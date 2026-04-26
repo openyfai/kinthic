@@ -1,0 +1,262 @@
+"""
+Meta-Reasoning Engine — Phase 7.
+
+Analyzes ARIA's own performance data (critiques, failures, tool errors)
+and generates formal proposals for self-improvement. All proposals require
+human approval before implementation — this is a hard safety constraint.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import uuid
+from datetime import datetime, timezone
+from google.genai import types
+
+from aria.llm.gemini import GeminiClient
+from aria.models.schemas import (
+    MetaAnalysisResponse,
+    SelfImprovementProposal,
+)
+from aria.storage.database import Database
+from aria.utils.logger import setup_logger
+
+log = setup_logger("aria.meta_reasoning")
+
+META_ANALYSIS_PROMPT = """You are a Meta-Reasoning Analyst for an AI system called ARIA.
+You will receive performance data about ARIA's recent behavior:
+- Self-correction logs (times when ARIA's draft was rejected by her own critic)
+- Tool execution failures
+- Debate uncertainties
+
+Your job is to analyze this data for PERSISTENT patterns of failure.
+Then propose ONE specific, actionable improvement.
+
+Rules:
+1. Only propose changes for REAL, REPEATED failures — not one-off mistakes.
+2. Every proposal must include a measurable success metric.
+3. Be conservative. A bad change is worse than no change.
+4. You must specify exactly which system to modify.
+5. If the data shows no clear pattern, set has_proposal to false.
+
+Valid target systems:
+- system_prompt: Changes to ARIA's base instructions
+- tool_registry: Adding new tools or modifying existing ones
+- cognitive_loop: Changes to the reasoning pipeline
+- memory_store: Changes to how memories are stored or retrieved
+- other: Anything else"""
+
+
+class MetaReasoningEngine:
+    """Analyzes ARIA's performance and generates self-improvement proposals."""
+
+    def __init__(self, gemini_client: GeminiClient, db: Database):
+        self.gemini = gemini_client
+        self.db = db
+
+    async def analyze_and_propose(
+        self, status_callback: callable | None = None
+    ) -> SelfImprovementProposal | None:
+        """
+        Analyze recent performance data and generate a proposal if warranted.
+        """
+        if status_callback:
+            status_callback("[bright_magenta]  Gathering performance data...[/]")
+
+        # Gather evidence
+        performance_data = await self._gather_performance_data()
+
+        if not performance_data:
+            log.debug("No performance data available for meta-analysis.")
+            return None
+
+        if status_callback:
+            status_callback("[bright_magenta]  Running meta-analysis...[/]")
+
+        try:
+            response = await self.gemini.client.aio.models.generate_content(
+                model=self.gemini._model,
+                contents=f"PERFORMANCE DATA:\n{performance_data}\n\nAnalyze and propose an improvement if warranted.",
+                config=types.GenerateContentConfig(
+                    system_instruction=META_ANALYSIS_PROMPT,
+                    response_mime_type="application/json",
+                    response_schema=MetaAnalysisResponse,
+                    temperature=0.2,
+                ),
+            )
+
+            data = json.loads(response.text)
+            analysis = MetaAnalysisResponse(**data)
+
+            if not analysis.has_proposal or not analysis.description:
+                log.info("Meta-analysis found no actionable improvements.")
+                return None
+
+            # Persist the proposal
+            proposal = SelfImprovementProposal(
+                target_system=analysis.target_system,
+                description=analysis.description,
+                rationale=analysis.rationale,
+                success_metric=analysis.success_metric,
+            )
+
+            await self.db.execute(
+                """
+                INSERT INTO improvement_proposals (
+                    id, target_system, description, rationale,
+                    success_metric, status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    proposal.id,
+                    proposal.target_system,
+                    proposal.description,
+                    proposal.rationale,
+                    proposal.success_metric,
+                    proposal.status,
+                    proposal.created_at,
+                ),
+            )
+
+            log.info(f"New self-improvement proposal: {proposal.description[:60]}...")
+            return proposal
+
+        except Exception as e:
+            log.warning(f"Meta-analysis failed (non-fatal): {e}")
+            return None
+
+    async def process_inline_proposals(
+        self, raw_proposals: list[str], session_id: str
+    ) -> list[SelfImprovementProposal]:
+        """
+        Parse and persist improvement proposals that ARIA embeds in her responses.
+        Expects format: 'TARGET: x | CHANGE: y | METRIC: z'
+        """
+        persisted = []
+
+        for raw in raw_proposals:
+            try:
+                # Parse the structured format
+                parts = {}
+                for segment in raw.split("|"):
+                    segment = segment.strip()
+                    if ":" in segment:
+                        key, value = segment.split(":", 1)
+                        parts[key.strip().upper()] = value.strip()
+
+                target = parts.get("TARGET", "other")
+                description = parts.get("CHANGE", raw)
+                metric = parts.get("METRIC", "Manual review required")
+
+                proposal = SelfImprovementProposal(
+                    target_system=target,
+                    description=description,
+                    rationale=f"Self-identified during session {session_id[:8]}",
+                    success_metric=metric,
+                )
+
+                await self.db.execute(
+                    """
+                    INSERT INTO improvement_proposals (
+                        id, target_system, description, rationale,
+                        success_metric, status, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        proposal.id,
+                        proposal.target_system,
+                        proposal.description,
+                        proposal.rationale,
+                        proposal.success_metric,
+                        proposal.status,
+                        proposal.created_at,
+                    ),
+                )
+
+                persisted.append(proposal)
+                log.info(f"Inline proposal persisted: {description[:50]}...")
+
+            except Exception as e:
+                log.warning(f"Failed to parse inline proposal: {e}")
+
+        return persisted
+
+    async def get_pending_proposals(self) -> list[SelfImprovementProposal]:
+        """Fetch all pending proposals."""
+        rows = await self.db.fetch_all(
+            "SELECT * FROM improvement_proposals WHERE status = 'pending' ORDER BY created_at DESC"
+        )
+        return [self._row_to_proposal(r) for r in rows]
+
+    async def get_all_proposals(self) -> list[SelfImprovementProposal]:
+        """Fetch all proposals regardless of status."""
+        rows = await self.db.fetch_all(
+            "SELECT * FROM improvement_proposals ORDER BY created_at DESC"
+        )
+        return [self._row_to_proposal(r) for r in rows]
+
+    async def update_status(
+        self, proposal_id: str, status: str
+    ) -> None:
+        """Update a proposal's status (approve, reject, implement)."""
+        resolved = datetime.now(timezone.utc).isoformat() if status != "pending" else None
+        await self.db.execute(
+            "UPDATE improvement_proposals SET status = ?, resolved_at = ? WHERE id = ?",
+            (status, resolved, proposal_id),
+        )
+        log.info(f"Proposal {proposal_id[:8]} status -> {status}")
+
+    def _row_to_proposal(self, row) -> SelfImprovementProposal:
+        return SelfImprovementProposal(
+            id=row["id"],
+            target_system=row["target_system"],
+            description=row["description"],
+            rationale=row["rationale"],
+            success_metric=row["success_metric"],
+            status=row["status"],
+            created_at=row["created_at"],
+            resolved_at=row["resolved_at"],
+        )
+
+    async def _gather_performance_data(self) -> str:
+        """Gather recent failure data for meta-analysis."""
+        sections = []
+
+        # Recent critique rejections
+        rejections = await self.db.fetch_all(
+            "SELECT * FROM improvement_logs ORDER BY created_at DESC LIMIT 10"
+        )
+        if rejections:
+            sections.append("RECENT CRITIQUE REJECTIONS:")
+            for r in rejections:
+                sections.append(
+                    f"  Turn {r['turn_number']}: "
+                    f"Acc={r['accuracy_score']:.1f}, Dep={r['depth_score']:.1f}, "
+                    f"Hon={r['honesty_score']:.1f} — {r['feedback'][:100]}"
+                )
+            sections.append("")
+
+        # Tool failures
+        tool_failures = await self.db.fetch_all(
+            "SELECT * FROM action_logs WHERE success = 0 ORDER BY created_at DESC LIMIT 10"
+        )
+        if tool_failures:
+            sections.append("RECENT TOOL FAILURES:")
+            for f in tool_failures:
+                sections.append(
+                    f"  Tool: {f['tool_name']} — {f['actual_outcome'][:100]}"
+                )
+            sections.append("")
+
+        # Unresolved uncertainties
+        uncertainties = await self.db.fetch_all(
+            "SELECT * FROM uncertainties WHERE status = 'open' ORDER BY created_at DESC LIMIT 5"
+        )
+        if uncertainties:
+            sections.append("UNRESOLVED UNCERTAINTIES:")
+            for u in uncertainties:
+                sections.append(f"  {u['topic']}: {u['why_uncertain'][:80]}")
+            sections.append("")
+
+        return "\n".join(sections) if sections else ""

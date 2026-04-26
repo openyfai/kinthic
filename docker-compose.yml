@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  aria-graph:
+    build: .
+    container_name: aria-graph
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env
+    restart: unless-stopped
+    command: python scripts/web_server.py
+
+  aria-telegram:
+    build: .
+    container_name: aria-telegram
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env
+      - ./skills:/app/skills
+    restart: unless-stopped
+    command: python scripts/telegram_bot.py
+    depends_on:
+      - aria-graph
