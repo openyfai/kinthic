@@ -9,9 +9,8 @@ human approval before implementation — this is a hard safety constraint.
 from __future__ import annotations
 
 import json
-import re
-import uuid
 from datetime import datetime, timezone
+from typing import Callable, Any
 from google.genai import types
 
 from aria.llm.gemini import GeminiClient
@@ -56,7 +55,7 @@ class MetaReasoningEngine:
         self.db = db
 
     async def analyze_and_propose(
-        self, status_callback: callable | None = None
+        self, status_callback: Callable[..., Any] | None = None
     ) -> SelfImprovementProposal | None:
         """
         Analyze recent performance data and generate a proposal if warranted.

@@ -1,7 +1,7 @@
 [project]
 name = "aria-agi"
-version = "0.2.0"
-description = "ARIA — Adaptive Reasoning & Intelligence Architecture. Phase 2: World Model + Causal Graph."
+version = "1.0.0"
+description = "ARIA — Adaptive Reasoning & Intelligence Architecture. A cognitive AI agent with causal world model, self-improvement, and multi-agent debate."
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.12"
@@ -21,6 +21,12 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+web = [
+    "fastapi>=0.111",
+    "uvicorn>=0.30",
 ]
 
 [project.scripts]

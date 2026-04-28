@@ -4,11 +4,11 @@ Web Search Tool using DuckDuckGo.
 
 from __future__ import annotations
 
-import logging
 from ddgs import DDGS
 from aria.tools.base import BaseTool
+from aria.utils.logger import setup_logger
 
-log = logging.getLogger("aria.tools.search")
+log = setup_logger("aria.tools.search")
 
 class WebSearchTool(BaseTool):
     name = "web_search"
@@ -22,8 +22,11 @@ class WebSearchTool(BaseTool):
         query = kwargs.get("query")
         if not query:
             return "Error: 'query' argument is required."
-            
-        max_results = int(kwargs.get("max_results", 3))
+
+        # Sanitize: cap query length to prevent abuse
+        query = str(query)[:200]
+
+        max_results = min(int(kwargs.get("max_results", 3)), 5)
         log.info(f"Executing web_search for: '{query}'")
 
         try:

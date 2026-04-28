@@ -1,16 +1,23 @@
 """
 Tool Registry. Manages tool registration and execution routing.
+
+Security: All tool arguments are validated against the tool's schema
+before execution to prevent injection of unexpected parameters.
 """
 
 from __future__ import annotations
 
-import logging
+import json
+
 from aria.models.schemas import ToolCall, ToolResult
 from aria.tools.base import BaseTool
 from aria.tools.search import WebSearchTool
 from aria.tools.file_reader import FileReaderTool
+from aria.tools.code_editor import CodeEditorTool, ApplyEditTool
+from aria.utils.logger import setup_logger
 
-log = logging.getLogger("aria.tools.registry")
+log = setup_logger("aria.tools.registry")
+
 
 class ToolRegistry:
     """Holds available tools and executes them based on ToolCalls."""
@@ -23,6 +30,8 @@ class ToolRegistry:
         """Register the default Phase 5 tools."""
         self.register(WebSearchTool())
         self.register(FileReaderTool())
+        self.register(CodeEditorTool())
+        self.register(ApplyEditTool())
 
     def register(self, tool: BaseTool) -> None:
         """Register a new tool."""
@@ -52,25 +61,35 @@ class ToolRegistry:
                 error="Tool not found"
             )
 
-        log.info(f"Executing {call.tool_name} with args: {call.arguments}")
-        
+        # ── Parse arguments ──────────────────────────────────────
+        args_dict = {}
+        if isinstance(call.arguments, str):
+            try:
+                args_dict = json.loads(call.arguments)
+            except json.JSONDecodeError:
+                return ToolResult(
+                    tool_name=call.tool_name,
+                    actual_outcome="Error: Failed to parse arguments as JSON.",
+                    success=False,
+                    error="JSON parse error"
+                )
+        elif isinstance(call.arguments, dict):
+            args_dict = call.arguments
+
+        # ── Validate arguments against schema ────────────────────
+        # Only allow keys defined in the tool's schema
+        allowed_keys = set(tool.schema.keys()) if tool.schema else set()
+        unexpected_keys = set(args_dict.keys()) - allowed_keys
+        if unexpected_keys:
+            log.warning(
+                f"Tool {call.tool_name}: rejected unexpected args: {unexpected_keys}"
+            )
+            # Strip unexpected keys rather than crash
+            args_dict = {k: v for k, v in args_dict.items() if k in allowed_keys}
+
+        log.info(f"Executing {call.tool_name} with args: {list(args_dict.keys())}")
+
         try:
-            import json
-            args_dict = {}
-            if isinstance(call.arguments, str):
-                try:
-                    args_dict = json.loads(call.arguments)
-                except json.JSONDecodeError:
-                    return ToolResult(
-                        tool_name=call.tool_name,
-                        actual_outcome="Error: Failed to parse arguments as JSON.",
-                        success=False,
-                        error="JSON parse error"
-                    )
-            elif isinstance(call.arguments, dict):
-                args_dict = call.arguments
-                
-            # We pass the dictionary of arguments as kwargs
             outcome = await tool.execute(**args_dict)
             # If the outcome string starts with "Error:", we consider it a failure
             success = not outcome.startswith("Error:")
@@ -85,7 +104,7 @@ class ToolRegistry:
             log.error(f"Tool {call.tool_name} crashed: {e}")
             return ToolResult(
                 tool_name=call.tool_name,
-                actual_outcome=f"Error executing tool: {e}",
+                actual_outcome=f"Error executing tool: internal error occurred.",
                 success=False,
-                error=str(e)
+                error="Internal tool execution error"
             )

@@ -11,10 +11,19 @@ and hypotheses from every cognitive turn.
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable, Any
 
+from aria.core.benchmark import BenchmarkRunner
 from aria.core.context_builder import ContextBuilder
+from aria.core.critic import ResponseCritic
+from aria.core.debate import DebateEngine
+from aria.core.generalization import GeneralizationEngine
+from aria.core.improver import ImprovementLogger
+from aria.core.meta_reasoning import MetaReasoningEngine
+from aria.core.skills import SkillLoader
 from aria.llm.gemini import GeminiClient
 from aria.memory.goal_tracker import GoalTracker
 from aria.memory.memory_store import MemoryStore
@@ -37,6 +46,7 @@ from aria.models.schemas import (
     StoredHypothesis,
 )
 from aria.storage.database import Database
+from aria.tools.registry import ToolRegistry
 from aria.utils.config import TRACES_DIR, DATA_DIR
 from aria.utils.logger import setup_logger
 from aria.world.contradictions import ContradictionDetector
@@ -66,15 +76,12 @@ class CognitiveLoop:
         self.hypotheses = HypothesisEngine(self.db, self.kg)
 
         # Phase 5 — Tool Use
-        from aria.tools.registry import ToolRegistry
         self.tool_registry = ToolRegistry()
 
         # Phase 6 — Generalization
-        from aria.core.generalization import GeneralizationEngine
         self.generalization_engine = GeneralizationEngine(GeminiClient(), self.db)
 
         # Phase C — Markdown Skills Ecosystem
-        from aria.core.skills import SkillLoader
         self.skill_loader = SkillLoader()
         self.skill_loader.load_all()
 
@@ -90,18 +97,13 @@ class CognitiveLoop:
         self.gemini = GeminiClient()
 
         # Phase 3 — Self-Improvement
-        from aria.core.critic import ResponseCritic
-        from aria.core.improver import ImprovementLogger
         self.critic = ResponseCritic(self.gemini)
         self.improver = ImprovementLogger(self.db)
 
         # Phase 4 — Multi-Agent Debate
-        from aria.core.debate import DebateEngine
         self.debate_engine = DebateEngine(self.gemini, self.db)
 
         # Phase 7 — Recursive Self-Improvement
-        from aria.core.meta_reasoning import MetaReasoningEngine
-        from aria.core.benchmark import BenchmarkRunner
         self.meta_reasoning = MetaReasoningEngine(self.gemini, self.db)
         self.benchmark = BenchmarkRunner(self.gemini, self.db)
 
@@ -135,7 +137,7 @@ class CognitiveLoop:
     async def process(
         self,
         user_input: str,
-        status_callback: callable | None = None
+        status_callback: Callable[..., Any] | None = None
     ) -> CognitiveResponse:
         """
         Process a single cognitive turn.
@@ -157,7 +159,10 @@ class CognitiveLoop:
             cognitive = await self.gemini.think(system_prompt, user_input)
             
             # Step 3: Tool Execution
-            if cognitive.tool_calls:
+            used_tools = bool(cognitive.tool_calls)
+            tool_prompt = system_prompt  # default; overwritten if tools are used
+            
+            if used_tools:
                 if status_callback:
                     status_callback(f"[magenta]  Executing {len(cognitive.tool_calls)} tools...[/]")
                 
@@ -182,7 +187,7 @@ class CognitiveLoop:
                 status_callback("[bright_cyan]  Critiquing draft...[/]")
                 
             # The context should include tool results if they were run
-            current_context = tool_prompt if cognitive.tool_calls else system_prompt
+            current_context = tool_prompt if used_tools else system_prompt
             
             critique = await self.critic.critique(
                 user_input=user_input,
@@ -225,23 +230,22 @@ class CognitiveLoop:
                 if status_callback:
                     status_callback("[bright_cyan]  ARIA is thinking (Attempt 2)...[/]")
 
+        except json.JSONDecodeError as e:
+            log.error(f"JSON parsing failed: {e}")
+            cognitive = self._make_error_response(
+                "I received a malformed response from my reasoning engine. Retrying on next turn."
+            )
+        except ValueError as e:
+            log.error(f"Value error in cognitive loop: {e}")
+            cognitive = self._make_error_response(
+                "I encountered a data validation error. Please try rephrasing your input."
+            )
         except Exception as e:
-            log.error(f"Cognitive loop failed: {e}")
-            cognitive = CognitiveResponse(
-                reasoning=f"My reasoning engine encountered an error: {e}",
-                response=(
-                    "I'm having trouble processing that right now. Your input was received "
-                    "and I'll try again on the next turn. The error was: " + str(e)
-                ),
-                new_memories=[],
-                goal_updates=[],
-                self_reflection="Failed to reason. Need to investigate the error.",
-                confidence=0.0,
-                uncertainty_flags=["API failure"],
-                causal_observations=[],
-                contradictions_detected=[],
-                hypotheses=[],
-                tool_calls=[],
+            log.error(f"Cognitive loop failed: {e}", exc_info=True)
+            # SECURITY: Do NOT include raw exception in user-facing response
+            cognitive = self._make_error_response(
+                "I'm having trouble processing that right now. Your input was received "
+                "and I'll try again on the next turn."
             )
 
         # Step 7: Persist new memories
@@ -295,12 +299,25 @@ class CognitiveLoop:
 
         return cognitive
 
+    @staticmethod
+    def _make_error_response(user_message: str) -> CognitiveResponse:
+        """Create a safe error CognitiveResponse without leaking internals."""
+        return CognitiveResponse(
+            reasoning="My reasoning engine encountered an internal error.",
+            response=user_message,
+            new_memories=[],
+            goal_updates=[],
+            self_reflection="Failed to reason. Need to investigate the error.",
+            confidence=0.0,
+            uncertainty_flags=["internal_error"],
+            causal_observations=[],
+            contradictions_detected=[],
+            hypotheses=[],
+            tool_calls=[],
+        )
+
     async def _execute_tools(self, tool_calls, status_callback) -> str:
         """Executes a list of tool calls and formats the results for the LLM."""
-        from datetime import datetime, timezone
-        import uuid
-        import json
-        
         results_text = ""
         for call in tool_calls:
             if status_callback:
@@ -337,7 +354,7 @@ class CognitiveLoop:
                         call.expected_outcome,
                         result.actual_outcome,
                         result.success,
-                        "Update pending", # Simplified for now
+                        "Update pending",
                         datetime.now(timezone.utc).isoformat()
                     )
                 )
@@ -502,38 +519,6 @@ class CognitiveLoop:
         return count
 
     # ------------------------------------------------------------------
-    # Trace Persistence
-    # ------------------------------------------------------------------
-
-    async def _save_trace(self, user_input: str, cognitive: CognitiveResponse) -> None:
-        """Save the full reasoning trace to a JSON file for debugging."""
-        if not self.session.current:
-            return
-
-        trace = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "session_id": self.session.current.id,
-            "turn": self.session.current.turn_count,
-            "input": user_input,
-            "reasoning": cognitive.reasoning,
-            "response": cognitive.response,
-            "new_memories": [m.model_dump() for m in cognitive.new_memories],
-            "goal_updates": [g.model_dump() for g in cognitive.goal_updates],
-            "causal_observations": [o.model_dump() for o in cognitive.causal_observations],
-            "contradictions": [c.model_dump() for c in cognitive.contradictions_detected],
-            "hypotheses": [h.model_dump() for h in cognitive.hypotheses],
-            "self_reflection": cognitive.self_reflection,
-            "confidence": cognitive.confidence,
-            "uncertainty_flags": cognitive.uncertainty_flags,
-        }
-
-        session_dir = TRACES_DIR / self.session.current.id[:8]
-        session_dir.mkdir(exist_ok=True)
-
-        trace_file = session_dir / f"turn_{self.session.current.turn_count:04d}.json"
-        trace_file.write_text(json.dumps(trace, indent=2), encoding="utf-8")
-
-    # ------------------------------------------------------------------
     # UI Command Handlers
     # ------------------------------------------------------------------
 
@@ -623,7 +608,7 @@ class CognitiveLoop:
         """Trigger meta-reasoning analysis."""
         return await self.meta_reasoning.analyze_and_propose(status_callback=status_callback)
 
-    async def run_debate(self, topic: str, status_callback: callable | None = None):
+    async def run_debate(self, topic: str, status_callback: Callable[..., Any] | None = None):
         """Manually trigger a Phase 4 debate."""
         resolution = await self.debate_engine.run_debate(topic, rounds=1, status_callback=status_callback)
         # Apply the graph updates discovered during the debate

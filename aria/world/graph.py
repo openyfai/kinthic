@@ -40,6 +40,8 @@ class KnowledgeGraph:
     def __init__(self, db: Database):
         self.db = db
         self.graph: nx.DiGraph = nx.DiGraph()
+        # Inverted index: word → set of node_ids containing that word
+        self._word_index: dict[str, set[str]] = {}
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -86,6 +88,23 @@ class KnowledgeGraph:
             f"{self.graph.number_of_edges()} edges"
         )
 
+        # Build the inverted index from loaded nodes
+        self._rebuild_word_index()
+
+    def _rebuild_word_index(self) -> None:
+        """Build the inverted keyword index from all in-memory nodes."""
+        self._word_index.clear()
+        for node_id, data in self.graph.nodes(data=True):
+            self._index_node(node_id, data["content"])
+
+    def _index_node(self, node_id: str, content: str) -> None:
+        """Add a single node's words to the inverted index."""
+        for word in content.lower().strip().split():
+            if len(word) > 1:  # Skip single-character words
+                if word not in self._word_index:
+                    self._word_index[word] = set()
+                self._word_index[word].add(node_id)
+
     # ------------------------------------------------------------------
     # Node Operations
     # ------------------------------------------------------------------
@@ -131,17 +150,29 @@ class KnowledgeGraph:
             metadata=node.metadata,
         )
 
+        # Update the inverted index
+        self._index_node(node.id, node.content)
+
         log.debug(f"Added node: {node.content[:50]}...")
         return node
 
     async def find_similar_node(self, content: str, threshold: float = 0.8) -> str | None:
-        """Find an existing node with very similar content. Returns node ID or None."""
+        """Find an existing node with very similar content using inverted index."""
         content_words = set(content.lower().strip().split())
         if not content_words:
             return None
 
-        for node_id, data in self.graph.nodes(data=True):
-            existing_words = set(data["content"].lower().strip().split())
+        # Use inverted index to find candidate nodes (only nodes sharing at least one word)
+        candidate_ids: set[str] = set()
+        for word in content_words:
+            if word in self._word_index:
+                candidate_ids.update(self._word_index[word])
+
+        # Score only candidates instead of scanning all nodes
+        for node_id in candidate_ids:
+            if node_id not in self.graph:
+                continue
+            existing_words = set(self.graph.nodes[node_id]["content"].lower().strip().split())
             if not existing_words:
                 continue
             overlap = content_words & existing_words
@@ -387,24 +418,34 @@ class KnowledgeGraph:
 
     async def retrieve_relevant_context(self, query: str, max_nodes: int = 15) -> list[dict]:
         """
-        Graph-aware context retrieval.
+        Graph-aware context retrieval using inverted index.
 
-        Given a query, find relevant nodes and their causal neighborhoods.
-        This replaces the flat keyword search from Phase 1.
+        Given a query, find relevant nodes via the keyword index
+        and their causal neighborhoods.
         """
         if self.graph.number_of_nodes() == 0:
             return []
 
-        # Find directly relevant nodes via content matching
         query_words = set(query.lower().split())
-        scored_nodes: list[tuple[str, float]] = []
+        if not query_words:
+            return []
 
-        for node_id, data in self.graph.nodes(data=True):
+        # Use inverted index to find candidate nodes
+        candidate_ids: set[str] = set()
+        for word in query_words:
+            if word in self._word_index:
+                candidate_ids.update(self._word_index[word])
+
+        # Score only candidates
+        scored_nodes: list[tuple[str, float]] = []
+        for node_id in candidate_ids:
+            if node_id not in self.graph:
+                continue
+            data = self.graph.nodes[node_id]
             content_words = set(data["content"].lower().split())
             if not content_words:
                 continue
 
-            # Score = word overlap + confidence bonus + connection bonus
             overlap = len(query_words & content_words) / max(len(query_words), 1)
             confidence_bonus = data.get("confidence", 0.5) * 0.2
             degree_bonus = min(self.graph.degree(node_id) * 0.05, 0.3)

@@ -1,13 +1,15 @@
 """
-Gemini LLM Client — ARIA's reasoning engine.
+Gemini LLM Client — ARIA's connection to Google's Gemini models.
 
-Wraps the Google GenAI SDK with structured output support.
-Every call returns a validated CognitiveResponse via Pydantic.
+Handles structured output via Pydantic schemas, retry with exponential
+backoff on transient errors (503, 429), and model selection via config.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
+from functools import wraps
 
 from google import genai
 from google.genai import types
@@ -18,109 +20,118 @@ from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.llm")
 
+# ---------------------------------------------------------------------------
+# Retry decorator for transient API errors
+# ---------------------------------------------------------------------------
+
+_TRANSIENT_ERROR_CODES = {"503", "429", "500", "UNAVAILABLE", "RESOURCE_EXHAUSTED"}
+
+
+def _is_transient(error: Exception) -> bool:
+    """Check if an exception is a transient API error worth retrying."""
+    error_str = str(error)
+    return any(code in error_str for code in _TRANSIENT_ERROR_CODES)
+
+
+def retry_on_transient(max_retries: int = 3, base_delay: float = 1.0):
+    """
+    Decorator that retries async functions on transient API errors.
+    Uses exponential backoff with jitter.
+    """
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            last_error = None
+            for attempt in range(max_retries):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    last_error = e
+                    if _is_transient(e) and attempt < max_retries - 1:
+                        delay = base_delay * (2 ** attempt)
+                        log.warning(
+                            f"Transient API error (attempt {attempt + 1}/{max_retries}), "
+                            f"retrying in {delay:.1f}s: {e}"
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+                    raise
+            raise last_error  # Should never reach here, but safety net
+        return wrapper
+    return decorator
+
+
+# ---------------------------------------------------------------------------
+# Gemini Client
+# ---------------------------------------------------------------------------
+
+SYSTEM_CONFIG = types.GenerateContentConfig(
+    response_mime_type="application/json",
+    response_schema=CognitiveResponse,
+    temperature=0.7,
+)
+
 
 class GeminiClient:
-    """Async Gemini API client with structured cognitive output."""
+    """Manages the connection to Google's Gemini API."""
 
     def __init__(self):
+        self._model = get_model()
         self._client: genai.Client | None = None
-        self._model: str = get_model()
 
     def connect(self) -> None:
         """Initialize the Gemini client."""
-        api_key = get_api_key()
-        self._client = genai.Client(api_key=api_key)
+        self._client = genai.Client(api_key=get_api_key())
         log.info(f"Gemini client initialized with model: {self._model}")
 
     @property
     def client(self) -> genai.Client:
+        """Get the active client or fail."""
         if self._client is None:
             raise RuntimeError("Gemini client not connected. Call connect() first.")
         return self._client
 
-    async def think(
-        self,
-        system_prompt: str,
-        user_message: str,
-    ) -> CognitiveResponse:
+    @retry_on_transient(max_retries=3, base_delay=1.5)
+    async def think(self, system_prompt: str, user_input: str) -> CognitiveResponse:
         """
-        Send a cognitive turn to Gemini and get a structured response.
+        Send a prompt to Gemini and get a structured CognitiveResponse.
 
-        Uses Gemini's native structured output to guarantee the response
-        matches our CognitiveResponse schema exactly.
+        Retries automatically on transient API errors (503, 429).
         """
-        log.debug("Sending cognitive turn to Gemini...")
-
-        try:
-            response = await self.client.aio.models.generate_content(
-                model=self._model,
-                contents=user_message,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    response_mime_type="application/json",
-                    response_schema=CognitiveResponse,
-                    temperature=0.7,
-                    top_p=0.9,
-                ),
-            )
-
-            # Parse the structured JSON response
-            raw_text = response.text
-            if not raw_text:
-                raise ValueError("Empty response from Gemini")
-
-            data = json.loads(raw_text)
-            cognitive = CognitiveResponse(**data)
-
-            log.debug(
-                f"Cognitive response received "
-                f"(confidence: {cognitive.confidence:.2f}, "
-                f"memories: {len(cognitive.new_memories)}, "
-                f"goal_updates: {len(cognitive.goal_updates)}, "
-                f"causal: {len(cognitive.causal_observations)}, "
-                f"contradictions: {len(cognitive.contradictions_detected)}, "
-                f"hypotheses: {len(cognitive.hypotheses)})"
-            )
-            return cognitive
-
-        except json.JSONDecodeError as e:
-            log.error(f"Failed to parse Gemini response as JSON: {e}")
-            # Retry once with a correction prompt
-            return await self._retry_with_correction(system_prompt, user_message, str(e))
-
-        except Exception as e:
-            log.error(f"Gemini API error: {e}")
-            raise
-
-    async def _retry_with_correction(
-        self,
-        system_prompt: str,
-        user_message: str,
-        error: str,
-    ) -> CognitiveResponse:
-        """Retry once if the first attempt produced invalid JSON."""
-        log.warning("Retrying with correction prompt...")
-
-        correction = (
-            f"Previous response failed JSON parsing: {error}\n"
-            f"Please respond with valid JSON matching the required schema exactly.\n\n"
-            f"Original request: {user_message}"
-        )
-
         response = await self.client.aio.models.generate_content(
             model=self._model,
-            contents=correction,
+            contents=user_input,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 response_mime_type="application/json",
                 response_schema=CognitiveResponse,
-                temperature=0.5,  # Lower temp for retry
+                temperature=0.7,
             ),
         )
 
         raw_text = response.text
         if not raw_text:
-            raise ValueError("Empty response from Gemini on retry")
+            raise ValueError("Empty response from Gemini")
 
-        data = json.loads(raw_text)
+        try:
+            data = json.loads(raw_text)
+        except json.JSONDecodeError:
+            log.warning("Gemini returned invalid JSON. Attempting repair...")
+            # Retry once with a nudge
+            response = await self.client.aio.models.generate_content(
+                model=self._model,
+                contents=(
+                    f"{user_input}\n\n"
+                    "[SYSTEM: Your previous response was not valid JSON. "
+                    "Please respond ONLY with valid JSON matching the schema.]"
+                ),
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    response_mime_type="application/json",
+                    response_schema=CognitiveResponse,
+                    temperature=0.5,
+                ),
+            )
+            data = json.loads(response.text)
+
         return CognitiveResponse(**data)

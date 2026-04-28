@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime, timezone
+from typing import Callable, Any
 from google.genai import types
 
 from aria.llm.gemini import GeminiClient
@@ -51,7 +52,7 @@ class DebateEngine:
         self,
         topic: str,
         rounds: int = 1,
-        status_callback: callable | None = None
+        status_callback: Callable[..., Any] | None = None
     ) -> DebateResolution:
         """
         Run a full debate between A and B, judged by the Synthesizer.

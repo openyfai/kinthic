@@ -7,6 +7,8 @@ All operations are async via aiosqlite.
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 import aiosqlite
 
 from aria.utils.config import DB_PATH
@@ -281,10 +283,32 @@ class Database:
         return self._conn
 
     async def execute(self, sql: str, params: tuple = ()) -> aiosqlite.Cursor:
-        """Execute a single SQL statement."""
+        """Execute a single SQL statement with auto-commit."""
         cursor = await self.conn.execute(sql, params)
         await self.conn.commit()
         return cursor
+
+    async def execute_no_commit(self, sql: str, params: tuple = ()) -> aiosqlite.Cursor:
+        """Execute a single SQL statement WITHOUT committing (for use inside transactions)."""
+        return await self.conn.execute(sql, params)
+
+    @asynccontextmanager
+    async def transaction(self):
+        """
+        Atomic transaction context manager.
+
+        Usage:
+            async with db.transaction():
+                await db.execute_no_commit("INSERT ...", (...))
+                await db.execute_no_commit("INSERT ...", (...))
+            # auto-commit on success, auto-rollback on exception
+        """
+        try:
+            yield
+            await self.conn.commit()
+        except Exception:
+            await self.conn.rollback()
+            raise
 
     async def fetch_one(self, sql: str, params: tuple = ()) -> dict | None:
         """Fetch a single row as a dict."""
