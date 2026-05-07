@@ -22,6 +22,7 @@ from aria.models.schemas import (
     EdgeType,
     KnowledgeNode,
     NodeType,
+    VerificationStatus,
 )
 from aria.storage.database import Database
 from aria.utils.logger import setup_logger
@@ -39,7 +40,7 @@ class KnowledgeGraph:
 
     def __init__(self, db: Database):
         self.db = db
-        self.graph: nx.DiGraph = nx.DiGraph()
+        self.graph: nx.MultiDiGraph = nx.MultiDiGraph()
         # Inverted index: word → set of node_ids containing that word
         self._word_index: dict[str, set[str]] = {}
 
@@ -64,6 +65,7 @@ class KnowledgeGraph:
                 last_validated=row["last_validated"],
                 validation_count=row["validation_count"],
                 contradiction_count=row["contradiction_count"],
+                verification_status=row.get("verification_status", "unverified"),
                 metadata=json.loads(row["metadata"]),
             )
 
@@ -76,6 +78,7 @@ class KnowledgeGraph:
                 self.graph.add_edge(
                     row["source_node"],
                     row["target_node"],
+                    key=row["edge_type"],
                     id=row["id"],
                     edge_type=row["edge_type"],
                     strength=row["strength"],
@@ -125,13 +128,14 @@ class KnowledgeGraph:
             """
             INSERT INTO knowledge_nodes (id, content, node_type, confidence, source,
                                          created_at, last_validated, validation_count,
-                                         contradiction_count, metadata)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                         contradiction_count, verification_status, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 node.id, node.content, node_type, node.confidence,
                 node.source, node.created_at, node.last_validated,
                 node.validation_count, node.contradiction_count,
+                node.verification_status.value if isinstance(node.verification_status, VerificationStatus) else node.verification_status,
                 json.dumps(node.metadata),
             ),
         )
@@ -147,6 +151,7 @@ class KnowledgeGraph:
             last_validated=node.last_validated,
             validation_count=node.validation_count,
             contradiction_count=node.contradiction_count,
+            verification_status=node.verification_status.value if isinstance(node.verification_status, VerificationStatus) else node.verification_status,
             metadata=node.metadata,
         )
 
@@ -238,6 +243,7 @@ class KnowledgeGraph:
             last_validated=data["last_validated"],
             validation_count=data["validation_count"],
             contradiction_count=data["contradiction_count"],
+            verification_status=data.get("verification_status", "unverified"),
             metadata=data.get("metadata", {}),
         )
 
@@ -255,21 +261,23 @@ class KnowledgeGraph:
             )
             return edge
 
-        # Check for duplicate edge
-        if self.graph.has_edge(edge.source_node, edge.target_node):
-            existing = self.graph.edges[edge.source_node, edge.target_node]
-            if existing.get("edge_type") == (edge.edge_type.value if isinstance(edge.edge_type, EdgeType) else edge.edge_type):
-                # Same type edge already exists — reinforce strength
-                new_strength = min(1.0, existing.get("strength", 0.5) + 0.1)
-                self.graph.edges[edge.source_node, edge.target_node]["strength"] = new_strength
-                await self.db.execute(
-                    "UPDATE causal_edges SET strength = ? WHERE source_node = ? AND target_node = ?",
-                    (new_strength, edge.source_node, edge.target_node),
-                )
-                log.debug("Reinforced existing edge")
-                return edge
-
         edge_type = edge.edge_type.value if isinstance(edge.edge_type, EdgeType) else edge.edge_type
+
+        # Same typed edge already exists — reinforce only that relationship.
+        if self.graph.has_edge(edge.source_node, edge.target_node, key=edge_type):
+            existing = self.graph.edges[edge.source_node, edge.target_node, edge_type]
+            new_strength = min(1.0, existing.get("strength", 0.5) + 0.1)
+            self.graph.edges[edge.source_node, edge.target_node, edge_type]["strength"] = new_strength
+            await self.db.execute(
+                """
+                UPDATE causal_edges
+                SET strength = ?
+                WHERE source_node = ? AND target_node = ? AND edge_type = ?
+                """,
+                (new_strength, edge.source_node, edge.target_node, edge_type),
+            )
+            log.debug("Reinforced existing typed edge")
+            return edge
 
         # Persist to SQLite
         await self.db.execute(
@@ -287,6 +295,7 @@ class KnowledgeGraph:
         # Add to in-memory graph
         self.graph.add_edge(
             edge.source_node, edge.target_node,
+            key=edge_type,
             id=edge.id,
             edge_type=edge_type,
             strength=edge.strength,
@@ -368,7 +377,8 @@ class KnowledgeGraph:
 
         steps = []
         for i in range(len(path) - 1):
-            edge_data = self.graph.edges[path[i], path[i + 1]]
+            edge_bundle = self.graph.get_edge_data(path[i], path[i + 1]) or {}
+            edge_data = next(iter(edge_bundle.values())) if edge_bundle else {}
             steps.append({
                 "from": self.graph.nodes[path[i]]["content"],
                 "relationship": edge_data.get("edge_type", "→"),

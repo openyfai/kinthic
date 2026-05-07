@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from math import exp
 
-from aria.models.schemas import Memory, MemorySource
+from aria.models.schemas import Memory, MemorySource, MemoryType
 from aria.storage.database import Database
 from aria.utils.config import (
     MAX_IMPORTANT_MEMORIES,
@@ -48,20 +49,26 @@ class MemoryStore:
 
         await self.db.execute(
             """
-            INSERT INTO memories (id, content, source, importance, created_at,
-                                  last_accessed, access_count, tags, related_memories)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO memories (id, content, source, memory_type, importance,
+                                  confidence, created_at, last_accessed,
+                                  access_count, tags, provenance_json,
+                                  related_memories, archived_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 memory.id,
                 memory.content,
                 memory.source.value if isinstance(memory.source, MemorySource) else memory.source,
+                memory.memory_type.value if isinstance(memory.memory_type, MemoryType) else memory.memory_type,
                 memory.importance,
+                memory.confidence,
                 memory.created_at,
                 memory.last_accessed,
                 memory.access_count,
                 json.dumps(memory.tags),
+                json.dumps(memory.provenance),
                 json.dumps(memory.related_memories),
+                memory.archived_at,
             ),
         )
         log.debug(f"Stored memory: {memory.content[:60]}...")
@@ -142,20 +149,26 @@ class MemoryStore:
         # Bypass duplicate check for manual memories — user explicitly wants it
         await self.db.execute(
             """
-            INSERT INTO memories (id, content, source, importance, created_at,
-                                  last_accessed, access_count, tags, related_memories)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO memories (id, content, source, memory_type, importance,
+                                  confidence, created_at, last_accessed,
+                                  access_count, tags, provenance_json,
+                                  related_memories, archived_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 memory.id,
                 memory.content,
                 memory.source.value,
+                memory.memory_type.value,
                 memory.importance,
+                memory.confidence,
                 memory.created_at,
                 memory.last_accessed,
                 memory.access_count,
                 json.dumps(memory.tags),
+                json.dumps(memory.provenance),
                 json.dumps(memory.related_memories),
+                memory.archived_at,
             ),
         )
         log.info(f"Manual memory stored: {content[:40]}...")
@@ -172,35 +185,31 @@ class MemoryStore:
           2. Important — top N by importance (core knowledge)
           3. Relevant — keyword match against query (situational)
 
-        Results are deduplicated and sorted by importance.
+        Results are deduplicated and sorted by a fused trust/relevance score.
         """
-        seen_ids: set[str] = set()
-        result: list[Memory] = []
+        candidates: dict[str, Memory] = {}
 
         # Pool 1: Recent
         recent = await self._get_recent(MAX_RECENT_MEMORIES)
         for m in recent:
-            if m.id not in seen_ids:
-                seen_ids.add(m.id)
-                result.append(m)
+            candidates[m.id] = m
 
         # Pool 2: Important
         important = await self._get_important(MAX_IMPORTANT_MEMORIES)
         for m in important:
-            if m.id not in seen_ids:
-                seen_ids.add(m.id)
-                result.append(m)
+            candidates[m.id] = m
 
         # Pool 3: Relevant (keyword search)
         if query.strip():
             relevant = await self._search_relevant(query, MAX_RELEVANT_MEMORIES)
             for m in relevant:
-                if m.id not in seen_ids:
-                    seen_ids.add(m.id)
-                    result.append(m)
+                candidates[m.id] = m
 
-        # Sort by importance descending
-        result.sort(key=lambda m: m.importance, reverse=True)
+        result = sorted(
+            candidates.values(),
+            key=lambda m: self._retrieval_score(m, query),
+            reverse=True,
+        )
 
         # Update access timestamps for retrieved memories
         for m in result:
@@ -212,7 +221,7 @@ class MemoryStore:
     async def _get_recent(self, limit: int) -> list[Memory]:
         """Get most recently accessed memories."""
         rows = await self.db.fetch_all(
-            "SELECT * FROM memories ORDER BY last_accessed DESC LIMIT ?",
+            "SELECT * FROM memories WHERE archived_at IS NULL ORDER BY last_accessed DESC LIMIT ?",
             (limit,),
         )
         return [self._row_to_memory(r) for r in rows]
@@ -220,7 +229,7 @@ class MemoryStore:
     async def _get_important(self, limit: int) -> list[Memory]:
         """Get highest importance memories."""
         rows = await self.db.fetch_all(
-            "SELECT * FROM memories ORDER BY importance DESC LIMIT ?",
+            "SELECT * FROM memories WHERE archived_at IS NULL ORDER BY importance DESC LIMIT ?",
             (limit,),
         )
         return [self._row_to_memory(r) for r in rows]
@@ -242,10 +251,50 @@ class MemoryStore:
         params = tuple(f"%{kw}%" for kw in keywords)
 
         rows = await self.db.fetch_all(
-            f"SELECT * FROM memories WHERE {conditions} ORDER BY importance DESC LIMIT ?",
+            f"SELECT * FROM memories WHERE archived_at IS NULL AND ({conditions}) ORDER BY importance DESC LIMIT ?",
             (*params, limit),
         )
         return [self._row_to_memory(r) for r in rows]
+
+    @staticmethod
+    def _retrieval_score(memory: Memory, query: str) -> float:
+        """Fuse importance, reliability, recency, relevance, and source trust."""
+        query_words = {w.lower() for w in query.split() if len(w) > 2}
+        content_words = {w.lower() for w in memory.content.split() if len(w) > 2}
+        relevance = 0.0
+        if query_words:
+            relevance = len(query_words & content_words) / max(len(query_words), 1)
+
+        try:
+            last_accessed = datetime.fromisoformat(memory.last_accessed)
+            age_days = max((datetime.now(timezone.utc) - last_accessed).days, 0)
+            recency = exp(-age_days / 30)
+        except Exception:
+            recency = 0.5
+
+        source_trust = {
+            MemorySource.USER: 0.9,
+            MemorySource.SYSTEM: 0.85,
+            MemorySource.REFLECTION: 0.65,
+            MemorySource.INFERENCE: 0.55,
+        }.get(memory.source, 0.5)
+
+        type_bonus = {
+            MemoryType.PREFERENCE: 0.08,
+            MemoryType.PROCEDURAL: 0.06,
+            MemoryType.PROJECT: 0.06,
+            MemoryType.NORMATIVE: 0.10,
+            MemoryType.CHARACTER: 0.09,
+        }.get(memory.memory_type, 0.0)
+
+        return (
+            memory.importance * 0.35
+            + memory.confidence * 0.20
+            + relevance * 0.25
+            + recency * 0.10
+            + source_trust * 0.10
+            + type_bonus
+        )
 
     # ------------------------------------------------------------------
     # Duplicate Detection
@@ -280,6 +329,42 @@ class MemoryStore:
 
         return False
 
+    async def archive(self, memory_id: str) -> bool:
+        """Soft-archive a memory without destroying provenance."""
+        now = datetime.now(timezone.utc).isoformat()
+        await self.db.execute(
+            "UPDATE memories SET archived_at = ? WHERE id = ?",
+            (now, memory_id),
+        )
+        return True
+
+    async def update_confidence(self, memory_id: str, confidence: float) -> bool:
+        """Adjust memory confidence for correction workflows."""
+        confidence = max(0.0, min(1.0, confidence))
+        await self.db.execute(
+            "UPDATE memories SET confidence = ? WHERE id = ?",
+            (confidence, memory_id),
+        )
+        return True
+
+    async def merge(self, keep_id: str, merge_id: str) -> bool:
+        """Merge two memories by archiving the duplicate and linking provenance."""
+        keep = await self.get(keep_id)
+        duplicate = await self.get(merge_id)
+        if not keep or not duplicate:
+            return False
+        related = set(keep.related_memories)
+        related.add(merge_id)
+        provenance = dict(keep.provenance)
+        provenance.setdefault("merged_memory_ids", [])
+        provenance["merged_memory_ids"].append(merge_id)
+        await self.db.execute(
+            "UPDATE memories SET related_memories = ?, provenance_json = ? WHERE id = ?",
+            (json.dumps(sorted(related)), json.dumps(provenance), keep_id),
+        )
+        await self.archive(merge_id)
+        return True
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
@@ -291,10 +376,52 @@ class MemoryStore:
             id=row["id"],
             content=row["content"],
             source=row["source"],
+            memory_type=row.get("memory_type", "semantic"),
             importance=row["importance"],
+            confidence=row.get("confidence", 0.5),
             created_at=row["created_at"],
             last_accessed=row["last_accessed"],
             access_count=row["access_count"],
             tags=json.loads(row["tags"]),
+            provenance=json.loads(row.get("provenance_json", "{}")),
             related_memories=json.loads(row["related_memories"]),
+            archived_at=row.get("archived_at"),
         )
+    # ------------------------------------------------------------------
+    # Semantic Profiles (Phase 7)
+    # ------------------------------------------------------------------
+
+    async def get_semantic_profile(self, term: str) -> dict | None:
+        """Retrieve the objective mapping for a subjective term."""
+        row = await self.db.fetch_one(
+            "SELECT * FROM semantic_profiles WHERE term = ?", (term.lower(),)
+        )
+        if row:
+            return {
+                "term": row["term"],
+                "objective_proxies": json.loads(row["objective_proxies"]),
+                "context_tags": json.loads(row["context_tags"]),
+                "confidence": row["confidence"],
+                "updated_at": row["updated_at"]
+            }
+        return None
+
+    async def save_semantic_profile(self, term: str, objective_proxies: list[str], confidence: float = 0.5):
+        """Save or update a semantic profile."""
+        now = datetime.now(timezone.utc).isoformat()
+        await self.db.execute(
+            """
+            INSERT INTO semantic_profiles (term, objective_proxies, confidence, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(term) DO UPDATE SET
+                objective_proxies = excluded.objective_proxies,
+                confidence = excluded.confidence,
+                updated_at = excluded.updated_at
+            """,
+            (term.lower(), json.dumps(objective_proxies), confidence, now)
+        )
+
+    async def get_all_semantic_profiles(self) -> dict[str, list[str]]:
+        """Retrieve all learned semantic mappings."""
+        rows = await self.db.fetch_all("SELECT term, objective_proxies FROM semantic_profiles")
+        return {row["term"]: json.loads(row["objective_proxies"]) for row in rows}

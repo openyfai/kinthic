@@ -1,5 +1,14 @@
-FROM python:3.12-slim
+# Stage 1: Build the Next.js UI
+FROM node:20-slim AS ui-builder
+WORKDIR /app
+COPY aria-ui/package*.json ./aria-ui/
+WORKDIR /app/aria-ui
+RUN npm ci
+COPY aria-ui/ ./
+RUN npm run build
 
+# Stage 2: Build the Python backend
+FROM python:3.12-slim
 WORKDIR /app
 
 # Install system dependencies required for some python packages (like sqlite)
@@ -13,12 +22,19 @@ COPY aria/ ./aria/
 COPY scripts/ ./scripts/
 COPY skills/ ./skills/
 
+# Copy the built UI from Stage 1
+COPY --from=ui-builder /app/aria-ui/out ./aria-ui/out
+
 # Install python dependencies
-RUN pip install --no-cache-dir -e .
-RUN pip install --no-cache-dir fastapi uvicorn python-telegram-bot
+RUN pip install --no-cache-dir -e ".[full]" \
+    && python -m playwright install --with-deps chromium
 
 # Set up the data directory for the SQLite database
-RUN mkdir -p data
+RUN mkdir -p data workspace \
+    && useradd --create-home --shell /usr/sbin/nologin aria \
+    && chown -R aria:aria /app
+
+USER aria
 
 # Expose the Web Graph UI port
 EXPOSE 8000

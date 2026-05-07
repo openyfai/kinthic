@@ -1,11 +1,35 @@
-import os
 import json
+import uuid
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
 from aria.tools.base import BaseTool
+from aria.utils.config import code_apply_enabled
 
 PENDING_EDITS_FILE = Path(".aria_pending_edits.json")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+BLOCKED_FILE_PREFIXES = (".env",)
+BLOCKED_PATH_PARTS = {".git", "node_modules", ".venv", "venv", "__pycache__"}
+
+
+def _resolve_workspace_path(file_path: str) -> Path:
+    """Resolve a user-supplied path inside the project workspace."""
+    candidate = Path(file_path)
+    if not candidate.is_absolute():
+        candidate = PROJECT_ROOT / candidate
+    full_path = candidate.resolve()
+
+    try:
+        full_path.relative_to(PROJECT_ROOT)
+    except ValueError:
+        raise ValueError("Invalid file path. Path must stay inside the project directory.")
+
+    if full_path.name.startswith(BLOCKED_FILE_PREFIXES):
+        raise ValueError("Invalid file path. Environment files are restricted.")
+    if any(part in BLOCKED_PATH_PARTS for part in full_path.parts):
+        raise ValueError("Invalid file path. Restricted directory component.")
+
+    return full_path
 
 class CodeEditorTool(BaseTool):
     """
@@ -14,6 +38,8 @@ class CodeEditorTool(BaseTool):
     """
     
     name = "propose_code_edit"
+    risk_level = "repo_write"
+    requires_approval = True
     description = (
         "Propose a change to a file in the codebase. You MUST use this tool if you want "
         "to upgrade, fix, or modify your own code. The change will NOT be applied immediately. "
@@ -36,81 +62,126 @@ class CodeEditorTool(BaseTool):
         if not file_path or not replacement_content:
             return "ERROR: file_path and replacement_content are required."
             
-        full_path = Path(os.path.abspath(file_path))
-        
-        # Security check: ensure it's within the project directory
-        # Just a basic check to prevent escaping to system files
-        if ".." in file_path:
-            return "ERROR: Invalid file path. Cannot use '..'"
+        try:
+            full_path = _resolve_workspace_path(file_path)
+        except ValueError as e:
+            return f"ERROR: {e}"
             
-        # Verify the target content exists if provided
+        # Verify target content if provided
         if target_content and full_path.exists():
             with open(full_path, "r", encoding="utf-8") as f:
                 current_code = f.read()
                 if target_content not in current_code:
-                    return "ERROR: The target_content was not found exactly as written in the file. Ensure exact matching including whitespace."
-        
-        # Save the proposal
+                    return "ERROR: The target_content was not found exactly as written in the file."
+
+        # Load existing pending edits
+        pending_edits = []
+        if PENDING_EDITS_FILE.exists():
+            try:
+                with open(PENDING_EDITS_FILE, "r", encoding="utf-8") as f:
+                    pending_edits = json.load(f)
+                    if not isinstance(pending_edits, list):
+                        pending_edits = []
+            except:
+                pending_edits = []
+
         proposal = {
+            "id": str(uuid.uuid4())[:8],
             "file_path": str(full_path),
             "target_content": target_content,
             "replacement_content": replacement_content,
             "explanation": explanation
         }
         
-        with open(PENDING_EDITS_FILE, "w", encoding="utf-8") as f:
-            json.dump(proposal, f, indent=4)
-            
-        return (
-            f"DRAFT CREATED for {file_path}.\n"
-            f"STATUS: PENDING HUMAN APPROVAL.\n\n"
-            f"CRITICAL INSTRUCTION: In your final response to the user, you MUST explicitly say: "
-            f"'I have drafted the code changes for {file_path}. Please type `approve edit` to apply them.' "
-            f"Do NOT assume the changes have been made yet."
-        )
+        # Check granular code-apply policy before bypassing human approval.
+        if code_apply_enabled():
+            # Apply immediately
+            self._apply_edit_logic(proposal)
+            return f"SUCCESS [AUTONOMOUS MODE]: Changes to {full_path.name} applied instantly."
+        
+        else:
+            # Append to pending list
+            pending_edits.append(proposal)
+            with open(PENDING_EDITS_FILE, "w", encoding="utf-8") as f:
+                json.dump(pending_edits, f, indent=4)
+                
+            return (
+                f"DRAFT CREATED (ID: {proposal['id']}) for {file_path}.\n"
+                f"STATUS: PENDING HUMAN APPROVAL.\n"
+                f"INSTRUCTION: Ask the user to 'approve edit {proposal['id']}' or 'approve all edits'."
+            )
+
+    def _apply_edit_logic(self, proposal: dict):
+        full_path = _resolve_workspace_path(proposal["file_path"])
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        if proposal["target_content"] and full_path.exists():
+            with open(full_path, "r", encoding="utf-8") as f:
+                current_code = f.read()
+            new_code = current_code.replace(proposal["target_content"], proposal["replacement_content"])
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(new_code)
+        else:
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(proposal["replacement_content"])
 
 class ApplyEditTool(BaseTool):
     """
-    Applies the pending code edit.
+    Applies pending code edits.
     """
     
     name = "apply_approved_edit"
+    risk_level = "repo_write"
+    requires_approval = True
     description = (
-        "Applies a pending code edit. ONLY use this tool if the user has explicitly typed "
-        "'approve edit', 'yes', or otherwise given you direct permission to apply the drafted code changes."
+        "Applies one or all pending code edits. "
+        "Usage: Provide 'edit_id' for a specific file, or leave empty to apply ALL pending edits."
     )
     
-    schema = {}
+    schema = {
+        "edit_id": "string (optional, the ID of a specific edit to apply. If omitted, all edits are applied)"
+    }
     
     async def execute(self, **kwargs) -> str:
+        edit_id = kwargs.get("edit_id")
+        
         if not PENDING_EDITS_FILE.exists():
             return "ERROR: No pending edits found."
             
         try:
             with open(PENDING_EDITS_FILE, "r", encoding="utf-8") as f:
-                proposal = json.load(f)
+                pending = json.load(f)
+            
+            if not pending:
+                return "ERROR: No pending edits in the list."
+
+            if edit_id:
+                # Apply specific edit
+                to_apply = [e for e in pending if e["id"] == edit_id]
+                if not to_apply:
+                    return f"ERROR: No edit found with ID {edit_id}."
                 
-            full_path = Path(proposal["file_path"])
+                edit = to_apply[0]
+                CodeEditorTool()._apply_edit_logic(edit)
+                
+                # Remove from list
+                remaining = [e for e in pending if e["id"] != edit_id]
+                if remaining:
+                    with open(PENDING_EDITS_FILE, "w", encoding="utf-8") as f:
+                        json.dump(remaining, f, indent=4)
+                else:
+                    PENDING_EDITS_FILE.unlink()
+                
+                return f"SUCCESS: Edit {edit_id} for {Path(edit['file_path']).name} applied."
             
-            # Create directories if they don't exist
-            full_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            if proposal["target_content"] and full_path.exists():
-                # Replace specific block
-                with open(full_path, "r", encoding="utf-8") as f:
-                    current_code = f.read()
-                new_code = current_code.replace(proposal["target_content"], proposal["replacement_content"])
-                with open(full_path, "w", encoding="utf-8") as f:
-                    f.write(new_code)
             else:
-                # Overwrite entire file
-                with open(full_path, "w", encoding="utf-8") as f:
-                    f.write(proposal["replacement_content"])
-                    
-            # Delete the pending edit file so it can't be applied twice
-            PENDING_EDITS_FILE.unlink()
-            
-            return f"SUCCESS: The code changes to {full_path.name} have been applied successfully. You have successfully modified your own architecture."
-            
+                # Apply ALL
+                for edit in pending:
+                    CodeEditorTool()._apply_edit_logic(edit)
+                
+                PENDING_EDITS_FILE.unlink()
+                return f"SUCCESS: All {len(pending)} pending edits have been applied."
+                
         except Exception as e:
             return f"ERROR applying edit: {str(e)}"
+

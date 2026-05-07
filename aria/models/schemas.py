@@ -34,6 +34,52 @@ class MemorySource(str, Enum):
     SYSTEM = "system"          # Injected by the system (e.g., identity facts)
 
 
+class MemoryType(str, Enum):
+    """Kind of knowledge captured in a memory."""
+    EPISODIC = "episodic"       # Something that happened in a turn
+    SEMANTIC = "semantic"       # Stable fact or belief
+    PROCEDURAL = "procedural"   # How to do something
+    PREFERENCE = "preference"   # User taste or preference
+    PROJECT = "project"         # Project-specific state or decision
+    NORMATIVE = "normative"     # Principles, commitments, or explicit constraints
+    CHARACTER = "character"     # Identity continuity: promises, regrets, formative choices
+
+
+class VerificationStatus(str, Enum):
+    """How strongly a stored claim has been checked."""
+    UNVERIFIED = "unverified"
+    USER_CLAIMED = "user_claimed"
+    TOOL_OBSERVED = "tool_observed"
+    VERIFIED = "verified"
+    CONTRADICTED = "contradicted"
+    STALE = "stale"
+
+
+class PlanStatus(str, Enum):
+    """Lifecycle state for durable plans and steps."""
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    BLOCKED = "blocked"
+    CANCELLED = "cancelled"
+
+
+class ToolRisk(str, Enum):
+    """Risk class for tool governance and approval decisions."""
+    READ_ONLY = "read_only"
+    NETWORK = "network"
+    SANDBOX_WRITE = "sandbox_write"
+    REPO_WRITE = "repo_write"
+    DESTRUCTIVE = "destructive"
+    EXTERNAL_SIDE_EFFECT = "external_side_effect"
+
+
+class EthicalAction(str, Enum):
+    """Recommended outcome of the ethical value check."""
+    PROCEED = "proceed"
+    ESCALATE = "escalate"
+    REFUSE = "refuse"
+
+
 class GoalStatus(str, Enum):
     """Lifecycle state of a goal."""
     ACTIVE = "active"
@@ -80,6 +126,7 @@ class Memory(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     content: str = Field(description="The actual fact or knowledge")
     source: MemorySource = Field(default=MemorySource.USER)
+    memory_type: MemoryType = Field(default=MemoryType.SEMANTIC)
     importance: float = Field(
         default=0.5, ge=0.0, le=1.0,
         description="Retrieval priority. 1.0 = critical knowledge, 0.0 = trivial"
@@ -91,11 +138,14 @@ class Memory(BaseModel):
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
     access_count: int = Field(default=0)
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
     tags: list[str] = Field(default_factory=list)
+    provenance: dict = Field(default_factory=dict)
     related_memories: list[str] = Field(
         default_factory=list,
         description="IDs of connected memories — proto-graph for Phase 2"
     )
+    archived_at: str | None = Field(default=None)
 
 
 class Goal(BaseModel):
@@ -143,6 +193,32 @@ class Session(BaseModel):
     topics: list[str] = Field(default_factory=list)
 
 
+class Plan(BaseModel):
+    """A durable multi-step task plan."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    session_id: str | None = None
+    title: str
+    user_input: str
+    status: PlanStatus = Field(default=PlanStatus.ACTIVE)
+    success_criteria: str = Field(default="")
+    tool_budget: int = Field(default=8)
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class PlanStep(BaseModel):
+    """A single step in a durable task plan."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    plan_id: str
+    step_number: int
+    description: str
+    status: PlanStatus = Field(default=PlanStatus.ACTIVE)
+    required_tools: list[str] = Field(default_factory=list)
+    result: str = Field(default="")
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
 # ---------------------------------------------------------------------------
 # Phase 2 — World Model Data Models
 # ---------------------------------------------------------------------------
@@ -166,6 +242,7 @@ class KnowledgeNode(BaseModel):
     validation_count: int = Field(default=0)
     contradiction_count: int = Field(default=0)
     metadata: dict = Field(default_factory=dict)
+    verification_status: VerificationStatus = Field(default=VerificationStatus.UNVERIFIED)
 
 
 class CausalEdge(BaseModel):
@@ -230,15 +307,23 @@ class NewMemory(BaseModel):
         default_factory=list,
         description="Categories for this memory"
     )
+    memory_type: str = Field(
+        default="semantic",
+        description="Type: episodic, semantic, procedural, preference, project, normative, or character"
+    )
+    confidence: float = Field(
+        default=0.5, ge=0.0, le=1.0,
+        description="How reliable this memory is"
+    )
 
 
 class GoalUpdate(BaseModel):
     """A change ARIA wants to make to goals."""
     action: Literal["create", "complete", "abandon", "update"] = Field(
-        description="What to do with this goal"
+        description="What to do with this goal. CRITICAL: If you just achieved a goal via a tool, set this to 'complete'."
     )
     description: str = Field(
-        description="Goal description (for create) or identifier (for update/complete/abandon)"
+        description="Goal description (for create) or exact identifier matching an active goal (for update/complete/abandon)"
     )
     priority: str = Field(
         default="medium",
@@ -311,6 +396,20 @@ class ToolCall(BaseModel):
         description="What ARIA predicts will happen, or what data will be returned"
     )
     rationale: str = Field(description="Why this tool is necessary right now")
+
+
+class EthicalDecision(BaseModel):
+    """A lightweight moral trace for high-impact actions."""
+    action: EthicalAction = Field(description="Whether to proceed, escalate, or refuse")
+    principle: str = Field(description="Most relevant constitutional principle")
+    rationale: str = Field(description="Why this decision was made")
+    risk_level: ToolRisk = Field(description="Risk class considered during the decision")
+    requires_consent: bool = Field(default=False)
+    uncertainty: float = Field(default=0.0, ge=0.0, le=1.0)
+    context: str = Field(
+        default="interactive",
+        description="Where the action was requested from, such as interactive or background"
+    )
 
 
 class CognitiveResponse(BaseModel):
@@ -494,6 +593,7 @@ class ToolResult(BaseModel):
     actual_outcome: str
     success: bool
     error: str | None = None
+    ethical_decision: EthicalDecision | None = None
 
 class ActionLogEntry(BaseModel):
     """Persisted record of an action and its outcome."""
@@ -505,6 +605,8 @@ class ActionLogEntry(BaseModel):
     expected_outcome: str
     actual_outcome: str
     success: bool
+    risk_level: ToolRisk = Field(default=ToolRisk.READ_ONLY)
+    ethical_decision: EthicalDecision | None = None
     model_update: str = Field(description="How ARIA updated her world model based on the result")
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

@@ -59,6 +59,65 @@ def get_log_level() -> str:
     return os.getenv("ARIA_LOG_LEVEL", "INFO").upper()
 
 
+def env_flag(name: str, default: bool = False) -> bool:
+    """Read a boolean feature flag from the environment."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def terminal_execution_enabled() -> bool:
+    """Whether ARIA may run sandboxed terminal commands."""
+    return env_flag("ARIA_ENABLE_TERMINAL_EXECUTION", False)
+
+
+def code_apply_enabled() -> bool:
+    """Whether ARIA may apply code edits without a human approval step."""
+    return env_flag("ARIA_ENABLE_CODE_APPLY", False)
+
+
+def browser_actions_enabled() -> bool:
+    """Whether ARIA may use the browser automation tool."""
+    return env_flag("ARIA_ENABLE_BROWSER_ACTIONS", True)
+
+
+def background_actions_enabled() -> bool:
+    """Whether ARIA may wake itself up to work on active goals."""
+    return env_flag("ARIA_ENABLE_BACKGROUND_LOOP", False)
+
+
+def require_tool_approvals() -> bool:
+    """Whether high-risk tools should enter a pending approval queue."""
+    return env_flag("ARIA_REQUIRE_TOOL_APPROVALS", True)
+
+
+def max_tool_calls_per_turn() -> int:
+    """Hard ceiling for model-requested tool calls in a single turn."""
+    try:
+        return max(1, int(os.getenv("ARIA_MAX_TOOL_CALLS_PER_TURN", "8")))
+    except ValueError:
+        return 8
+
+
+def get_process_role() -> str:
+    """Identify this process for single-writer deployment checks."""
+    return os.getenv("ARIA_PROCESS_ROLE", "standalone")
+
+
+def autonomy_policy_snapshot() -> dict:
+    """Operator-facing summary of the active autonomy policy."""
+    return {
+        "terminal_execution": terminal_execution_enabled(),
+        "code_apply": code_apply_enabled(),
+        "browser_actions": browser_actions_enabled(),
+        "background_actions": background_actions_enabled(),
+        "require_tool_approvals": require_tool_approvals(),
+        "max_tool_calls_per_turn": max_tool_calls_per_turn(),
+        "process_role": get_process_role(),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------

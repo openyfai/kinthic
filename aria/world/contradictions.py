@@ -20,7 +20,10 @@ from aria.models.schemas import (
     CausalEdge,
     Contradiction,
     EdgeType,
+    KnowledgeNode,
+    NodeType,
     StoredContradiction,
+    VerificationStatus,
 )
 from aria.storage.database import Database
 from aria.world.graph import KnowledgeGraph
@@ -49,18 +52,32 @@ class ContradictionDetector:
         node_a_id = self.graph.find_node_by_content(contradiction.existing_claim)
         node_b_id = self.graph.find_node_by_content(contradiction.new_claim)
 
-        if not node_a_id and not node_b_id:
-            log.debug("Contradiction involves no known nodes, skipping")
-            return None
+        if not node_a_id:
+            node_a = await self.graph.add_node(KnowledgeNode(
+                content=contradiction.existing_claim,
+                node_type=NodeType.HYPOTHESIS,
+                confidence=0.4,
+                source="contradiction",
+                verification_status=VerificationStatus.CONTRADICTED,
+                metadata={"provenance": "contradiction_detector"},
+            ))
+            node_a_id = node_a.id
 
-        # Use actual node IDs or placeholder
-        a_id = node_a_id or "unknown"
-        b_id = node_b_id or "unknown"
+        if not node_b_id:
+            node_b = await self.graph.add_node(KnowledgeNode(
+                content=contradiction.new_claim,
+                node_type=NodeType.HYPOTHESIS,
+                confidence=0.4,
+                source="contradiction",
+                verification_status=VerificationStatus.CONTRADICTED,
+                metadata={"provenance": "contradiction_detector"},
+            ))
+            node_b_id = node_b.id
 
         # Create the contradiction record
         stored = StoredContradiction(
-            node_a=a_id,
-            node_b=b_id,
+            node_a=node_a_id,
+            node_b=node_b_id,
             analysis=contradiction.analysis,
             status="unresolved",
         )

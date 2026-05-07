@@ -26,12 +26,16 @@ CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
     content TEXT NOT NULL,
     source TEXT NOT NULL DEFAULT 'user',
+    memory_type TEXT NOT NULL DEFAULT 'semantic',
     importance REAL NOT NULL DEFAULT 0.5,
+    confidence REAL NOT NULL DEFAULT 0.5,
     created_at TEXT NOT NULL,
     last_accessed TEXT NOT NULL,
     access_count INTEGER NOT NULL DEFAULT 0,
     tags TEXT NOT NULL DEFAULT '[]',
-    related_memories TEXT NOT NULL DEFAULT '[]'
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    related_memories TEXT NOT NULL DEFAULT '[]',
+    archived_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_memories_importance ON memories(importance DESC);
@@ -94,6 +98,7 @@ CREATE TABLE IF NOT EXISTS knowledge_nodes (
     last_validated TEXT NOT NULL,
     validation_count INTEGER NOT NULL DEFAULT 0,
     contradiction_count INTEGER NOT NULL DEFAULT 0,
+    verification_status TEXT NOT NULL DEFAULT 'unverified',
     metadata TEXT NOT NULL DEFAULT '{}'
 );
 
@@ -147,6 +152,19 @@ CREATE TABLE IF NOT EXISTS contradictions (
 CREATE INDEX IF NOT EXISTS idx_contradictions_status ON contradictions(status);
 
 -- =====================================================================
+-- Phase 7 — Semantic Disambiguation
+-- =====================================================================
+
+-- Semantic profiles (learned subjective-to-objective mappings)
+CREATE TABLE IF NOT EXISTS semantic_profiles (
+    term TEXT PRIMARY KEY,
+    objective_proxies TEXT NOT NULL, -- JSON list
+    context_tags TEXT NOT NULL DEFAULT '[]',
+    confidence REAL NOT NULL DEFAULT 0.5,
+    updated_at TEXT NOT NULL
+);
+
+-- =====================================================================
 -- Phase 3 — Self-Improvement Tables
 -- =====================================================================
 
@@ -196,9 +214,44 @@ CREATE TABLE IF NOT EXISTS action_logs (
     expected_outcome TEXT NOT NULL,
     actual_outcome TEXT NOT NULL,
     success BOOLEAN NOT NULL,
+    risk_level TEXT NOT NULL DEFAULT 'read_only',
     model_update TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS tool_approvals (
+    id TEXT PRIMARY KEY,
+    session_id TEXT,
+    tool_name TEXT NOT NULL,
+    risk_level TEXT NOT NULL,
+    arguments_json TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL,
+    resolved_at TEXT,
+    FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tool_approvals_status ON tool_approvals(status, created_at);
+
+CREATE TABLE IF NOT EXISTS ethical_decisions (
+    id TEXT PRIMARY KEY,
+    session_id TEXT,
+    turn_number INTEGER NOT NULL DEFAULT 0,
+    tool_name TEXT NOT NULL,
+    principle TEXT NOT NULL,
+    action TEXT NOT NULL,
+    rationale TEXT NOT NULL,
+    risk_level TEXT NOT NULL DEFAULT 'read_only',
+    requires_consent BOOLEAN NOT NULL DEFAULT 0,
+    uncertainty REAL NOT NULL DEFAULT 0.0,
+    context TEXT NOT NULL DEFAULT 'interactive',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ethical_decisions_session ON ethical_decisions(session_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_ethical_decisions_action ON ethical_decisions(action, created_at);
 
 -- =====================================================================
 -- Phase 6 — Transfer + Generalization
@@ -239,7 +292,56 @@ CREATE TABLE IF NOT EXISTS benchmark_history (
     question_count INTEGER NOT NULL,
     created_at TEXT NOT NULL
 );
+
+-- =====================================================================
+-- Durable Planning
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS plans (
+    id TEXT PRIMARY KEY,
+    session_id TEXT,
+    title TEXT NOT NULL,
+    user_input TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    success_criteria TEXT NOT NULL DEFAULT '',
+    tool_budget INTEGER NOT NULL DEFAULT 8,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_plans_session ON plans(session_id, status);
+
+CREATE TABLE IF NOT EXISTS plan_steps (
+    id TEXT PRIMARY KEY,
+    plan_id TEXT NOT NULL,
+    step_number INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    required_tools_json TEXT NOT NULL DEFAULT '[]',
+    result TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (plan_id) REFERENCES plans(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_plan_steps_plan ON plan_steps(plan_id, step_number);
 """
+
+MIGRATIONS_SQL = [
+    "ALTER TABLE memories ADD COLUMN memory_type TEXT NOT NULL DEFAULT 'semantic'",
+    "ALTER TABLE memories ADD COLUMN confidence REAL NOT NULL DEFAULT 0.5",
+    "ALTER TABLE memories ADD COLUMN provenance_json TEXT NOT NULL DEFAULT '{}'",
+    "ALTER TABLE memories ADD COLUMN archived_at TEXT",
+    "ALTER TABLE action_logs ADD COLUMN risk_level TEXT NOT NULL DEFAULT 'read_only'",
+    "ALTER TABLE knowledge_nodes ADD COLUMN verification_status TEXT NOT NULL DEFAULT 'unverified'",
+    "CREATE TABLE IF NOT EXISTS ethical_decisions (id TEXT PRIMARY KEY, session_id TEXT, turn_number INTEGER NOT NULL DEFAULT 0, tool_name TEXT NOT NULL, principle TEXT NOT NULL, action TEXT NOT NULL, rationale TEXT NOT NULL, risk_level TEXT NOT NULL DEFAULT 'read_only', requires_consent BOOLEAN NOT NULL DEFAULT 0, uncertainty REAL NOT NULL DEFAULT 0.0, context TEXT NOT NULL DEFAULT 'interactive', created_at TEXT NOT NULL, FOREIGN KEY (session_id) REFERENCES sessions(id))",
+    # Indexes on columns added by migrations must run after ALTERs (older DBs skip CREATE TABLE).
+    "CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type)",
+    "CREATE INDEX IF NOT EXISTS idx_memories_archived ON memories(archived_at)",
+    "CREATE INDEX IF NOT EXISTS idx_ethical_decisions_session ON ethical_decisions(session_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_ethical_decisions_action ON ethical_decisions(action, created_at)",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -265,8 +367,18 @@ class Database:
 
         # Create tables if they don't exist
         await self._conn.executescript(SCHEMA_SQL)
+        await self._run_migrations()
         await self._conn.commit()
         log.info("Database schema initialized")
+
+    async def _run_migrations(self) -> None:
+        """Apply additive migrations for existing local SQLite brains."""
+        for sql in MIGRATIONS_SQL:
+            try:
+                await self._conn.execute(sql)
+            except aiosqlite.OperationalError as e:
+                if "duplicate column name" not in str(e).lower():
+                    raise
 
     async def close(self) -> None:
         """Close the database connection."""

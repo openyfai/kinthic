@@ -48,6 +48,9 @@ class ContextBuilder:
         tool_registry=None,
         generalization_engine=None,
         skill_loader=None,
+        semantic_parser=None,
+        pruner=None,
+        creativity_stack=None,
     ):
         self.memory = memory_store
         self.goals = goal_tracker
@@ -58,8 +61,11 @@ class ContextBuilder:
         self.tool_registry = tool_registry
         self.generalization_engine = generalization_engine
         self.skill_loader = skill_loader
+        self.semantic_parser = semantic_parser
+        self.pruner = pruner
+        self.creativity_stack = creativity_stack
 
-    async def build(self, user_input: str) -> str:
+    async def build(self, user_input: str, semantic_analysis: dict | None = None) -> str:
         """
         Build the complete system prompt for a cognitive turn.
 
@@ -71,7 +77,8 @@ class ContextBuilder:
           5. Pending Hypotheses — untested predictions
           6. Goals — active objectives
           7. History — recent conversation turns
-          8. Stats — session metrics
+          8. Semantic Analysis — objective translations of subjective input
+          9. Stats — session metrics
         """
         sections: list[str] = []
 
@@ -105,9 +112,19 @@ class ContextBuilder:
 
         # Section 7: Recent conversation history
         recent_turns = await self.session.get_recent_turns(limit=MAX_HISTORY_TURNS)
+        
+        # Phase B: Milestone 4 — Metabolic Pruning
+        if self.pruner:
+            # We prune if we have more than 10 turns
+            recent_turns = await self.pruner.prune(recent_turns, threshold=10)
+            
         sections.append(self._format_history(recent_turns))
 
-        # Section 8: Session stats (including graph stats)
+        # Section 8: Semantic Analysis (Phase 7)
+        if semantic_analysis and semantic_analysis.get('subjective_interpretations'):
+            sections.append(self._format_semantic_analysis(semantic_analysis))
+
+        # Section 9: Session stats (including graph stats)
         sections.append(await self._format_stats())
 
         # Section 9: Tools
@@ -127,6 +144,10 @@ class ContextBuilder:
             skill_block = self.skill_loader.format_for_prompt()
             if skill_block:
                 sections.append(skill_block)
+
+        # Section 12: Creativity roles for high-leverage ideation tasks
+        if self.creativity_stack and self._needs_creativity(user_input):
+            sections.append(self.creativity_stack.format_for_prompt(user_input))
 
         # ── Assemble with budget enforcement ────────────────────────
         # Sections are in priority order. Lower-priority sections at
@@ -208,10 +229,13 @@ class ContextBuilder:
             importance_bar = "█" * int(mem.importance * 10)
             importance_bar = importance_bar.ljust(10, "░")
             tags_str = f" [{', '.join(mem.tags)}]" if mem.tags else ""
+            provenance = mem.provenance.get("source_ref") or mem.provenance.get("tool") or mem.provenance.get("session_id")
+            provenance_str = f" | provenance: {provenance}" if provenance else ""
             lines.append(
                 f"  [{i}] {mem.content}\n"
                 f"      importance: {importance_bar} {mem.importance:.1f} | "
-                f"source: {mem.source} | accessed: {mem.access_count}x{tags_str}"
+                f"type: {mem.memory_type} | confidence: {mem.confidence:.1f} | "
+                f"source: {mem.source} | accessed: {mem.access_count}x{tags_str}{provenance_str}"
             )
 
         lines.append("")
@@ -260,6 +284,9 @@ class ContextBuilder:
         if not goals:
             lines.append("  No active goals. Consider what you're working toward.")
         else:
+            lines.append("  IMPORTANT: If you have just successfully executed tools that fulfill one of these goals,")
+            lines.append("  you MUST output a GoalUpdate with action='complete' in your CognitiveResponse JSON.")
+            lines.append("")
             for i, goal in enumerate(goals, 1):
                 priority_icon = {
                     "critical": "🔴",
@@ -295,6 +322,12 @@ class ContextBuilder:
         sanitized = sanitized[:max_length]
 
         return sanitized
+
+    @staticmethod
+    def _needs_creativity(text: str) -> bool:
+        keywords = {"design", "creative", "brainstorm", "architecture", "strategy", "vision", "ui", "ux"}
+        words = {w.strip(".,!?;:").lower() for w in text.split()}
+        return bool(words & keywords)
 
     def _format_history(self, turns: list[Turn]) -> str:
         """Format recent conversation history with input sanitization."""
@@ -352,3 +385,47 @@ class ContextBuilder:
             f"  Active goals:   {active_goals}\n"
             f"  Avg confidence: {avg_conf:.2f}\n"
         )
+    def _format_semantic_analysis(self, analysis: dict) -> str:
+        """Formats the semantic disambiguation results for the system prompt."""
+        lines = [
+            "═══════════════════════════════════════════════════════════",
+            "SEMANTIC ANALYSIS & OBJECTIVE TRANSLATION",
+            "═══════════════════════════════════════════════════════════",
+            "The following subjective or ambiguous terms in the user input have been translated into objective proxies.",
+            ""
+        ]
+        
+        for term, details in analysis['subjective_interpretations'].items():
+            proxies = ", ".join(details['objective_proxies'])
+            mapped = ", ".join(details.get('mapped_concepts', [])) or "none"
+            ambiguity = details.get('ambiguity', 'low')
+            lines.append(f"- Subjective: '{term}' → Objective Proxies: [{proxies}]")
+            lines.append(f"  Ontology Concepts: [{mapped}] | Ambiguity: {ambiguity}")
+            if details.get('context_window'):
+                lines.append(f"  Local Context: \"{details['context_window']}\"")
+            if details.get('clarification_prompt') and ambiguity in {'medium', 'high'}:
+                lines.append(f"  Clarification Prompt: {details['clarification_prompt']}")
+
+        if analysis.get('identified_concepts'):
+            lines.append("\nIdentified Ontology Concepts:")
+            for concept in analysis['identified_concepts']:
+                lines.append(f"- {concept}")
+            
+        if analysis.get('causal_inferences'):
+            lines.append("\nPotential Causal Inferences:")
+            for inference in analysis['causal_inferences']:
+                lines.append(f"- {inference}")
+
+        if analysis.get('potential_actions'):
+            lines.append("\nPotential Semantic Actions:")
+            for action in analysis['potential_actions']:
+                lines.append(f"- {action}")
+                
+        if analysis.get('clarification_candidates'):
+            lines.append(
+                "\nIf the user's intent materially depends on one of the ambiguous terms above, "
+                "ask a brief clarifying question before committing to a strong interpretation."
+            )
+
+        lines.append("\nPrioritize objective interpretations, but preserve ambiguity when the user has not yet disambiguated it.")
+        return "\n".join(lines)

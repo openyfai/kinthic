@@ -60,6 +60,7 @@ def _is_path_safe(path: Path) -> tuple[bool, str]:
 
 class FileReaderTool(BaseTool):
     name = "read_file"
+    risk_level = "read_only"
     description = (
         "Reads the text content of a local file. "
         "Files must be inside the project directory. "

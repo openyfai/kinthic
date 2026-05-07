@@ -92,15 +92,31 @@ class GeminiClient:
         return self._client
 
     @retry_on_transient(max_retries=3, base_delay=1.5)
-    async def think(self, system_prompt: str, user_input: str) -> CognitiveResponse:
+    async def think(
+        self, 
+        system_prompt: str, 
+        user_input: str, 
+        images: list[dict] | None = None,
+        model_override: str | None = None
+    ) -> CognitiveResponse:
         """
         Send a prompt to Gemini and get a structured CognitiveResponse.
-
+        Supports multimodal inputs via optional 'images' list [{"mime": "...", "bytes": b"..."}].
         Retries automatically on transient API errors (503, 429).
         """
+        model = model_override or self._model
+        
+        contents = []
+        if images:
+            for img_dict in images:
+                contents.append(
+                    types.Part.from_bytes(data=img_dict["bytes"], mime_type=img_dict["mime"])
+                )
+        contents.append(user_input)
+
         response = await self.client.aio.models.generate_content(
-            model=self._model,
-            contents=user_input,
+            model=model,
+            contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 response_mime_type="application/json",
@@ -118,13 +134,17 @@ class GeminiClient:
         except json.JSONDecodeError:
             log.warning("Gemini returned invalid JSON. Attempting repair...")
             # Retry once with a nudge
+            retry_contents = contents.copy()
+            # remove the last item (the user_input) and append the nudged version
+            retry_contents.pop()
+            retry_contents.append(
+                f"{user_input}\n\n"
+                "[SYSTEM: Your previous response was not valid JSON. "
+                "Please respond ONLY with valid JSON matching the schema.]"
+            )
             response = await self.client.aio.models.generate_content(
                 model=self._model,
-                contents=(
-                    f"{user_input}\n\n"
-                    "[SYSTEM: Your previous response was not valid JSON. "
-                    "Please respond ONLY with valid JSON matching the schema.]"
-                ),
+                contents=retry_contents,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
                     response_mime_type="application/json",

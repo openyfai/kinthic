@@ -12,6 +12,8 @@ class BaseTool:
     
     name: str = "base_tool"
     description: str = "Base description."
+    risk_level: str = "read_only"
+    requires_approval: bool = False
     
     # We will use this schema to inform the LLM how to call the tool
     schema: dict = {}
@@ -26,4 +28,9 @@ class BaseTool:
     @classmethod
     def get_prompt_description(cls) -> str:
         """Formats the tool for the system prompt."""
-        return f"- **{cls.name}**: {cls.description}\n  Args: {cls.schema}"
+        approval = "requires approval" if cls.requires_approval else "auto-allowed by policy"
+        return (
+            f"- **{cls.name}**: {cls.description}\n"
+            f"  Risk: {cls.risk_level} ({approval})\n"
+            f"  Args: {cls.schema}"
+        )

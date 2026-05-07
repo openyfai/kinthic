@@ -36,8 +36,21 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Pass incoming Telegram messages into ARIA's Cognitive Loop."""
-    user_text = update.message.text
-    if not user_text:
+    user_text = update.message.text or update.message.caption or ""
+    
+    # Process attachments
+    images = None
+    if update.message.photo:
+        photo = update.message.photo[-1]
+        file = await context.bot.get_file(photo.file_id)
+        img_bytes = await file.download_as_bytearray()
+        images = [{"mime": "image/jpeg", "bytes": bytes(img_bytes)}]
+    elif update.message.document and update.message.document.mime_type and update.message.document.mime_type.startswith("image/"):
+        file = await context.bot.get_file(update.message.document.file_id)
+        img_bytes = await file.download_as_bytearray()
+        images = [{"mime": update.message.document.mime_type, "bytes": bytes(img_bytes)}]
+
+    if not user_text and not images:
         return
 
     user_id = update.effective_user.id
@@ -85,7 +98,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     try:
         # Route the message into the core agent loop!
-        cognitive = await aria_loop.process(user_text)
+        cognitive = await aria_loop.process(user_text, images=images)
         
         # -------------------------------------------------------------------------
         # STABILITY: Markdown Fallback
@@ -158,7 +171,7 @@ def main():
 
     # Register handlers
     app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, handle_message))
 
     # Start polling for messages
     app.run_polling()

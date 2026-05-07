@@ -10,9 +10,13 @@ services:
       - ./data:/app/data
       - ./.env:/app/.env
     restart: unless-stopped
+    environment:
+      - ARIA_PROCESS_ROLE=web
     command: python scripts/web_server.py
 
   aria-telegram:
+    profiles:
+      - telegram
     build: .
     container_name: aria-telegram
     volumes:
@@ -20,6 +24,8 @@ services:
       - ./.env:/app/.env
       - ./skills:/app/skills
     restart: unless-stopped
+    environment:
+      - ARIA_PROCESS_ROLE=telegram
     command: python scripts/telegram_bot.py
     depends_on:
       - aria-graph
