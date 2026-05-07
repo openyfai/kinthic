@@ -2,6 +2,8 @@ version: '3.8'
 
 services:
   aria-graph:
+    profiles:
+      - web
     build: .
     container_name: aria-graph
     ports:
@@ -9,9 +11,11 @@ services:
     volumes:
       - ./data:/app/data
       - ./.env:/app/.env
+      - ./skills:/app/skills
     restart: unless-stopped
     environment:
       - ARIA_PROCESS_ROLE=web
+      - ARIA_WEB_HOST=0.0.0.0
     command: python scripts/web_server.py
 
   aria-telegram:
@@ -27,5 +31,3 @@ services:
     environment:
       - ARIA_PROCESS_ROLE=telegram
     command: python scripts/telegram_bot.py
-    depends_on:
-      - aria-graph

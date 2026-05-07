@@ -3,7 +3,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "ARIA Web Interface",
-  description: "Advanced Sovereign AGI",
+  description:
+    "Local-first AI agent with a visible brain: memory, knowledge graph, and operator controls.",
 };
 
 export default function RootLayout({

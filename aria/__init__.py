@@ -1,9 +1,8 @@
 """
-ARIA — Adaptive Reasoning & Intelligence Architecture
-Phase 1: Cognitive Core + Memory
+ARIA — local-first cognitive agent (memory, goals, graph, governed tools).
 
-A persistent cognitive agent with memory, goals, reasoning traces,
-and self-reflection. Built as the foundation for artificial general intelligence.
+A persistent cognitive agent with memory, goals, reasoning traces, and reflection.
+Operators configure providers, autonomy policy, and identity through settings.
 """
 
 __version__ = "0.1.0"

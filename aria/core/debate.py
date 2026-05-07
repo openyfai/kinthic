@@ -11,9 +11,8 @@ import json
 import uuid
 from datetime import datetime, timezone
 from typing import Callable, Any
-from google.genai import types
 
-from aria.llm.gemini import GeminiClient
+from aria.llm.base import SupportsLLM
 from aria.models.schemas import DebateArgument, DebateResolution, UncertaintyTopic
 from aria.storage.database import Database
 from aria.utils.logger import setup_logger
@@ -44,8 +43,8 @@ You are objective, emotionless, and deeply wise."""
 class DebateEngine:
     """Manages multi-agent debates and truth synthesis."""
 
-    def __init__(self, gemini_client: GeminiClient, db: Database):
-        self.gemini = gemini_client
+    def __init__(self, llm_client: SupportsLLM, db: Database):
+        self.llm = llm_client
         self.db = db
 
     async def run_debate(
@@ -108,18 +107,15 @@ class DebateEngine:
             
         content = f"TOPIC: {topic}\n\n{history}\nIt is your turn. Deliver your argument."
         
-        response = await self.gemini.client.aio.models.generate_content(
-            model=self.gemini._model,
-            contents=content,
-            config=types.GenerateContentConfig(
-                system_instruction=prompt,
-                response_mime_type="application/json",
-                response_schema=DebateArgument,
+        data = (
+            await self.llm.complete_json(
+                schema=DebateArgument,
+                system_prompt=prompt,
+                user_input=content,
                 temperature=0.7,
-            ),
-        )
-        
-        data = json.loads(response.text)
+                request_kind="debate_argument",
+            )
+        ).model_dump()
         # Ensure the agent_id is correct regardless of what the model hallucinates
         data["agent_id"] = agent_id
         return DebateArgument(**data)
@@ -134,19 +130,13 @@ class DebateEngine:
             
         content = f"TOPIC: {topic}\n\n{history}\nEvaluate and synthesize."
         
-        response = await self.gemini.client.aio.models.generate_content(
-            model=self.gemini._model,
-            contents=content,
-            config=types.GenerateContentConfig(
-                system_instruction=JUDGE_PROMPT,
-                response_mime_type="application/json",
-                response_schema=DebateResolution,
-                temperature=0.2, # Low temp for objective judgment
-            ),
+        return await self.llm.complete_json(
+            schema=DebateResolution,
+            system_prompt=JUDGE_PROMPT,
+            user_input=content,
+            temperature=0.2,
+            request_kind="debate_judge",
         )
-        
-        data = json.loads(response.text)
-        return DebateResolution(**data)
         
     async def _save_debate(
         self, topic: str, transcript: list[DebateArgument], resolution: DebateResolution

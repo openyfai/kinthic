@@ -8,11 +8,8 @@ and provides them as context for cross-domain reasoning.
 from __future__ import annotations
 
 import json
-import uuid
-from datetime import datetime, timezone
-from google.genai import types
 
-from aria.llm.gemini import GeminiClient
+from aria.llm.base import SupportsLLM
 from aria.models.schemas import (
     CausalObservation,
     PrincipleExtractionResponse,
@@ -46,8 +43,8 @@ Do NOT force a principle where none exists. Quality over quantity."""
 class GeneralizationEngine:
     """Manages extraction and retrieval of universal principles."""
 
-    def __init__(self, gemini_client: GeminiClient, db: Database):
-        self.gemini = gemini_client
+    def __init__(self, llm_client: SupportsLLM, db: Database):
+        self.llm = llm_client
         self.db = db
 
     async def abstract_principles(
@@ -69,19 +66,13 @@ class GeneralizationEngine:
         content = f"CAUSAL OBSERVATIONS:\n{obs_text}\n\nExtract a universal principle if one exists."
 
         try:
-            response = await self.gemini.client.aio.models.generate_content(
-                model=self.gemini._model,
-                contents=content,
-                config=types.GenerateContentConfig(
-                    system_instruction=EXTRACTION_PROMPT,
-                    response_mime_type="application/json",
-                    response_schema=PrincipleExtractionResponse,
-                    temperature=0.3,
-                ),
+            extraction = await self.llm.complete_json(
+                schema=PrincipleExtractionResponse,
+                system_prompt=EXTRACTION_PROMPT,
+                user_input=content,
+                temperature=0.3,
+                request_kind="generalization",
             )
-
-            data = json.loads(response.text)
-            extraction = PrincipleExtractionResponse(**data)
 
             if not extraction.has_principle or not extraction.name:
                 log.debug("No universal principle extracted from this batch.")

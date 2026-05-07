@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" fill="none">
+  <rect width="1600" height="900" fill="#050505"/>
+  <rect x="84" y="72" width="1432" height="756" rx="36" fill="#0C0C0C" stroke="#1F1F1F"/>
+  <text x="130" y="146" fill="#7F7F7F" font-family="Arial, sans-serif" font-size="18" letter-spacing="5">PLACEHOLDER ASSET</text>
+  <text x="130" y="230" fill="white" font-family="Arial, sans-serif" font-size="48">Onboarding provider selection</text>
+  <text x="130" y="282" fill="#C6C6C6" font-family="Arial, sans-serif" font-size="24">Replace with a real screenshot before launch.</text>
+  <rect x="130" y="344" width="620" height="320" rx="28" fill="#111111" stroke="#2A2A2A"/>
+  <rect x="830" y="344" width="640" height="320" rx="28" fill="#0E1612" stroke="#214A35"/>
+  <text x="170" y="408" fill="#8B8B8B" font-family="Arial, sans-serif" font-size="20">Provider</text>
+  <rect x="170" y="438" width="540" height="64" rx="18" fill="#171717" stroke="#2E2E2E"/>
+  <text x="198" y="480" fill="white" font-family="Arial, sans-serif" font-size="24">Google Gemini</text>
+  <text x="170" y="566" fill="#8B8B8B" font-family="Arial, sans-serif" font-size="20">Model</text>
+  <rect x="170" y="596" width="540" height="64" rx="18" fill="#171717" stroke="#2E2E2E"/>
+  <text x="198" y="638" fill="white" font-family="Arial, sans-serif" font-size="24">Gemini 2.5 Flash</text>
+  <text x="870" y="414" fill="#7DF0B1" font-family="Arial, sans-serif" font-size="28">Capture the moment where setup feels trustworthy.</text>
+  <text x="870" y="462" fill="#D9FBE8" font-family="Arial, sans-serif" font-size="22">Show provider choice, model choice, and safe defaults.</text>
+</svg>

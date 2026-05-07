@@ -11,9 +11,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from typing import Callable, Any
-from google.genai import types
 
-from aria.llm.gemini import GeminiClient
+from aria.llm.base import SupportsLLM
 from aria.models.schemas import (
     MetaAnalysisResponse,
     SelfImprovementProposal,
@@ -50,8 +49,8 @@ Valid target systems:
 class MetaReasoningEngine:
     """Analyzes ARIA's performance and generates self-improvement proposals."""
 
-    def __init__(self, gemini_client: GeminiClient, db: Database):
-        self.gemini = gemini_client
+    def __init__(self, llm_client: SupportsLLM, db: Database):
+        self.llm = llm_client
         self.db = db
 
     async def analyze_and_propose(
@@ -74,19 +73,13 @@ class MetaReasoningEngine:
             status_callback("[bright_magenta]  Running meta-analysis...[/]")
 
         try:
-            response = await self.gemini.client.aio.models.generate_content(
-                model=self.gemini._model,
-                contents=f"PERFORMANCE DATA:\n{performance_data}\n\nAnalyze and propose an improvement if warranted.",
-                config=types.GenerateContentConfig(
-                    system_instruction=META_ANALYSIS_PROMPT,
-                    response_mime_type="application/json",
-                    response_schema=MetaAnalysisResponse,
-                    temperature=0.2,
-                ),
+            analysis = await self.llm.complete_json(
+                schema=MetaAnalysisResponse,
+                system_prompt=META_ANALYSIS_PROMPT,
+                user_input=f"PERFORMANCE DATA:\n{performance_data}\n\nAnalyze and propose an improvement if warranted.",
+                temperature=0.2,
+                request_kind="meta_reasoning",
             )
-
-            data = json.loads(response.text)
-            analysis = MetaAnalysisResponse(**data)
 
             if not analysis.has_proposal or not analysis.description:
                 log.info("Meta-analysis found no actionable improvements.")

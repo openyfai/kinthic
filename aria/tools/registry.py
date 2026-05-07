@@ -192,8 +192,8 @@ class ToolRegistry:
                 """
                 INSERT INTO tool_approvals (
                     id, session_id, tool_name, risk_level, arguments_json,
-                    reason, status, created_at, resolved_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    expected_outcome, reason, status, created_at, resolved_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     approval_id,
@@ -201,6 +201,7 @@ class ToolRegistry:
                     tool.name,
                     tool.risk_level,
                     json.dumps(args_dict),
+                    reason or "Tool requested by model.",
                     reason or "Tool requested by model.",
                     "pending",
                     datetime.now(timezone.utc).isoformat(),
@@ -249,8 +250,37 @@ class ToolRegistry:
         if not self.db:
             return False
         now = datetime.now(timezone.utc).isoformat()
+        approval = await self.db.fetch_one(
+            "SELECT * FROM tool_approvals WHERE id = ?",
+            (approval_id,),
+        )
+        if not approval:
+            return False
+
+        execution_result_json = None
+        if status == "approved":
+            tool = self.tools.get(approval["tool_name"])
+            if tool:
+                args_dict = json.loads(approval["arguments_json"])
+                try:
+                    outcome = await tool.execute(**args_dict)
+                    execution_result_json = json.dumps(
+                        {
+                            "success": not outcome.lower().startswith("error:"),
+                            "actual_outcome": outcome,
+                        }
+                    )
+                except Exception as exc:
+                    execution_result_json = json.dumps(
+                        {
+                            "success": False,
+                            "actual_outcome": "Error executing approved tool.",
+                            "error": str(exc),
+                        }
+                    )
+
         await self.db.execute(
-            "UPDATE tool_approvals SET status = ?, resolved_at = ? WHERE id = ?",
-            (status, now, approval_id),
+            "UPDATE tool_approvals SET status = ?, resolved_at = ?, execution_result_json = ? WHERE id = ?",
+            (status, now, execution_result_json, approval_id),
         )
         return True

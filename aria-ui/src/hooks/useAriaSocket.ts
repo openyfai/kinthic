@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { apiUrl, getAuthHeaders } from '@/lib/api';
+import { apiUrl, getApiKey, getAuthHeaders } from '@/lib/api';
 
 export interface Message {
   id: string;
@@ -63,7 +63,7 @@ type LoadedTurn = {
 const WS_RECONNECT_DELAY = 2000;
 const WS_MAX_RETRIES = 10;
 
-export function useAriaSocket(url: string) {
+export function useAriaSocket(url: string, enabled = true) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [monologue, setMonologue] = useState<MonologueEntry[]>([]);
   const [isThinking, setIsThinking] = useState(false);
@@ -104,18 +104,20 @@ export function useAriaSocket(url: string) {
 
   // ----- Session fetching -----
   const fetchSessions = useCallback(async () => {
+    if (!enabled) return;
     try {
       const res = await fetch(apiUrl('/api/sessions'), { headers: getAuthHeaders() });
       if (res.ok) setSessions(await res.json());
     } catch (e) {
       console.error("Failed to fetch sessions", e);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     const timer = setTimeout(() => void fetchSessions(), 0);
     return () => clearTimeout(timer);
-  }, [fetchSessions]);
+  }, [enabled, fetchSessions]);
 
   useEffect(() => {
     if (!busyStartedAt || (!isThinking && !isStreaming)) {
@@ -140,14 +142,7 @@ export function useAriaSocket(url: string) {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      setIsConnected(true);
-      retriesRef.current = 0;
-      setLastError(null);
-      pushActivity({
-        tone: 'system',
-        title: 'Live link established',
-        detail: 'ARIA is connected and ready for new prompts.'
-      });
+      ws.send(JSON.stringify({ type: 'auth', api_key: getApiKey() }));
     };
 
     ws.onmessage = (event) => {
@@ -160,6 +155,18 @@ export function useAriaSocket(url: string) {
       }
 
       switch (data.type) {
+        case 'auth_ok': {
+          setIsConnected(true);
+          retriesRef.current = 0;
+          setLastError(null);
+          pushActivity({
+            tone: 'system',
+            title: 'Live link established',
+            detail: 'ARIA is connected and ready for new prompts.'
+          });
+          break;
+        }
+
         case 'monologue': {
           const entry: MonologueEntry = {
             id: Date.now().toString() + Math.random(),
@@ -315,12 +322,16 @@ export function useAriaSocket(url: string) {
   }, [url, fetchSessions, pushActivity]);
 
   useEffect(() => {
+    if (!enabled) {
+      setIsConnected(false);
+      return;
+    }
     connectWs();
     return () => {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       wsRef.current?.close();
     };
-  }, [connectWs]);
+  }, [connectWs, enabled]);
 
   // ----- Send message -----
   const sendMessage = useCallback(async (text: string, files?: File[]) => {

@@ -1,16 +1,12 @@
 'use client';
 
 import { Message01Icon as MessageSquare, Target01Icon as Target, AiNetworkIcon as Network, Add01Icon as Plus } from 'hugeicons-react';
-import { SessionMeta } from '@/hooks/useAriaSocket';
 
 export type ViewType = 'chat' | 'goals' | 'graph';
 
 interface Props {
-  sessions: SessionMeta[];
-  activeSessionId: string | null;
   currentView: ViewType;
   onViewChange: (view: ViewType) => void;
-  onSelectSession: (id: string) => void;
   onNewChat: () => void;
 }
 
@@ -20,7 +16,7 @@ const navItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
   { id: 'graph', label: 'Knowledge Graph', icon: <Network size={15} /> },
 ];
 
-export default function TopNav({ sessions, activeSessionId, currentView, onViewChange, onSelectSession, onNewChat }: Props) {
+export default function TopNav({ currentView, onViewChange, onNewChat }: Props) {
   return (
     <header className="w-full flex-shrink-0 flex items-center gap-1 px-4 h-12 border-b border-border bg-background z-40">
 

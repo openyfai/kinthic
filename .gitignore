@@ -1,9 +1,33 @@
-# Runtime data
+# Runtime data & secrets — never publish
 data/
 !data/.gitkeep
-
-# Environment
 .env
+.env.*
+!.env.example
+*.pem
+*.p12
+id_rsa*
+
+# Builder-only & personal planning docs (keep on your machine only)
+.cursor/
+aria_packaging.md
+context.md
+aria_launch_plan.md
+aria_expansion_plan.md
+aria_conclusion_state.md
+aria_phase*_plan.md
+ARIA_*.md
+docs/phase_f_plan.md
+
+# IDE / assistant scratch (can contain project-specific prompts)
+**/AGENTS.md
+**/CLAUDE.md
+.aria_pending_edits.json
+
+# Workspace & ad-hoc experiments
+scratch/
+workspace/
+test_screenshot.png
 
 # Python
 __pycache__/
@@ -13,6 +37,13 @@ __pycache__/
 dist/
 build/
 .eggs/
+
+# Frontend — dependencies & build output (never push)
+aria-ui/node_modules/
+aria-ui/.next/
+aria-ui/out/
+aria-ui/dist/
+aria-ui/huge*.txt
 
 # IDE
 .vscode/

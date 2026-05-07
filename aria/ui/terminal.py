@@ -57,6 +57,7 @@ console = Console(theme=ARIA_THEME)
 
 def show_banner() -> None:
     """Display the ARIA startup banner."""
+    _border_inner = 54  # characters between "    ║     " and closing "║"
     banner = Text()
     banner.append("    ╔═══════════════════════════════════════════════════════════╗\n", style="bright_cyan")
     banner.append("    ║                                                           ║\n", style="bright_cyan")
@@ -67,8 +68,18 @@ def show_banner() -> None:
     banner.append("    ║     ██║  ██║██║  ██║██║██║  ██║                            ║\n", style="bright_cyan")
     banner.append("    ║     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝                            ║\n", style="bright_cyan")
     banner.append("    ║                                                           ║\n", style="bright_cyan")
-    banner.append("    ║     Adaptive Reasoning & Intelligence Architecture        ║\n", style="dim bright_cyan")
-    banner.append("    ║     Phase 01 — Cognitive Core + Memory                    ║\n", style="dim bright_cyan")
+    banner.append(
+        "    ║     "
+        + "Local-first agent · memory · graph · governed tools".ljust(_border_inner)
+        + "║\n",
+        style="dim bright_cyan",
+    )
+    banner.append(
+        "    ║     "
+        + "Phase 01 — Cognitive Core + Memory".ljust(_border_inner)
+        + "║\n",
+        style="dim bright_cyan",
+    )
     banner.append("    ║     v0.1.0                                                ║\n", style="dim bright_cyan")
     banner.append("    ║                                                           ║\n", style="bright_cyan")
     banner.append("    ╚═══════════════════════════════════════════════════════════╝\n", style="bright_cyan")

@@ -225,8 +225,10 @@ CREATE TABLE IF NOT EXISTS tool_approvals (
     tool_name TEXT NOT NULL,
     risk_level TEXT NOT NULL,
     arguments_json TEXT NOT NULL,
+    expected_outcome TEXT NOT NULL DEFAULT '',
     reason TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'pending',
+    execution_result_json TEXT,
     created_at TEXT NOT NULL,
     resolved_at TEXT,
     FOREIGN KEY (session_id) REFERENCES sessions(id)
@@ -293,6 +295,25 @@ CREATE TABLE IF NOT EXISTS benchmark_history (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS llm_usage (
+    id TEXT PRIMARY KEY,
+    session_id TEXT,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    request_kind TEXT NOT NULL,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    estimated_cost_usd REAL,
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    success BOOLEAN NOT NULL DEFAULT 1,
+    error TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_llm_usage_created ON llm_usage(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_llm_usage_provider_model ON llm_usage(provider, model, created_at DESC);
+
 -- =====================================================================
 -- Durable Planning
 -- =====================================================================
@@ -341,6 +362,11 @@ MIGRATIONS_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_memories_archived ON memories(archived_at)",
     "CREATE INDEX IF NOT EXISTS idx_ethical_decisions_session ON ethical_decisions(session_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_ethical_decisions_action ON ethical_decisions(action, created_at)",
+    "ALTER TABLE tool_approvals ADD COLUMN expected_outcome TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE tool_approvals ADD COLUMN execution_result_json TEXT",
+    "CREATE TABLE IF NOT EXISTS llm_usage (id TEXT PRIMARY KEY, session_id TEXT, provider TEXT NOT NULL, model TEXT NOT NULL, request_kind TEXT NOT NULL, input_tokens INTEGER, output_tokens INTEGER, estimated_cost_usd REAL, duration_ms INTEGER NOT NULL DEFAULT 0, success BOOLEAN NOT NULL DEFAULT 1, error TEXT, created_at TEXT NOT NULL, FOREIGN KEY (session_id) REFERENCES sessions(id))",
+    "CREATE INDEX IF NOT EXISTS idx_llm_usage_created ON llm_usage(created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_llm_usage_provider_model ON llm_usage(provider, model, created_at DESC)",
 ]
 
 

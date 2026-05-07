@@ -1,21 +1,23 @@
 """
-Gemini LLM Client — ARIA's connection to Google's Gemini models.
-
-Handles structured output via Pydantic schemas, retry with exponential
-backoff on transient errors (503, 429), and model selection via config.
+Gemini provider implementation.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import time
 from functools import wraps
+from typing import Any
 
 from google import genai
 from google.genai import types
+from pydantic import BaseModel
 
-from aria.models.schemas import CognitiveResponse
-from aria.utils.config import get_api_key, get_model
+from aria.llm.base import BaseLLMProvider, SchemaT
+from aria.runtime.settings import RuntimeSettingsStore
+from aria.runtime.usage import UsageTracker
+from aria.utils.config import get_provider_secret, get_provider_settings
 from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.llm")
@@ -65,24 +67,26 @@ def retry_on_transient(max_retries: int = 3, base_delay: float = 1.0):
 # Gemini Client
 # ---------------------------------------------------------------------------
 
-SYSTEM_CONFIG = types.GenerateContentConfig(
-    response_mime_type="application/json",
-    response_schema=CognitiveResponse,
-    temperature=0.7,
-)
-
-
-class GeminiClient:
+class GeminiClient(BaseLLMProvider):
     """Manages the connection to Google's Gemini API."""
 
-    def __init__(self):
-        self._model = get_model()
+    def __init__(
+        self,
+        settings_store: RuntimeSettingsStore | None = None,
+        usage_tracker: UsageTracker | None = None,
+    ):
+        settings = get_provider_settings(settings_store)
+        super().__init__(default_model=settings["model"])
+        self._settings_store = settings_store
+        self._usage_tracker = usage_tracker
         self._client: genai.Client | None = None
+        self.provider_name = "gemini"
 
     def connect(self) -> None:
         """Initialize the Gemini client."""
-        self._client = genai.Client(api_key=get_api_key())
-        log.info(f"Gemini client initialized with model: {self._model}")
+        api_key = get_provider_secret("gemini", settings_store=self._settings_store)
+        self._client = genai.Client(api_key=api_key)
+        log.info(f"Gemini client initialized with model: {self.default_model}")
 
     @property
     def client(self) -> genai.Client:
@@ -92,20 +96,18 @@ class GeminiClient:
         return self._client
 
     @retry_on_transient(max_retries=3, base_delay=1.5)
-    async def think(
-        self, 
-        system_prompt: str, 
-        user_input: str, 
+    async def complete_json(
+        self,
+        *,
+        schema: type[SchemaT],
+        system_prompt: str,
+        user_input: str,
         images: list[dict] | None = None,
-        model_override: str | None = None
-    ) -> CognitiveResponse:
-        """
-        Send a prompt to Gemini and get a structured CognitiveResponse.
-        Supports multimodal inputs via optional 'images' list [{"mime": "...", "bytes": b"..."}].
-        Retries automatically on transient API errors (503, 429).
-        """
-        model = model_override or self._model
-        
+        model_override: str | None = None,
+        temperature: float = 0.7,
+        request_kind: str = "chat",
+    ) -> SchemaT:
+        model = model_override or self.default_model
         contents = []
         if images:
             for img_dict in images:
@@ -114,44 +116,62 @@ class GeminiClient:
                 )
         contents.append(user_input)
 
-        response = await self.client.aio.models.generate_content(
-            model=model,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                response_mime_type="application/json",
-                response_schema=CognitiveResponse,
-                temperature=0.7,
-            ),
-        )
-
-        raw_text = response.text
-        if not raw_text:
-            raise ValueError("Empty response from Gemini")
-
+        started = time.perf_counter()
+        error_text: str | None = None
+        response: Any | None = None
         try:
-            data = json.loads(raw_text)
-        except json.JSONDecodeError:
-            log.warning("Gemini returned invalid JSON. Attempting repair...")
-            # Retry once with a nudge
-            retry_contents = contents.copy()
-            # remove the last item (the user_input) and append the nudged version
-            retry_contents.pop()
-            retry_contents.append(
-                f"{user_input}\n\n"
-                "[SYSTEM: Your previous response was not valid JSON. "
-                "Please respond ONLY with valid JSON matching the schema.]"
-            )
             response = await self.client.aio.models.generate_content(
-                model=self._model,
-                contents=retry_contents,
+                model=model,
+                contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
                     response_mime_type="application/json",
-                    response_schema=CognitiveResponse,
-                    temperature=0.5,
+                    response_schema=schema,
+                    temperature=temperature,
                 ),
             )
-            data = json.loads(response.text)
 
-        return CognitiveResponse(**data)
+            raw_text = response.text
+            if not raw_text:
+                raise ValueError("Empty response from Gemini")
+
+            try:
+                parsed = schema.model_validate_json(raw_text)
+            except Exception:
+                log.warning("Gemini returned invalid JSON. Attempting repair...")
+                retry_contents = contents.copy()
+                retry_contents.pop()
+                retry_contents.append(
+                    f"{user_input}\n\n"
+                    "[SYSTEM: Your previous response was not valid JSON. "
+                    "Please respond ONLY with valid JSON matching the schema.]"
+                )
+                response = await self.client.aio.models.generate_content(
+                    model=model,
+                    contents=retry_contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        response_mime_type="application/json",
+                        response_schema=schema,
+                        temperature=max(0.1, temperature - 0.2),
+                    ),
+                )
+                parsed = schema.model_validate_json(response.text or "{}")
+            return parsed
+        except Exception as exc:
+            error_text = str(exc)
+            raise
+        finally:
+            if self._usage_tracker:
+                usage = getattr(response, "usage_metadata", None) if response else None
+                await self._usage_tracker.log_llm_call(
+                    provider=self.provider_name,
+                    model=model,
+                    request_kind=request_kind,
+                    input_tokens=getattr(usage, "prompt_token_count", None) if usage else None,
+                    output_tokens=getattr(usage, "candidates_token_count", None) if usage else None,
+                    estimated_cost_usd=None,
+                    duration_ms=int((time.perf_counter() - started) * 1000),
+                    success=error_text is None,
+                    error=error_text,
+                )

@@ -11,6 +11,7 @@ type Health = {
   browser_registered: boolean;
   current_session: string | null;
   autonomy_policy: Record<string, boolean | string | number>;
+  telegram_public_mode?: boolean;
 };
 
 type Approval = {
@@ -22,20 +23,50 @@ type Approval = {
   created_at: string;
 };
 
+type UsageSummary = {
+  totals?: {
+    requests?: number;
+    input_tokens?: number;
+    output_tokens?: number;
+    estimated_cost_usd?: number;
+  };
+  models?: Array<{
+    provider: string;
+    model: string;
+    requests: number;
+    estimated_cost_usd: number;
+  }>;
+  approvals?: Array<{ status: string; count: number }>;
+  tools?: Array<{ tool_name: string; calls: number; successes: number }>;
+};
+
+type TelegramUser = {
+  user_id: number;
+  username?: string;
+  paired_at: string;
+};
+
 export default function OperatorPanel() {
   const [health, setHealth] = useState<Health | null>(null);
   const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
+  const [telegramUsers, setTelegramUsers] = useState<TelegramUser[]>([]);
+  const [pairCode, setPairCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [healthRes, approvalsRes] = await Promise.all([
+      const [healthRes, approvalsRes, usageRes, usersRes] = await Promise.all([
         fetch(apiUrl("/api/health"), { headers: getAuthHeaders() }),
         fetch(apiUrl("/api/tool-approvals"), { headers: getAuthHeaders() }),
+        fetch(apiUrl("/api/usage"), { headers: getAuthHeaders() }),
+        fetch(apiUrl("/api/telegram/users"), { headers: getAuthHeaders() }),
       ]);
-      if (!healthRes.ok || !approvalsRes.ok) throw new Error("Failed to load operator state");
+      if (!healthRes.ok || !approvalsRes.ok || !usageRes.ok || !usersRes.ok) throw new Error("Failed to load operator state");
       setHealth(await healthRes.json());
       setApprovals(await approvalsRes.json());
+      setUsage(await usageRes.json());
+      setTelegramUsers(await usersRes.json());
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load operator state");
@@ -53,6 +84,18 @@ export default function OperatorPanel() {
       headers: getAuthHeaders(),
     });
     await refresh();
+  };
+
+  const generatePairCode = async () => {
+    const response = await fetch(apiUrl("/api/telegram/pair-code"), {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (response.ok) {
+      const payload = await response.json();
+      setPairCode(payload.code);
+      await refresh();
+    }
   };
 
   return (
@@ -82,6 +125,11 @@ export default function OperatorPanel() {
         {health && (
           <section className="rounded-2xl border border-border bg-sidebar p-5 space-y-3">
             <h2 className="text-sm font-semibold">Autonomy Policy</h2>
+            {health.telegram_public_mode && (
+              <div className="rounded-xl border border-amber-700/40 bg-amber-950/40 px-4 py-3 text-sm text-amber-200">
+                Warning: Telegram public mode is enabled. Any Telegram user can reach this ARIA instance until you disable it.
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3 text-sm">
               {Object.entries(health.autonomy_policy).map(([key, value]) => (
                 <Status key={key} label={key.replaceAll("_", " ")} value={String(value)} />
@@ -89,6 +137,56 @@ export default function OperatorPanel() {
             </div>
           </section>
         )}
+
+        {usage && (
+          <section className="rounded-2xl border border-border bg-sidebar p-5 space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold">Usage</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Local provider, model, and tool activity across this ARIA brain.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <Status label="requests" value={usage.totals?.requests ?? 0} />
+              <Status label="input tokens" value={usage.totals?.input_tokens ?? 0} />
+              <Status label="output tokens" value={usage.totals?.output_tokens ?? 0} />
+              <Status label="estimated cost" value={`$${Number(usage.totals?.estimated_cost_usd ?? 0).toFixed(2)}`} />
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">By model</div>
+              {(usage.models ?? []).slice(0, 5).map((model) => (
+                <div key={`${model.provider}-${model.model}`} className="rounded-xl bg-background p-3 text-sm">
+                  <div className="font-medium">{model.provider} / {model.model}</div>
+                  <div className="text-xs text-muted-foreground">{model.requests} requests · ${Number(model.estimated_cost_usd ?? 0).toFixed(2)}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="rounded-2xl border border-border bg-sidebar p-5 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Telegram Pairing</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Generate a short-lived pairing code, then send it to your bot with <code>/start CODE</code>.</p>
+            </div>
+            <button onClick={() => void generatePairCode()} className="rounded-lg bg-white px-3 py-2 text-xs font-medium text-black">New code</button>
+          </div>
+          {pairCode && (
+            <div className="rounded-xl border border-emerald-900 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200">
+              Active pairing code: <span className="font-semibold tracking-[0.2em]">{pairCode}</span>
+            </div>
+          )}
+          <div className="space-y-2">
+            {telegramUsers.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No paired Telegram users yet.</p>
+            ) : telegramUsers.map((user) => (
+              <div key={user.user_id} className="rounded-xl bg-background p-3 text-sm">
+                <div className="font-medium">{user.username ? `@${user.username}` : `User ${user.user_id}`}</div>
+                <div className="text-xs text-muted-foreground">Paired {new Date(user.paired_at).toLocaleString()}</div>
+              </div>
+            ))}
+          </div>
+        </section>
 
         <section className="rounded-2xl border border-border bg-sidebar p-5 space-y-3">
           <h2 className="text-sm font-semibold">Pending Approvals</h2>

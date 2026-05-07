@@ -28,7 +28,8 @@ from aria.core.improver import ImprovementLogger
 from aria.core.meta_reasoning import MetaReasoningEngine
 from aria.core.planner import Planner
 from aria.core.skills import SkillLoader
-from aria.llm.gemini import GeminiClient
+from aria.llm.catalog import list_providers
+from aria.llm.factory import build_provider
 from aria.llm.router import ModelRouter
 from aria.memory.goal_tracker import GoalTracker
 from aria.memory.memory_store import MemoryStore
@@ -58,8 +59,12 @@ from aria.models.schemas import (
 )
 from aria.storage.database import Database
 from aria.tools.registry import ToolRegistry
+from aria.runtime.settings import RuntimeSettingsStore
+from aria.runtime.usage import UsageTracker
 from aria.utils.config import TRACES_DIR, DATA_DIR, PROJECT_ROOT, autonomy_policy_snapshot
+from aria.utils.config import allow_multi_writer, get_process_role, get_provider_settings, get_settings_store
 from aria.utils.config import max_tool_calls_per_turn
+from aria.utils.config import telegram_public_mode_enabled
 from aria.utils.logger import setup_logger
 from aria.world.contradictions import ContradictionDetector
 from aria.world.graph import KnowledgeGraph
@@ -78,14 +83,20 @@ class CognitiveLoop:
 
     def __init__(self):
         self.db = Database()
+        self.settings_store: RuntimeSettingsStore = get_settings_store()
+        self.usage_tracker = UsageTracker(self.db)
         self.memory = MemoryStore(self.db)
         self.goals = GoalTracker(self.db)
         self.session = SessionManager(self.db)
         self.planner = Planner(self.db)
 
-        # Share a single Gemini client instance across all engines
-        self.gemini = GeminiClient()
-        self.router = ModelRouter()
+        provider_settings = get_provider_settings(self.settings_store)
+        self.gemini = build_provider(self.settings_store, self.usage_tracker)
+        self.router = ModelRouter(
+            fast_model=provider_settings["fast_model"],
+            reasoning_model=provider_settings["reasoning_model"],
+        )
+        self._process_lock_path = DATA_DIR / ".aria-process.lock"
 
         # Phase 2 — World Model
         self.kg = KnowledgeGraph(self.db)
@@ -143,6 +154,7 @@ class CognitiveLoop:
     async def startup(self) -> None:
         """Initialize all systems."""
         log.info("ARIA cognitive systems initializing...")
+        self._acquire_process_lock()
         await self.db.connect()
         self.gemini.connect()
 
@@ -169,6 +181,7 @@ class CognitiveLoop:
         log.info("ARIA shutting down...")
         await self.session.end_session()
         await self.db.close()
+        self._release_process_lock()
         log.info("Shutdown complete.")
 
     async def tick(self) -> None:
@@ -249,7 +262,8 @@ class CognitiveLoop:
             # Step 1.5: Route (Determine Depth)
             target_model = self.router.route(user_input, context_size=len(system_prompt))
             if status_callback:
-                model_name = "PRO" if "pro" in target_model else "FLASH"
+                provider_settings = get_provider_settings(self.settings_store)
+                model_name = "REASONING" if target_model == provider_settings["reasoning_model"] else "FAST"
                 status_callback(f"[dim]  (Engine: {model_name})[/]")
 
             # Step 2: Think (Pass 1)
@@ -899,6 +913,7 @@ class CognitiveLoop:
 
     async def get_health_status(self) -> dict:
         """Operator-facing runtime health and capability status."""
+        provider_settings = get_provider_settings(self.settings_store)
         return {
             "database_path": str(self.db.db_path),
             "data_dir": str(DATA_DIR),
@@ -908,4 +923,85 @@ class CognitiveLoop:
             "browser_registered": "browser" in self.tool_registry.tools,
             "current_session": self.session.current.id if self.session.current else None,
             "autonomy_policy": autonomy_policy_snapshot(),
+            "provider": provider_settings["provider"],
+            "model": provider_settings["model"],
+            "telegram_public_mode": telegram_public_mode_enabled(),
+            "setup": self.settings_store.setup_status(),
         }
+
+    async def get_setup_status(self) -> dict:
+        return self.settings_store.setup_status()
+
+    async def get_runtime_settings(self) -> dict:
+        settings = self.settings_store.load_settings()
+        status = self.settings_store.setup_status()
+        return {
+            "settings": settings,
+            "status": status,
+            "providers": list_providers(),
+        }
+
+    async def update_runtime_settings(self, payload: dict[str, Any]) -> dict:
+        saved = self.settings_store.save_settings(payload)
+        if "web_api_key" in payload:
+            self.settings_store.set_web_api_key(str(payload["web_api_key"]))
+        provider_secrets = payload.get("provider_secrets", {})
+        for provider, secret in provider_secrets.items():
+            if secret:
+                self.settings_store.set_provider_secret(provider, str(secret))
+        self.reload_provider()
+        return saved
+
+    async def get_usage_summary(self) -> dict:
+        return await self.usage_tracker.summary()
+
+    async def list_supported_providers(self) -> list[dict]:
+        return list_providers()
+
+    def reload_provider(self) -> None:
+        provider_settings = get_provider_settings(self.settings_store)
+        self.gemini = build_provider(self.settings_store, self.usage_tracker)
+        self.gemini.connect()
+        self.router = ModelRouter(
+            fast_model=provider_settings["fast_model"],
+            reasoning_model=provider_settings["reasoning_model"],
+        )
+        self.pruner = ContextPruner(self.gemini)
+        self.context_builder.pruner = self.pruner
+        self.generalization_engine = GeneralizationEngine(self.gemini, self.db)
+        self.context_builder.generalization_engine = self.generalization_engine
+        self.critic = ResponseCritic(self.gemini)
+        self.debate_engine = DebateEngine(self.gemini, self.db)
+        self.meta_reasoning = MetaReasoningEngine(self.gemini, self.db)
+        self.benchmark = BenchmarkRunner(self.gemini, self.db)
+
+    def _acquire_process_lock(self) -> None:
+        if allow_multi_writer():
+            return
+        role = get_process_role()
+        if self._process_lock_path.exists():
+            existing = self._process_lock_path.read_text(encoding="utf-8").strip()
+            if existing:
+                raise RuntimeError(
+                    "Another ARIA process is already using this data directory. "
+                    f"Existing lock: {existing}. Set ARIA_ALLOW_MULTI_WRITER=true only if you understand the risk."
+                )
+        self._process_lock_path.write_text(
+            json.dumps(
+                {
+                    "pid": os.getpid(),
+                    "role": role,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def _release_process_lock(self) -> None:
+        if allow_multi_writer():
+            return
+        try:
+            if self._process_lock_path.exists():
+                self._process_lock_path.unlink()
+        except OSError:
+            pass

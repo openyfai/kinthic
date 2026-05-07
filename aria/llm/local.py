@@ -42,7 +42,7 @@ class LocalLLMClient:
         try:
             import httpx
         except ImportError as e:
-            raise RuntimeError("Install aria-agi[local] to use LocalLLMClient.") from e
+            raise RuntimeError("Install aria[local] to use LocalLLMClient.") from e
 
         payload = {
             "model": model_override or self.model,

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" fill="none">
+  <rect width="1600" height="900" fill="#050505"/>
+  <rect x="72" y="60" width="1456" height="780" rx="36" fill="#0B0B0B" stroke="#1E1E1E"/>
+  <text x="126" y="144" fill="#7F7F7F" font-family="Arial, sans-serif" font-size="18" letter-spacing="5">PLACEHOLDER ASSET</text>
+  <text x="126" y="224" fill="white" font-family="Arial, sans-serif" font-size="48">Operator approval plus usage monitor</text>
+  <rect x="126" y="302" width="580" height="446" rx="28" fill="#0E1510" stroke="#244332"/>
+  <rect x="742" y="302" width="640" height="446" rx="28" fill="#101010" stroke="#242424"/>
+  <text x="162" y="362" fill="#8FE1B0" font-family="Arial, sans-serif" font-size="28">Pending approval</text>
+  <text x="162" y="420" fill="#E4F9EC" font-family="Arial, sans-serif" font-size="24">run_terminal_command</text>
+  <text x="162" y="466" fill="#C4EAD3" font-family="Arial, sans-serif" font-size="20">Reason: inspect project layout before proposing a safe change</text>
+  <rect x="162" y="548" width="152" height="56" rx="18" fill="#DFF7E7"/>
+  <rect x="334" y="548" width="152" height="56" rx="18" fill="#3F1616"/>
+  <text x="196" y="584" fill="#111111" font-family="Arial, sans-serif" font-size="22">Approve</text>
+  <text x="381" y="584" fill="#FFD4D4" font-family="Arial, sans-serif" font-size="22">Reject</text>
+  <text x="780" y="362" fill="#F3F3F3" font-family="Arial, sans-serif" font-size="28">Usage monitor</text>
+  <text x="780" y="424" fill="#D0D0D0" font-family="Arial, sans-serif" font-size="22">Requests: 12</text>
+  <text x="780" y="468" fill="#D0D0D0" font-family="Arial, sans-serif" font-size="22">Input tokens: 34,220</text>
+  <text x="780" y="512" fill="#D0D0D0" font-family="Arial, sans-serif" font-size="22">Output tokens: 5,184</text>
+  <text x="780" y="556" fill="#D0D0D0" font-family="Arial, sans-serif" font-size="22">Estimated cost: $0.84</text>
+</svg>

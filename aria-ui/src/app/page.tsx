@@ -10,26 +10,90 @@ import MonologuePanel from "@/components/MonologuePanel";
 import GoalsView from "@/components/GoalsView";
 import GraphView from "@/components/GraphView";
 import OperatorPanel from "@/components/OperatorPanel";
+import SettingsView from "@/components/SettingsView";
+import SetupWizard from "@/components/SetupWizard";
 import { useAriaSocket } from "@/hooks/useAriaSocket";
-import { wsUrl } from "@/lib/api";
+import { apiUrl, clearApiKey, getAuthHeaders, getApiKey, setApiKey, wsUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const PANEL_WIDTH = 420;
 const PANEL_REVEAL_WIDTH = PANEL_WIDTH;
 const DRAG_OPEN_THRESHOLD = 100;
 
+type RuntimeSettings = {
+  provider: string;
+  model: string;
+  security?: {
+    require_tool_approvals?: boolean;
+    browser_actions?: boolean;
+    terminal_execution?: boolean;
+    code_apply?: boolean;
+    background_actions?: boolean;
+  };
+};
+
+type RuntimeStatus = {
+  setup_completed: boolean;
+};
+
+type RuntimeProvider = {
+  id: string;
+  label: string;
+  models: Array<{ id: string; label: string; tier?: string }>;
+};
+
+type RuntimeData = {
+  settings: RuntimeSettings;
+  status: RuntimeStatus;
+  providers: RuntimeProvider[];
+};
+
+type BootstrapData = {
+  auth_required: boolean;
+  has_local_api_key: boolean;
+  setup: RuntimeStatus & {
+    provider?: string;
+    model?: string;
+    provider_configured?: boolean;
+    web_api_key_configured?: boolean;
+  };
+  providers: RuntimeProvider[];
+};
+
+function mergeRuntimeData(current: RuntimeData | null, patch: Partial<RuntimeData>): RuntimeData | null {
+  if (!current) {
+    return patch.providers && patch.settings && patch.status
+      ? { providers: patch.providers, settings: patch.settings, status: patch.status }
+      : current;
+  }
+  return {
+    providers: patch.providers ?? current.providers,
+    settings: patch.settings ?? current.settings,
+    status: patch.status ?? current.status,
+  };
+}
+
 export default function Home() {
   const [isSidebarOpen] = useState(true);
   const [isMonologueOpen, setMonologueOpen] = useState(false);
   const [currentView, setCurrentView] = useState<ViewType>("chat");
+  const [bootstrapData, setBootstrapData] = useState<BootstrapData | null>(null);
+  const [runtimeData, setRuntimeData] = useState<RuntimeData | null>(null);
+  const [authInput, setAuthInput] = useState("");
+  const [authNeeded, setAuthNeeded] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [runtimeLoading, setRuntimeLoading] = useState(true);
+  const [setupSuccess, setSetupSuccess] = useState<string | null>(null);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const shellX = useMotionValue(0);
+  const socketEnabled = !runtimeLoading && !authNeeded;
 
   const {
     messages, monologue, isThinking, isStreaming, isConnected, currentThought,
     metrics, sessions, activeSessionId, activityFeed, telemetry,
     sendMessage, stopGeneration, regenerate, editAndResend, retryLast,
     loadSession, createNewSession
-  } = useAriaSocket(wsUrl("/ws/chat"));
+  } = useAriaSocket(wsUrl("/ws/chat"), socketEnabled);
 
   const panelScale = useTransform(shellX, [-PANEL_REVEAL_WIDTH, 0], [1, 0.985]);
   const panelOpacity = useTransform(shellX, [-PANEL_REVEAL_WIDTH, 0], [1, 0]);
@@ -45,13 +109,158 @@ export default function Home() {
     return () => controls.stop();
   }, [isMonologueOpen, shellX]);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRuntime() {
+      setRuntimeLoading(true);
+      try {
+        const bootstrapRes = await fetch(apiUrl("/api/bootstrap"));
+        if (!bootstrapRes.ok) {
+          throw new Error("Failed to load bootstrap state.");
+        }
+        const bootstrapPayload: BootstrapData = await bootstrapRes.json();
+        if (cancelled) return;
+        setBootstrapData(bootstrapPayload);
+
+        const storedApiKey = getApiKey();
+        const needsAuth = bootstrapPayload.auth_required && !storedApiKey;
+        setAuthNeeded(needsAuth);
+        if (needsAuth) {
+          setRuntimeError(null);
+          setRuntimeLoading(false);
+          return;
+        }
+
+        const response = await fetch(apiUrl("/api/settings"), { headers: getAuthHeaders() });
+        if (response.status === 401) {
+          setAuthNeeded(true);
+          setAuthError("Enter the ARIA web API key for this instance to continue.");
+          setRuntimeLoading(false);
+          return;
+        }
+        if (!response.ok) {
+          throw new Error("Failed to load runtime settings.");
+        }
+        const payload = await response.json();
+        if (!cancelled) {
+          setRuntimeData(payload);
+          setRuntimeError(null);
+          setAuthNeeded(false);
+          setAuthError(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRuntimeError(
+            error instanceof TypeError
+              ? "Cannot reach the ARIA server yet. Start `aria web` or `docker compose --profile web up --build`."
+              : error instanceof Error
+                ? error.message
+                : "Failed to load runtime settings."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setRuntimeLoading(false);
+        }
+      }
+    }
+
+    void loadRuntime();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function unlockWithApiKey() {
+    const candidate = authInput.trim();
+    if (!candidate) {
+      setAuthError("Enter the ARIA web API key to continue.");
+      return;
+    }
+    setApiKey(candidate);
+    setAuthError(null);
+    setRuntimeError(null);
+    setRuntimeLoading(true);
+    try {
+      const response = await fetch(apiUrl("/api/settings"), {
+        headers: {
+          Authorization: `Bearer ${candidate}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error("That API key was rejected.");
+      }
+      const payload: RuntimeData = await response.json();
+      setRuntimeData(payload);
+      setAuthNeeded(false);
+      setAuthInput("");
+    } catch (error) {
+      clearApiKey();
+      setAuthError(error instanceof Error ? error.message : "That API key was rejected.");
+    } finally {
+      setRuntimeLoading(false);
+    }
+  }
+
   return (
     <div className="flex h-screen w-full bg-background text-foreground overflow-hidden font-sans">
+      {authNeeded && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/78 px-6 py-10 backdrop-blur-md">
+          <div className="w-full max-w-xl rounded-[30px] border border-white/10 bg-[#050505] p-8 shadow-[0_30px_120px_rgba(0,0,0,0.65)]">
+            <div className="text-[11px] uppercase tracking-[0.32em] text-white/42">Secure instance</div>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Enter the ARIA web API key.</h1>
+            <p className="mt-3 text-sm leading-6 text-white/62">
+              This instance is bound beyond localhost or has API protection enabled. Enter the local web key first,
+              then the onboarding flow will continue normally.
+            </p>
+            {bootstrapData && (
+              <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
+                {bootstrapData.setup.setup_completed
+                  ? `Current runtime: ${bootstrapData.setup.provider ?? "configured provider"} / ${bootstrapData.setup.model ?? "configured model"}.`
+                  : "Setup has not been completed yet. After unlocking, ARIA will open the first-run setup flow."}
+              </div>
+            )}
+            <div className="mt-6 grid gap-3">
+              <input
+                value={authInput}
+                onChange={(event) => setAuthInput(event.target.value)}
+                placeholder="ARIA_WEB_API_KEY"
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/28 focus:border-white/25"
+              />
+              <button
+                type="button"
+                onClick={() => void unlockWithApiKey()}
+                className="rounded-2xl bg-white px-4 py-3 text-sm font-medium text-black transition hover:bg-white/90"
+              >
+                Unlock setup
+              </button>
+              {authError && (
+                <div className="rounded-2xl border border-red-500/20 bg-red-500/8 px-4 py-3 text-sm text-red-200">
+                  {authError}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {runtimeData && runtimeData.status && !runtimeData.status.setup_completed && (
+        <SetupWizard
+          providers={runtimeData.providers ?? []}
+          initialSettings={runtimeData.settings}
+          onComplete={(payload) => {
+            setRuntimeData((current) => mergeRuntimeData(current, {
+              settings: payload.settings,
+              status: payload.status,
+            }));
+            setSetupSuccess("ARIA is configured. Try the visual brain demo prompts below.");
+          }}
+        />
+      )}
       <div className="relative flex min-w-0 flex-1 overflow-hidden bg-background">
         <div className="relative z-20 shrink-0">
           <Sidebar
             isOpen={isSidebarOpen}
-            toggle={() => {}}
             sessions={sessions}
             activeSessionId={activeSessionId}
             currentView={currentView}
@@ -124,7 +333,13 @@ export default function Home() {
             <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
               {!isConnected && (
                 <div className="absolute top-0 left-0 right-0 bg-amber-950 border-b border-amber-800 text-amber-400 text-xs text-center py-1.5 z-30 font-medium">
-                  Reconnecting to ARIA...
+                  {runtimeLoading ? "Loading ARIA runtime..." : "Reconnecting to ARIA..."}
+                </div>
+              )}
+
+              {setupSuccess && currentView === "chat" && (
+                <div className="absolute top-4 left-1/2 z-30 -translate-x-1/2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs font-medium text-emerald-200">
+                  {setupSuccess}
                 </div>
               )}
 
@@ -149,6 +364,22 @@ export default function Home() {
                           onStop={stopGeneration}
                           isDisabled={isThinking || isStreaming}
                         />
+                        <div className="mt-4 flex flex-wrap justify-center gap-2">
+                          {[
+                            "Analyze this repo and build a knowledge graph of the architecture.",
+                            "Find one contradiction or risk in this project and explain it.",
+                            "Propose one safe improvement and ask before acting.",
+                          ].map((prompt) => (
+                            <button
+                              key={prompt}
+                              type="button"
+                              onClick={() => sendMessage(prompt)}
+                              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs text-white/85 transition hover:bg-white/[0.08]"
+                            >
+                              {prompt}
+                            </button>
+                          ))}
+                        </div>
                         <div className="text-center mt-3 text-[11px] text-muted-foreground">
                           ARIA can make mistakes. Consider verifying critical information.
                         </div>
@@ -174,6 +405,23 @@ export default function Home() {
               {currentView === "goals" && <GoalsView />}
               {currentView === "graph" && <GraphView />}
               {currentView === "operator" && <OperatorPanel />}
+              {currentView === "settings" && runtimeData && (
+                <SettingsView
+                  providers={runtimeData.providers ?? []}
+                  settings={runtimeData.settings}
+                  onSaved={(payload) => {
+                    setRuntimeData((current) => mergeRuntimeData(current, {
+                      settings: payload.settings,
+                    }));
+                  }}
+                />
+              )}
+
+              {runtimeError && (
+                <div className="absolute bottom-6 left-6 rounded-2xl border border-red-500/20 bg-red-500/8 px-4 py-3 text-sm text-red-200">
+                  {runtimeError}
+                </div>
+              )}
             </main>
           </motion.div>
 

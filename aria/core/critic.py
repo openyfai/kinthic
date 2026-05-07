@@ -10,10 +10,7 @@ Tracks consecutive failures to alert when quality control is degraded.
 
 from __future__ import annotations
 
-import json
-from google.genai import types
-
-from aria.llm.gemini import GeminiClient
+from aria.llm.base import SupportsLLM
 from aria.models.schemas import CritiqueResponse
 from aria.utils.logger import setup_logger
 
@@ -60,8 +57,8 @@ MAX_CONSECUTIVE_FAILURES = 3
 class ResponseCritic:
     """Evaluates draft responses for quality and triggers retries if needed."""
 
-    def __init__(self, gemini_client: GeminiClient):
-        self.gemini = gemini_client
+    def __init__(self, llm_client: SupportsLLM):
+        self.llm = llm_client
         self._consecutive_failures = 0
 
     async def critique(
@@ -86,23 +83,13 @@ class ResponseCritic:
         )
 
         try:
-            response = await self.gemini.client.aio.models.generate_content(
-                model=self.gemini._model,
-                contents=evaluation_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=CRITIC_SYSTEM_PROMPT,
-                    response_mime_type="application/json",
-                    response_schema=CritiqueResponse,
-                    temperature=0.2,  # Low temperature for consistent evaluation
-                ),
+            critique = await self.llm.complete_json(
+                schema=CritiqueResponse,
+                system_prompt=CRITIC_SYSTEM_PROMPT,
+                user_input=evaluation_prompt,
+                temperature=0.2,
+                request_kind="critic",
             )
-
-            raw_text = response.text
-            if not raw_text:
-                raise ValueError("Empty response from Critic")
-
-            data = json.loads(raw_text)
-            critique = CritiqueResponse(**data)
             
             # Reset failure counter on success
             self._consecutive_failures = 0

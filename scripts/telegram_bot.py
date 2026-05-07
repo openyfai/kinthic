@@ -16,23 +16,138 @@ from telegram.ext import (
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from aria.core.cognitive_loop import CognitiveLoop
+from aria.runtime.settings import RuntimeSettingsStore
+from aria.utils.config import telegram_public_mode_enabled
 from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.telegram")
 
 # Global singleton for the Cognitive Loop
 aria_loop = None
+settings_store = RuntimeSettingsStore()
+
+
+def _env_allowlist() -> list[int]:
+    allowed_users_env = os.getenv("ALLOWED_TELEGRAM_USERS", "")
+    if not allowed_users_env:
+        return []
+    try:
+        return [int(x.strip()) for x in allowed_users_env.split(",") if x.strip()]
+    except ValueError:
+        log.error("ALLOWED_TELEGRAM_USERS contains non-integer values!")
+        return []
+
+
+def _telegram_user_allowed(user_id: int) -> bool:
+    public_mode = telegram_public_mode_enabled()
+    if public_mode:
+        return True
+    if settings_store.is_telegram_user_allowed(user_id):
+        return True
+    return user_id in _env_allowlist()
+
+
+async def _send_pending_approvals(update: Update) -> None:
+    approvals = await aria_loop.tool_registry.get_pending_approvals()
+    if not approvals:
+        await update.message.reply_text("No pending tool approvals.")
+        return
+    lines = []
+    for approval in approvals[:10]:
+        lines.append(
+            f"`{approval['id'][:8]}` · {approval['tool_name']} · {approval['risk_level']}\n"
+            f"{approval['reason']}"
+        )
+    await update.message.reply_text("\n\n".join(lines), parse_mode="Markdown")
+
+
+async def pair_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    code = " ".join(context.args).strip().upper()
+    if not code:
+        await update.message.reply_text("Usage: /pair <code>")
+        return
+    user = update.effective_user
+    paired = settings_store.consume_pair_code(code, user.id, user.username)
+    if paired:
+        await update.message.reply_text("Pairing successful. You can now use this ARIA bot from Telegram.")
+    else:
+        await update.message.reply_text("That pairing code is invalid or expired.")
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /start command."""
     user_id = update.effective_user.id
+    if context.args:
+        code = context.args[0].strip().upper()
+        if settings_store.consume_pair_code(code, user_id, update.effective_user.username):
+            await update.message.reply_text("Pairing successful. ARIA is now linked to your Telegram account.")
+            return
     await update.message.reply_text(
-        "👋 Hello! I am ARIA (Adaptive Reasoning & Intelligence Architecture).\n\n"
-        "My cognitive engine is online. I have access to your tools, memory, "
+        "👋 Hello! I am ARIA — a local-first cognitive agent.\n\n"
+        "My engine is online. I have access (within policy) to your tools, memory, "
         "and knowledge graph. How can I help you today?\n\n"
-        f"Your Telegram ID: `{user_id}`",
+        f"Your Telegram ID: `{user_id}`\n"
+        "If the operator generated a pairing code, send `/start CODE` or `/pair CODE`.",
         parse_mode="Markdown"
     )
+
+
+async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    await update.message.reply_text(
+        f"Telegram user: `{user.id}`\nUsername: `{user.username or 'unknown'}`",
+        parse_mode="Markdown",
+    )
+
+
+async def logout_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    settings_store.revoke_telegram_user(update.effective_user.id)
+    await update.message.reply_text("This Telegram account has been unpaired from ARIA.")
+
+
+async def approvals_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _telegram_user_allowed(update.effective_user.id):
+        await update.message.reply_text("Access denied. Pair this account before requesting approvals.")
+        return
+    await _send_pending_approvals(update)
+
+
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _telegram_user_allowed(update.effective_user.id):
+        await update.message.reply_text("Access denied. Pair this account before requesting status.")
+        return
+    health = await aria_loop.get_health_status()
+    await update.message.reply_text(
+        "ARIA status:\n"
+        f"- Provider: {health.get('provider')}\n"
+        f"- Model: {health.get('model')}\n"
+        f"- Session: {health.get('current_session') or 'none'}\n"
+        f"- Browser tool: {'on' if health.get('browser_registered') else 'off'}"
+    )
+
+
+async def approval_decision_command(update: Update, context: ContextTypes.DEFAULT_TYPE, decision: str) -> None:
+    if not _telegram_user_allowed(update.effective_user.id):
+        await update.message.reply_text("Access denied. Pair this account before resolving approvals.")
+        return
+    approval_id = " ".join(context.args).strip()
+    if not approval_id:
+        await update.message.reply_text(f"Usage: /{decision} <approval-id>")
+        return
+    matches = await aria_loop.tool_registry.get_pending_approvals()
+    match = next((item for item in matches if item["id"].startswith(approval_id)), None)
+    if not match:
+        await update.message.reply_text("Approval not found.")
+        return
+    ok = await aria_loop.tool_registry.resolve_approval(match["id"], "approved" if decision == "approve" else "rejected")
+    await update.message.reply_text("Approval updated." if ok else "Failed to update approval.")
+
+
+async def approve_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await approval_decision_command(update, context, "approve")
+
+
+async def reject_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await approval_decision_command(update, context, "reject")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Pass incoming Telegram messages into ARIA's Cognitive Loop."""
@@ -56,42 +171,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
     
-    # -------------------------------------------------------------------------
-    # SECURITY: Whitelist Check (deny-by-default)
-    # -------------------------------------------------------------------------
-    allowed_users_env = os.getenv("ALLOWED_TELEGRAM_USERS", "")
-    public_mode = os.getenv("TELEGRAM_PUBLIC_MODE", "false").lower() == "true"
-    
-    if not allowed_users_env and not public_mode:
-        # No whitelist set AND not explicitly public → DENY
-        log.warning(f"Access denied for User ID {user_id}: ALLOWED_TELEGRAM_USERS is not configured.")
+    if not _telegram_user_allowed(user_id):
+        log.warning(f"Unauthorized access attempt from User ID: {user_id}")
         await update.message.reply_text(
-            f"🔒 **Bot Not Configured**\n\n"
-            f"This ARIA instance has no authorized users set.\n"
-            f"Your Telegram ID: `{user_id}`\n\n"
-            f"The owner must add this ID to `ALLOWED_TELEGRAM_USERS` in the `.env` file.\n"
-            f"Or set `TELEGRAM_PUBLIC_MODE=true` to allow all users.",
+            f"🚫 **Access Denied**\n\n"
+            f"Pair this Telegram account first with `/start CODE` or `/pair CODE`.\n"
+            f"Your Telegram ID: `{user_id}`",
             parse_mode="Markdown"
         )
         return
-    
-    if allowed_users_env:
-        try:
-            allowed_users = [int(x.strip()) for x in allowed_users_env.split(",") if x.strip()]
-        except ValueError:
-            log.error("ALLOWED_TELEGRAM_USERS contains non-integer values!")
-            return
-            
-        if allowed_users and user_id not in allowed_users:
-            log.warning(f"Unauthorized access attempt from User ID: {user_id}")
-            await update.message.reply_text(
-                f"🚫 **Access Denied**\n\n"
-                f"You are not authorized to use this ARIA instance.\n"
-                f"Your Telegram ID: `{user_id}`\n\n"
-                f"If you are the owner, add this ID to `ALLOWED_TELEGRAM_USERS` in the `.env` file.",
-                parse_mode="Markdown"
-            )
-            return
         
     # Show "typing..." indicator while ARIA thinks
     await context.bot.send_chat_action(chat_id=chat_id, action='typing')
@@ -153,13 +241,16 @@ def main():
     
     # Security status
     allowed = os.getenv("ALLOWED_TELEGRAM_USERS", "")
-    public = os.getenv("TELEGRAM_PUBLIC_MODE", "false").lower() == "true"
+    public = telegram_public_mode_enabled()
+    paired_users = settings_store.list_telegram_users()
     if allowed:
         print(f"🔒 Whitelist active: {allowed}")
     elif public:
         print("⚠️  PUBLIC MODE: Any Telegram user can interact with ARIA!")
+    elif paired_users:
+        print(f"🔒 Pairing active: {len(paired_users)} Telegram user(s) authorized.")
     else:
-        print("🔒 Deny-by-default: Set ALLOWED_TELEGRAM_USERS in .env to authorize users.")
+        print("🔒 Deny-by-default: generate a pairing code with `aria telegram pair` or set ALLOWED_TELEGRAM_USERS.")
     
     # Build the Telegram application
     app = (
@@ -171,6 +262,13 @@ def main():
 
     # Register handlers
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("pair", pair_command))
+    app.add_handler(CommandHandler("whoami", whoami_command))
+    app.add_handler(CommandHandler("logout", logout_command))
+    app.add_handler(CommandHandler("approvals", approvals_command))
+    app.add_handler(CommandHandler("status", status_command))
+    app.add_handler(CommandHandler("approve", approve_command))
+    app.add_handler(CommandHandler("reject", reject_command))
     app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, handle_message))
 
     # Start polling for messages

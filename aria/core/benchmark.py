@@ -9,12 +9,9 @@ and uses an LLM judge to score each response.
 from __future__ import annotations
 
 import json
-import uuid
-from datetime import datetime, timezone
 from typing import Callable, Any
-from google.genai import types
 
-from aria.llm.gemini import GeminiClient
+from aria.llm.base import SupportsLLM
 from aria.models.schemas import (
     BenchmarkQuestion,
     BenchmarkResult,
@@ -88,8 +85,8 @@ Reserve 0.9+ for responses that demonstrate real intellectual depth."""
 class BenchmarkRunner:
     """Runs the fixed benchmark suite and tracks scores over time."""
 
-    def __init__(self, gemini_client: GeminiClient, db: Database):
-        self.gemini = gemini_client
+    def __init__(self, llm_client: SupportsLLM, db: Database):
+        self.llm = llm_client
         self.db = db
 
     async def run(
@@ -214,19 +211,13 @@ class BenchmarkRunner:
         )
 
         try:
-            result = await self.gemini.client.aio.models.generate_content(
-                model=self.gemini._model,
-                contents=content,
-                config=types.GenerateContentConfig(
-                    system_instruction=JUDGE_PROMPT,
-                    response_mime_type="application/json",
-                    response_schema=CritiqueScore,
-                    temperature=0.1,
-                ),
+            return await self.llm.complete_json(
+                schema=CritiqueScore,
+                system_prompt=JUDGE_PROMPT,
+                user_input=content,
+                temperature=0.1,
+                request_kind="benchmark_judge",
             )
-
-            data = json.loads(result.text)
-            return CritiqueScore(**data)
 
         except Exception as e:
             log.warning(f"Judge failed: {e}")

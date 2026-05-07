@@ -1,11 +1,17 @@
-import { Message01Icon as MessageSquare, Target01Icon as Target, AiNetworkIcon as Network, Add01Icon as Plus, Settings01Icon as Settings } from 'hugeicons-react';
+import {
+  Message01Icon as MessageSquare,
+  Target01Icon as Target,
+  AiNetworkIcon as Network,
+  Add01Icon as Plus,
+  Shield01Icon as Shield,
+  Settings02Icon as Settings,
+} from 'hugeicons-react';
 import { SessionMeta } from '@/hooks/useAriaSocket';
 
-export type ViewType = 'chat' | 'goals' | 'graph' | 'operator';
+export type ViewType = 'chat' | 'goals' | 'graph' | 'operator' | 'settings';
 
 interface Props {
   isOpen: boolean;
-  toggle: () => void;
   sessions: SessionMeta[];
   activeSessionId: string | null;
   currentView: ViewType;
@@ -14,12 +20,13 @@ interface Props {
   onNewChat: () => void;
 }
 
-export default function Sidebar({ isOpen, toggle, sessions, activeSessionId, currentView, onViewChange, onSelectSession, onNewChat }: Props) {
+export default function Sidebar({ isOpen, sessions, activeSessionId, currentView, onViewChange, onSelectSession, onNewChat }: Props) {
   const navItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
     { id: 'chat',  label: 'Chat',            icon: <MessageSquare size={15} /> },
     { id: 'goals', label: 'Active Goals',    icon: <Target size={15} /> },
     { id: 'graph', label: 'Knowledge Graph', icon: <Network size={15} /> },
-    { id: 'operator', label: 'Operator', icon: <Settings size={15} /> },
+    { id: 'operator', label: 'Operator', icon: <Shield size={15} /> },
+    { id: 'settings', label: 'Settings', icon: <Settings size={15} /> },
   ];
 
   if (!isOpen) return null;

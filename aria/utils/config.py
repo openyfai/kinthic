@@ -11,6 +11,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from aria.runtime.settings import RuntimeSettingsStore
+
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -36,22 +38,68 @@ _env_file = PROJECT_ROOT / ".env"
 if _env_file.exists():
     load_dotenv(_env_file)
 
+_settings_store = RuntimeSettingsStore()
+
+
+def get_settings_store() -> RuntimeSettingsStore:
+    return _settings_store
+
+
+def get_provider_settings(settings_store: RuntimeSettingsStore | None = None) -> dict:
+    store = settings_store or _settings_store
+    saved = store.load_settings()
+    provider = os.getenv("ARIA_PROVIDER", saved.get("provider", "gemini"))
+    model = os.getenv("ARIA_MODEL", saved.get("model", "gemini-2.5-flash"))
+    fast_model = os.getenv("ARIA_FAST_MODEL", saved.get("fast_model", model))
+    reasoning_model = os.getenv("ARIA_REASONING_MODEL", saved.get("reasoning_model", fast_model))
+    return {
+        "provider": provider,
+        "model": model,
+        "fast_model": fast_model,
+        "reasoning_model": reasoning_model,
+    }
+
+
+def get_provider_secret(provider: str, key_name: str = "api_key", settings_store: RuntimeSettingsStore | None = None) -> str:
+    store = settings_store or _settings_store
+    stored = store.get_provider_secret(provider, key=key_name)
+    if stored:
+        return stored
+
+    env_candidates = {
+        "gemini": "GEMINI_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "openrouter": "OPENROUTER_API_KEY",
+        "deepseek": "DEEPSEEK_API_KEY",
+        "mistral": "MISTRAL_API_KEY",
+        "groq": "GROQ_API_KEY",
+        "ollama": "",
+    }
+    env_name = env_candidates.get(provider, "")
+    if not env_name:
+        return ""
+    value = os.getenv(env_name, "")
+    if not value or value.endswith("_here"):
+        return ""
+    return value
+
 
 def get_api_key() -> str:
-    """Get the Gemini API key or fail loudly."""
-    key = os.getenv("GEMINI_API_KEY", "")
-    if not key or key == "your_api_key_here":
-        raise EnvironmentError(
-            "GEMINI_API_KEY is not set.\n"
-            "1. Copy .env.example to .env\n"
-            "2. Add your Gemini API key from https://aistudio.google.com/apikey\n"
-        )
-    return key
+    """Backward-compatible provider key lookup."""
+    provider = get_provider_settings()["provider"]
+    key = get_provider_secret(provider)
+    if key:
+        return key
+    raise EnvironmentError(
+        f"{provider} API key is not set.\n"
+        "Run `aria setup`, use the web onboarding flow, or configure the matching env var."
+    )
 
 
 def get_model() -> str:
-    """Get the Gemini model to use."""
-    return os.getenv("ARIA_MODEL", "gemini-2.5-flash")
+    """Get the active model."""
+    return get_provider_settings()["model"]
 
 
 def get_log_level() -> str:
@@ -67,29 +115,34 @@ def env_flag(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _saved_security_flag(name: str, default: bool) -> bool:
+    settings = _settings_store.load_settings()
+    return bool(settings.get("security", {}).get(name, default))
+
+
 def terminal_execution_enabled() -> bool:
     """Whether ARIA may run sandboxed terminal commands."""
-    return env_flag("ARIA_ENABLE_TERMINAL_EXECUTION", False)
+    return env_flag("ARIA_ENABLE_TERMINAL_EXECUTION", _saved_security_flag("terminal_execution", False))
 
 
 def code_apply_enabled() -> bool:
     """Whether ARIA may apply code edits without a human approval step."""
-    return env_flag("ARIA_ENABLE_CODE_APPLY", False)
+    return env_flag("ARIA_ENABLE_CODE_APPLY", _saved_security_flag("code_apply", False))
 
 
 def browser_actions_enabled() -> bool:
     """Whether ARIA may use the browser automation tool."""
-    return env_flag("ARIA_ENABLE_BROWSER_ACTIONS", True)
+    return env_flag("ARIA_ENABLE_BROWSER_ACTIONS", _saved_security_flag("browser_actions", True))
 
 
 def background_actions_enabled() -> bool:
     """Whether ARIA may wake itself up to work on active goals."""
-    return env_flag("ARIA_ENABLE_BACKGROUND_LOOP", False)
+    return env_flag("ARIA_ENABLE_BACKGROUND_LOOP", _saved_security_flag("background_actions", False))
 
 
 def require_tool_approvals() -> bool:
     """Whether high-risk tools should enter a pending approval queue."""
-    return env_flag("ARIA_REQUIRE_TOOL_APPROVALS", True)
+    return env_flag("ARIA_REQUIRE_TOOL_APPROVALS", _saved_security_flag("require_tool_approvals", True))
 
 
 def max_tool_calls_per_turn() -> int:
@@ -105,6 +158,42 @@ def get_process_role() -> str:
     return os.getenv("ARIA_PROCESS_ROLE", "standalone")
 
 
+def allow_multi_writer() -> bool:
+    """Whether multiple ARIA processes may share a data directory."""
+    return env_flag("ARIA_ALLOW_MULTI_WRITER", False)
+
+
+def get_web_host() -> str:
+    return os.getenv("ARIA_WEB_HOST", "127.0.0.1")
+
+
+def get_web_port() -> int:
+    try:
+        return int(os.getenv("ARIA_WEB_PORT", "8000"))
+    except ValueError:
+        return 8000
+
+
+def get_web_api_key() -> str:
+    env_value = os.getenv("ARIA_WEB_API_KEY", "")
+    if env_value:
+        return env_value
+    return _settings_store.get_web_api_key()
+
+
+def get_web_allowed_origins() -> list[str]:
+    raw = os.getenv(
+        "ARIA_WEB_ALLOWED_ORIGINS",
+        "http://127.0.0.1:8000,http://localhost:8000",
+    )
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+def telegram_public_mode_enabled() -> bool:
+    settings_value = bool(_settings_store.load_settings().get("telegram", {}).get("public_mode", False))
+    return env_flag("TELEGRAM_PUBLIC_MODE", settings_value)
+
+
 def autonomy_policy_snapshot() -> dict:
     """Operator-facing summary of the active autonomy policy."""
     return {
@@ -115,6 +204,8 @@ def autonomy_policy_snapshot() -> dict:
         "require_tool_approvals": require_tool_approvals(),
         "max_tool_calls_per_turn": max_tool_calls_per_turn(),
         "process_role": get_process_role(),
+        "provider": get_provider_settings()["provider"],
+        "model": get_provider_settings()["model"],
     }
 
 

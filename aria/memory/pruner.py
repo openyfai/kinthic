@@ -8,8 +8,9 @@ to keep the active context window lean, fast, and cost-effective.
 import logging
 from typing import List, Dict, Any
 
-from aria.llm.gemini import GeminiClient
+from aria.llm.base import SupportsLLM
 from aria.models.schemas import Turn
+from aria.utils.config import get_provider_settings
 from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.memory.pruner")
@@ -19,8 +20,8 @@ class ContextPruner:
     Analyzes turn history and compresses old context into high-density summaries.
     """
 
-    def __init__(self, gemini: GeminiClient):
-        self.gemini = gemini
+    def __init__(self, llm: SupportsLLM):
+        self.llm = llm
 
     async def prune(self, turns: List[Turn], threshold: int = 10) -> List[Turn]:
         """
@@ -49,10 +50,10 @@ class ContextPruner:
 
         try:
             # Use Flash for compression to keep it cheap
-            summary_response = await self.gemini.think(
+            summary_response = await self.llm.think(
                 system_prompt=compression_prompt,
                 user_input=f"Compress these turns:\n\n{turns_text}",
-                model_override="gemini-2.5-flash"
+                model_override=get_provider_settings()["fast_model"],
             )
             
             summary_text = summary_response.response

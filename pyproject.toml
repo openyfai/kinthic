@@ -1,10 +1,25 @@
 [project]
-name = "aria-agi"
+name = "aria"
 version = "1.0.0"
-description = "ARIA — Adaptive Reasoning & Intelligence Architecture. A cognitive AI agent with causal world model, self-improvement, and multi-agent debate."
+description = "ARIA — a local-first AI agent with persistent memory, an inspectable knowledge graph, governed tool use, and Markdown skills."
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 requires-python = ">=3.12"
+authors = [
+    { name = "Youel" },
+]
+maintainers = [
+    { name = "ARIA Maintainers" },
+]
+keywords = ["ai-agent", "local-first", "knowledge-graph", "llm", "autonomy", "telegram", "tools", "memory"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
 dependencies = [
     "google-genai>=1.0.0",
     "pydantic>=2.0",
@@ -15,6 +30,8 @@ dependencies = [
     "networkx>=3.0",
     "ddgs>=9.0.0",
     "python-telegram-bot>=21.0",
+    "openai>=1.79.0",
+    "anthropic>=0.52.0",
 ]
 
 [project.optional-dependencies]
@@ -39,6 +56,10 @@ vector = [
 local = [
     "httpx>=0.27",
 ]
+providers = [
+    "openai>=1.79.0",
+    "anthropic>=0.52.0",
+]
 full = [
     "fastapi>=0.111",
     "uvicorn>=0.30",
@@ -48,11 +69,33 @@ full = [
     "chromadb>=0.5",
     "docker>=7.0",
     "httpx>=0.27",
+    "openai>=1.79.0",
+    "anthropic>=0.52.0",
 ]
 
 [project.scripts]
-aria = "scripts.run:main"
+aria = "scripts.cli:main"
+aria-web = "scripts.cli:run_web"
+aria-telegram = "scripts.telegram_bot:main"
+
+[project.urls]
+Homepage = "https://github.com/0xopenYF/aria"
+Repository = "https://github.com/0xopenYF/aria"
+Issues = "https://github.com/0xopenYF/aria/issues"
+Changelog = "https://github.com/0xopenYF/aria/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/0xopenYF/aria#readme"
 
 [build-system]
 requires = ["setuptools>=75.0"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+py-modules = []
+
+[tool.setuptools.packages.find]
+include = ["aria*", "scripts*"]
+exclude = ["aria-ui*", "tests*", "scratch*", "workspace*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
