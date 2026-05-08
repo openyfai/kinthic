@@ -357,14 +357,17 @@ export default function Home() {
                   />
 
                   {messages.length === 0 && !isThinking ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <div className="mt-[18vh] w-full max-w-3xl px-8 pointer-events-auto">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-6 py-8">
+                      <div className="w-full max-w-3xl pointer-events-auto flex flex-col items-center gap-6">
+                        <h1 className="text-3xl font-semibold tracking-tight text-foreground text-center">
+                          How can I help you today?
+                        </h1>
                         <MessageInput
                           onSend={sendMessage}
                           onStop={stopGeneration}
                           isDisabled={isThinking || isStreaming}
                         />
-                        <div className="mt-4 flex flex-wrap justify-center gap-2">
+                        <div className="flex flex-wrap justify-center gap-2 -mt-2">
                           {[
                             "Analyze this repo and build a knowledge graph of the architecture.",
                             "Find one contradiction or risk in this project and explain it.",
@@ -380,7 +383,7 @@ export default function Home() {
                             </button>
                           ))}
                         </div>
-                        <div className="text-center mt-3 text-[11px] text-muted-foreground">
+                        <div className="text-center text-[11px] text-muted-foreground -mt-1">
                           ARIA can make mistakes. Consider verifying critical information.
                         </div>
                       </div>

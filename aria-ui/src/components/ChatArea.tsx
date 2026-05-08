@@ -152,14 +152,7 @@ export default function ChatArea({ messages, isThinking, isStreaming, currentTho
   const showRegenerate = !isThinking && !isStreaming && lastMsg?.sender === 'aria' && lastMsg?.status === 'done';
 
   if (messages.length === 0 && !isThinking) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center text-center p-8 mt-[-10vh]">
-        <h1 className="text-3xl font-semibold mb-3 tracking-tight text-foreground">How can I help you today?</h1>
-        <p className="text-muted-foreground max-w-md text-base leading-relaxed">
-          I am ARIA. I have full access to my internal cognitive architecture and external tool integrations.
-        </p>
-      </div>
-    );
+    return <div className="flex-1 min-h-0" aria-hidden />;
   }
 
   return (
