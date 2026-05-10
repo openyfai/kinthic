@@ -78,6 +78,7 @@ class VectorStore:
         if results['documents']:
             for i in range(len(results['documents'][0])):
                 formatted_results.append({
+                    "id": results['ids'][0][i] if 'ids' in results and results['ids'] else None,
                     "content": results['documents'][0][i],
                     "metadata": results['metadatas'][0][i],
                     "distance": results['distances'][0][i] if 'distances' in results else None
@@ -90,6 +91,12 @@ class VectorStore:
         if not self.client: return
         self.collection.delete(where={"path": file_path})
         log.debug(f"Deleted vector entries for path: {file_path}")
+
+    def delete_by_ids(self, ids: List[str]):
+        """Removes chunks by their exact IDs."""
+        if not self.client: return
+        self.collection.delete(ids=ids)
+        log.debug(f"Deleted vector entries for ids: {ids}")
 
     def clear(self):
         """Wipes the entire collection."""

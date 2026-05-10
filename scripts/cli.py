@@ -184,7 +184,8 @@ def run_web() -> None:
             print("\n✨ First run detected: Building the ARIA dashboard UI...")
             print("This usually takes 1-2 minutes.\n")
             try:
-                subprocess.run("npm install && npm run build", shell=True, cwd="aria-ui", check=True)
+                subprocess.run(["npm", "install"], cwd="aria-ui", check=True)
+                subprocess.run(["npm", "run", "build"], cwd="aria-ui", check=True)
                 print("\n✅ Dashboard built successfully!\n")
             except subprocess.CalledProcessError:
                 print("\n❌ Failed to build the UI. Check the output above.")
@@ -212,7 +213,12 @@ def run_web() -> None:
             pass
 
     from scripts import web_server
-    uvicorn.run(web_server.app, host=get_web_host(), port=get_web_port())
+    uvicorn.run(
+        web_server.app,
+        host=get_web_host(),
+        port=get_web_port(),
+        ws_max_size=int(os.environ.get("ARIA_WS_MAX_MESSAGE_CHARS", "2000000")),
+    )
 
 
 def run_telegram() -> None:
@@ -232,21 +238,27 @@ def run_start() -> None:
     print("Generating and starting ARIA background daemon...")
     import sys
     import subprocess
-    import platform
     
     if sys.platform == "win32":
         print("Windows daemonization not fully implemented natively yet. Please run `aria web` in a persistent terminal or use NSSM.")
         return
-        
-    # Super simple fallback daemon using nohup
+
     log_file = Path("data/aria.log").absolute()
-    cmd = f"nohup {sys.executable} -m scripts.cli web > {log_file} 2>&1 & echo $!"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
     try:
-        proc = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, text=True)
-        pid = proc.stdout.strip()
+        with open(log_file, "a") as lf:
+            proc = subprocess.Popen(
+                [sys.executable, "-m", "scripts.cli", "web"],
+                stdout=lf,
+                stderr=lf,
+                start_new_session=True,
+            )
+        pid = proc.pid
         print(f"ARIA daemon started (PID {pid}). Logs at {log_file}")
-        with open("data/aria.pid", "w") as f:
-            f.write(pid)
+        pid_path = Path("data/aria.pid")
+        pid_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(pid_path, "w") as f:
+            f.write(str(pid))
     except Exception as e:
         print(f"Failed to start ARIA daemon: {e}")
 

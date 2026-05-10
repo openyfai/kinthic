@@ -7,13 +7,31 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
+## [1.0.5] - 2026-05-10
+
+### Security
+
+- **The code editor can no longer bypass the ethics engine.** Previously, when `ARIA_ENABLE_CODE_APPLY=true` was set, the code editor tool skipped the ethics engine and the approval queue entirely — it applied file changes directly to disk with zero human oversight. Now the tool *always* creates a draft proposal. The `code_apply` flag only controls whether the approval queue auto-approves, it does NOT skip the ethics check.
+- **The code editor is now sandboxed to your workspace, not the entire project.** The code editor was using the repo root as its boundary — meaning the AI could propose (and in autonomous mode, apply) edits to its own source code, the web server, the database, or any file in the repository. It now uses the same `ARIA_WORKSPACE` boundary as the file reader, keeping writes inside the designated workspace directory.
+- **Eliminated all remaining `shell=True` subprocess calls.** The UI build step (`npm install && npm run build`) and the daemon launcher (`nohup ... &`) both used shell=True — the same class of vulnerability that was fixed in `aria stop` in v1.0.4. Both now use list-form arguments with no shell involved. The daemon launcher uses `subprocess.Popen` with `start_new_session=True` instead of `nohup`.
+- **WebSocket messages are now size-limited at the transport layer.** Previously, a client could send a multi-gigabyte message through the WebSocket and ARIA would buffer the entire thing into memory. Now `uvicorn` rejects oversized messages before they reach Python. The limit is configurable via `ARIA_WS_MAX_MESSAGE_CHARS` (default: 2MB).
+
+### Fixed
+
+- **Non-Gemini providers no longer crash on transient errors or malformed JSON.** The retry-with-backoff decorator and JSON repair logic were previously Gemini-exclusive. They've been extracted into shared utilities in `base.py` and applied to all providers — OpenAI, Anthropic, OpenRouter, DeepSeek, Mistral, Groq, and Ollama. Users on any provider now get automatic retries on 429/503 errors and graceful handling of markdown-wrapped JSON.
+- **Usage tracker no longer loses data on fast API calls.** The usage log ID was generated from a timestamp, so two LLM calls completing in the same millisecond got the same ID and one was silently dropped. Now uses UUID4.
+- **Bare exception handler in code editor replaced.** A `except:` that silently swallowed all errors (including KeyboardInterrupt) has been replaced with specific exception types.
+- **ARIA no longer forgets most of what you said.** The history sanitizer was capping user messages at 200 characters before embedding them in conversation context. If you sent a 1000-character message, ARIA only remembered the first 200 characters in future turns. Increased to 2000 characters — the prompt budget (120K chars) already provides the macro-level cap.
+- **Background agent can no longer burn unlimited API tokens on goal loops.** The proactive background loop could create goals, complete them, and repeat — each cycle burning API tokens. Now enforces a 10-minute cooldown between goal state transitions (configurable via `ARIA_GOAL_COOLDOWN_SECONDS`). All goal state changes are logged prominently at INFO level.
+- **Windows users now get a clear warning about API key file security.** On Windows, `data/secrets.json` has no file permission protection (Windows doesn't support Unix chmod). ARIA now logs a warning recommending environment variables over the secrets file on Windows.
 
 ### Changed
 
-- (nothing yet)
+- **`PROJECT_ROOT` is now defined once, not five times.** Five files each defined their own `PROJECT_ROOT` by counting parent directories from their own location. If any file moved, it silently broke. Now defined once in `settings.py` and imported everywhere.
 
----
+### Added
+
+- **New security tests for the code editor sandbox and ethics bypass.** Eight new tests prove: paths outside the workspace are rejected, dotfiles are blocked, path traversal attacks fail, the autonomous apply path no longer exists in the source code, and the registry correctly delegates approval decisions based on the code_apply flag.
 
 ## [1.0.4] - 2026-05-10
 

@@ -1,72 +1,107 @@
+"""
+Code Editor Tool — allows ARIA to propose and apply file changes.
+
+Security (v1.0.5):
+  - All paths are sandboxed to ARIA_WORKSPACE (not the repo root).
+  - The autonomous apply bypass has been removed. ALL edits flow through
+    the ethics engine and approval queue in the ToolRegistry.
+  - The code-apply operator flag now controls whether the registry
+    auto-approves code edits, NOT whether ethics is skipped.
+  - Dotfiles and sensitive directories are always blocked.
+"""
+
 import json
+import os
 import uuid
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 from aria.tools.base import BaseTool
-from aria.utils.config import code_apply_enabled
+from aria.utils.logger import setup_logger
+
+log = setup_logger("aria.tools.code_editor")
+
+# ---------------------------------------------------------------------------
+# Security — sandbox boundary (matches file_reader.py)
+# ---------------------------------------------------------------------------
+
+# Use ARIA_WORKSPACE env var, or fall back to <cwd>.
+# This ensures pip-installed copies don't accidentally write to site-packages.
+_workspace_env = os.environ.get("ARIA_WORKSPACE")
+_WORKSPACE_ROOT = Path(_workspace_env).resolve() if _workspace_env else Path.cwd()
 
 PENDING_EDITS_FILE = Path(".aria_pending_edits.json")
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 BLOCKED_FILE_PREFIXES = (".env",)
 BLOCKED_PATH_PARTS = {".git", "node_modules", ".venv", "venv", "__pycache__"}
 
 
 def _resolve_workspace_path(file_path: str) -> Path:
-    """Resolve a user-supplied path inside the project workspace."""
+    """Resolve a user-supplied path inside the ARIA workspace sandbox.
+
+    Security guarantees:
+      1. The resolved path must be inside _WORKSPACE_ROOT.
+      2. Dotfiles (.env*) are always blocked.
+      3. Sensitive directories (.git, node_modules, etc.) are blocked.
+    """
     candidate = Path(file_path)
     if not candidate.is_absolute():
-        candidate = PROJECT_ROOT / candidate
+        candidate = _WORKSPACE_ROOT / candidate
     full_path = candidate.resolve()
 
     try:
-        full_path.relative_to(PROJECT_ROOT)
+        full_path.relative_to(_WORKSPACE_ROOT)
     except ValueError:
-        raise ValueError("Invalid file path. Path must stay inside the project directory.")
+        raise ValueError(
+            f"Access denied — path is outside the workspace directory ({_WORKSPACE_ROOT.name}/)."
+        )
 
     if full_path.name.startswith(BLOCKED_FILE_PREFIXES):
-        raise ValueError("Invalid file path. Environment files are restricted.")
+        raise ValueError("Access denied — environment files are restricted.")
     if any(part in BLOCKED_PATH_PARTS for part in full_path.parts):
-        raise ValueError("Invalid file path. Restricted directory component.")
+        raise ValueError("Access denied — restricted directory component.")
 
     return full_path
 
+
 class CodeEditorTool(BaseTool):
     """
-    Allows ARIA to propose changes to her own codebase.
-    Enforces a strict human-in-the-loop approval mechanism.
+    Allows ARIA to propose changes to files in the workspace.
+
+    Security: This tool NEVER applies edits directly. It always creates
+    a draft proposal. The ToolRegistry's ethics engine and approval queue
+    decide whether and when the edit is actually applied.
     """
-    
+
     name = "propose_code_edit"
     risk_level = "repo_write"
     requires_approval = True
     description = (
-        "Propose a change to a file in the codebase. You MUST use this tool if you want "
-        "to upgrade, fix, or modify your own code. The change will NOT be applied immediately. "
-        "It will be saved as a draft, and you must explicitly ask the user for approval in your response."
+        "Propose a change to a file in the workspace. The change will NOT be "
+        "applied immediately — it will be saved as a draft pending human approval. "
+        "Ask the user to approve the edit in your response."
     )
-    
+
     schema = {
-        "file_path": "string (relative path to the file, e.g., 'aria/core/memory.py')",
-        "target_content": "string (the exact block of code you want to replace. Leave empty to overwrite the entire file)",
+        "file_path": "string (relative path to the file inside the workspace)",
+        "target_content": "string (the exact block of code to replace. Leave empty to overwrite the entire file)",
         "replacement_content": "string (the new code to insert)",
         "explanation": "string (why you are making this change)"
     }
-    
+
     async def execute(self, **kwargs) -> str:
         file_path = kwargs.get("file_path")
         target_content = kwargs.get("target_content", "")
         replacement_content = kwargs.get("replacement_content", "")
         explanation = kwargs.get("explanation", "No explanation provided.")
-        
+
         if not file_path or not replacement_content:
             return "ERROR: file_path and replacement_content are required."
-            
+
         try:
             full_path = _resolve_workspace_path(file_path)
         except ValueError as e:
             return f"ERROR: {e}"
-            
+
         # Verify target content if provided
         if target_content and full_path.exists():
             with open(full_path, "r", encoding="utf-8") as f:
@@ -82,7 +117,7 @@ class CodeEditorTool(BaseTool):
                     pending_edits = json.load(f)
                     if not isinstance(pending_edits, list):
                         pending_edits = []
-            except:
+            except (json.JSONDecodeError, OSError, ValueError):
                 pending_edits = []
 
         proposal = {
@@ -92,29 +127,30 @@ class CodeEditorTool(BaseTool):
             "replacement_content": replacement_content,
             "explanation": explanation
         }
-        
-        # Check granular code-apply policy before bypassing human approval.
-        if code_apply_enabled():
-            # Apply immediately
-            self._apply_edit_logic(proposal)
-            return f"SUCCESS [AUTONOMOUS MODE]: Changes to {full_path.name} applied instantly."
-        
-        else:
-            # Append to pending list
-            pending_edits.append(proposal)
-            with open(PENDING_EDITS_FILE, "w", encoding="utf-8") as f:
-                json.dump(pending_edits, f, indent=4)
-                
-            return (
-                f"DRAFT CREATED (ID: {proposal['id']}) for {file_path}.\n"
-                f"STATUS: PENDING HUMAN APPROVAL.\n"
-                f"INSTRUCTION: Ask the user to 'approve edit {proposal['id']}' or 'approve all edits'."
-            )
+
+        # ALL edits go to the pending queue. The ethics engine and approval
+        # flow in the ToolRegistry decide when they are applied.
+        # The operator's code-apply flag is handled by the registry's
+        # _approval_required() method, NOT here.
+        pending_edits.append(proposal)
+        with open(PENDING_EDITS_FILE, "w", encoding="utf-8") as f:
+            json.dump(pending_edits, f, indent=4)
+
+        return (
+            f"DRAFT CREATED (ID: {proposal['id']}) for {file_path}.\n"
+            f"STATUS: PENDING HUMAN APPROVAL.\n"
+            f"INSTRUCTION: Ask the user to 'approve edit {proposal['id']}' or 'approve all edits'."
+        )
 
     def _apply_edit_logic(self, proposal: dict):
+        """Apply a single edit proposal to disk.
+
+        Called ONLY by ApplyEditTool after the edit has passed through
+        the ethics engine and approval queue.
+        """
         full_path = _resolve_workspace_path(proposal["file_path"])
         full_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         if proposal["target_content"] and full_path.exists():
             with open(full_path, "r", encoding="utf-8") as f:
                 current_code = f.read()
@@ -125,11 +161,12 @@ class CodeEditorTool(BaseTool):
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(proposal["replacement_content"])
 
+
 class ApplyEditTool(BaseTool):
     """
-    Applies pending code edits.
+    Applies pending code edits that have been approved.
     """
-    
+
     name = "apply_approved_edit"
     risk_level = "repo_write"
     requires_approval = True
@@ -137,21 +174,21 @@ class ApplyEditTool(BaseTool):
         "Applies one or all pending code edits. "
         "Usage: Provide 'edit_id' for a specific file, or leave empty to apply ALL pending edits."
     )
-    
+
     schema = {
         "edit_id": "string (optional, the ID of a specific edit to apply. If omitted, all edits are applied)"
     }
-    
+
     async def execute(self, **kwargs) -> str:
         edit_id = kwargs.get("edit_id")
-        
+
         if not PENDING_EDITS_FILE.exists():
             return "ERROR: No pending edits found."
-            
+
         try:
             with open(PENDING_EDITS_FILE, "r", encoding="utf-8") as f:
                 pending = json.load(f)
-            
+
             if not pending:
                 return "ERROR: No pending edits in the list."
 
@@ -160,10 +197,10 @@ class ApplyEditTool(BaseTool):
                 to_apply = [e for e in pending if e["id"] == edit_id]
                 if not to_apply:
                     return f"ERROR: No edit found with ID {edit_id}."
-                
+
                 edit = to_apply[0]
                 CodeEditorTool()._apply_edit_logic(edit)
-                
+
                 # Remove from list
                 remaining = [e for e in pending if e["id"] != edit_id]
                 if remaining:
@@ -171,17 +208,16 @@ class ApplyEditTool(BaseTool):
                         json.dump(remaining, f, indent=4)
                 else:
                     PENDING_EDITS_FILE.unlink()
-                
+
                 return f"SUCCESS: Edit {edit_id} for {Path(edit['file_path']).name} applied."
-            
+
             else:
                 # Apply ALL
                 for edit in pending:
                     CodeEditorTool()._apply_edit_logic(edit)
-                
+
                 PENDING_EDITS_FILE.unlink()
                 return f"SUCCESS: All {len(pending)} pending edits have been applied."
-                
+
         except Exception as e:
             return f"ERROR applying edit: {str(e)}"
-

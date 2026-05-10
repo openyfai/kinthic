@@ -191,6 +191,24 @@ async def proactive_telegram_loop():
                 except Exception as e:
                     log.warning("Proactive Telegram message failed: %s", e)
 
+async def memory_decay_loop():
+    while True:
+        await asyncio.sleep(86400)  # Daily check
+        if _cognitive_loop:
+            try:
+                await _cognitive_loop.memory.decay_importance(days=7, decay_factor=0.95)
+            except Exception as e:
+                log.error(f"Memory decay failed: {e}")
+
+async def memory_consolidation_loop():
+    while True:
+        await asyncio.sleep(604800)  # Weekly check
+        if _cognitive_loop:
+            try:
+                await _cognitive_loop.pruner.consolidate_memories(_cognitive_loop.memory)
+            except Exception as e:
+                log.error(f"Memory consolidation failed: {e}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _cognitive_loop, _db, _kg
@@ -204,9 +222,13 @@ async def lifespan(app: FastAPI):
     _kg = _cognitive_loop.kg
     bg_task = asyncio.create_task(background_loop())
     proactive_task = asyncio.create_task(proactive_telegram_loop())
+    decay_task = asyncio.create_task(memory_decay_loop())
+    consolidation_task = asyncio.create_task(memory_consolidation_loop())
     yield
     bg_task.cancel()
     proactive_task.cancel()
+    decay_task.cancel()
+    consolidation_task.cancel()
     if _cognitive_loop:
         await _cognitive_loop.shutdown()
 
@@ -599,4 +621,4 @@ if __name__ == "__main__":
     print(f"Starting ARIA Knowledge Graph Visualizer on http://{host}:{port}")
     if not _current_api_key():
         print("No ARIA web API key configured. This is only allowed on loopback binds.")
-    uvicorn.run(app, host=host, port=port)
+    uvicorn.run(app, host=host, port=port, ws_max_size=_MAX_WS_MESSAGE_CHARS)

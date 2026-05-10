@@ -25,6 +25,7 @@ from aria.utils.config import (
     MAX_RECENT_MEMORIES,
     MAX_RELEVANT_MEMORIES,
 )
+from aria.memory.vector_store import VectorStore
 from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.memory")
@@ -35,6 +36,7 @@ class MemoryStore:
 
     def __init__(self, db: Database):
         self.db = db
+        self.vs = VectorStore(collection_name="aria_memories")
 
     # ------------------------------------------------------------------
     # CRUD
@@ -71,6 +73,10 @@ class MemoryStore:
                 memory.archived_at,
             ),
         )
+        if self.vs.is_active:
+            type_val = memory.memory_type.value if isinstance(memory.memory_type, MemoryType) else memory.memory_type
+            self.vs.add_chunks([memory.content], [{"type": type_val}], ids=[memory.id])
+
         log.debug(f"Stored memory: {memory.content[:60]}...")
         return memory
 
@@ -171,6 +177,10 @@ class MemoryStore:
                 memory.archived_at,
             ),
         )
+        if self.vs.is_active:
+            type_val = memory.memory_type.value if isinstance(memory.memory_type, MemoryType) else memory.memory_type
+            self.vs.add_chunks([memory.content], [{"type": type_val}], ids=[memory.id])
+
         log.info(f"Manual memory stored: {content[:40]}...")
         return memory
 
@@ -204,6 +214,20 @@ class MemoryStore:
             relevant = await self._search_relevant(query, MAX_RELEVANT_MEMORIES)
             for m in relevant:
                 candidates[m.id] = m
+
+        # Pool 4: Semantic (vector search)
+        if query.strip() and self.vs.is_active:
+            semantic_results = self.vs.search(query, MAX_RELEVANT_MEMORIES)
+            semantic_ids = [res["id"] for res in semantic_results if res.get("id")]
+            if semantic_ids:
+                placeholders = ",".join("?" * len(semantic_ids))
+                rows = await self.db.fetch_all(
+                    f"SELECT * FROM memories WHERE id IN ({placeholders}) AND archived_at IS NULL",
+                    tuple(semantic_ids)
+                )
+                for row in rows:
+                    m = self._row_to_memory(row)
+                    candidates[m.id] = m
 
         result = sorted(
             candidates.values(),
@@ -303,17 +327,24 @@ class MemoryStore:
     async def _is_duplicate(self, content: str) -> bool:
         """
         Check if a very similar memory already exists.
-
-        Uses normalized substring matching — if 80%+ of the words match
-        an existing memory, consider it a duplicate.
+        
+        Uses vector semantic similarity to catch rephrased facts.
+        Falls back to word overlap if VectorStore is offline.
         """
+        if self.vs.is_active:
+            results = self.vs.search(content, n_results=1)
+            # Distance < 0.2 typically indicates semantic equivalence with MiniLM
+            if results and results[0].get("distance", 1.0) < 0.2:
+                return True
+            return False
+
         content_lower = content.lower().strip()
         content_words = set(content_lower.split())
 
         if not content_words:
             return False
 
-        # Check against recent memories (don't scan entire DB)
+        # Fallback: Check against recent memories
         recent = await self._get_recent(50)
         for mem in recent:
             existing_words = set(mem.content.lower().strip().split())
@@ -364,6 +395,19 @@ class MemoryStore:
         )
         await self.archive(merge_id)
         return True
+
+    async def decay_importance(self, days: int = 7, decay_factor: float = 0.95):
+        """Multiplies importance by decay_factor for memories not accessed in the last `days`."""
+        await self.db.execute(
+            """
+            UPDATE memories
+            SET importance = importance * ?
+            WHERE (julianday('now') - julianday(last_accessed)) > ?
+              AND archived_at IS NULL
+            """,
+            (decay_factor, days)
+        )
+        log.info(f"Decayed importance of memories untouched in {days} days by factor {decay_factor}.")
 
     # ------------------------------------------------------------------
     # Helpers

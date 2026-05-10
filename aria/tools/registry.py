@@ -20,7 +20,7 @@ from aria.tools.code_editor import CodeEditorTool, ApplyEditTool
 from aria.tools.system import ListDirectoryTool, RunTerminalCommandTool
 from aria.tools.browser import BrowserTool
 from aria.utils.logger import setup_logger
-from aria.utils.config import require_tool_approvals
+from aria.utils.config import require_tool_approvals, code_apply_enabled
 
 log = setup_logger("aria.tools.registry")
 
@@ -181,8 +181,12 @@ class ToolRegistry:
     def _approval_required(self, tool: BaseTool) -> bool:
         if not tool.requires_approval or not require_tool_approvals():
             return False
-        # A tool with its own explicit enable flag still requires approval unless
-        # the operator disables ARIA_REQUIRE_TOOL_APPROVALS.
+        # When the operator enables code_apply, code-editor tools are
+        # auto-approved at this layer.  The ethics engine has ALREADY run
+        # (lines 108-144 above) — this flag only skips the manual approval
+        # queue, it does NOT bypass ethical evaluation.
+        if tool.risk_level == "repo_write" and code_apply_enabled():
+            return False
         return True
 
     async def _queue_approval(self, tool: BaseTool, args_dict: dict, reason: str) -> str:

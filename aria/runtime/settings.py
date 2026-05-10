@@ -20,6 +20,15 @@ def _now() -> str:
 
 
 def _ensure_private_file(path: Path) -> None:
+    """Create a private file with restricted permissions.
+
+    Security note (Windows):
+      Windows does not support Unix file permissions (0o600). On Windows,
+      the secrets file (data/secrets.json) is readable by any process running
+      as the current user. For maximum security on Windows, use environment
+      variables (GEMINI_API_KEY, OPENAI_API_KEY, etc.) instead of storing
+      API keys in the secrets file.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists():
         path.write_text("{}", encoding="utf-8")
@@ -28,6 +37,15 @@ def _ensure_private_file(path: Path) -> None:
             os.chmod(path, 0o600)
         except OSError:
             pass
+    else:
+        # Windows: no chmod equivalent. Log a warning on first creation.
+        import logging
+        logging.getLogger("aria.runtime.settings").warning(
+            "Windows detected: %s has no file permission protection. "
+            "For security, prefer environment variables over storing "
+            "API keys in this file.",
+            path.name,
+        )
 
 
 def _read_json(path: Path, default: dict[str, Any]) -> dict[str, Any]:

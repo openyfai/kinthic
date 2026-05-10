@@ -4,7 +4,7 @@ import json
 import time
 from base64 import b64encode
 
-from aria.llm.base import BaseLLMProvider, SchemaT
+from aria.llm.base import BaseLLMProvider, SchemaT, retry_on_transient, repair_json
 from aria.runtime.usage import UsageTracker
 from aria.utils.logger import setup_logger
 
@@ -51,6 +51,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             raise RuntimeError(f"{self.provider_name} client not connected.")
         return self._client
 
+    @retry_on_transient(max_retries=3, base_delay=1.5)
     async def complete_json(
         self,
         *,
@@ -90,7 +91,17 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 ],
             )
             content = response.choices[0].message.content or "{}"
-            return schema.model_validate(json.loads(content))
+
+            # Try direct parse first, then repair if needed
+            try:
+                return schema.model_validate(json.loads(content))
+            except (json.JSONDecodeError, Exception):
+                log.warning(
+                    "%s returned non-parseable JSON. Attempting repair...",
+                    self.provider_name,
+                )
+                repaired = repair_json(content)
+                return schema.model_validate(json.loads(repaired))
         except Exception as exc:
             error_text = str(exc)
             raise

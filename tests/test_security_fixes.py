@@ -1,11 +1,13 @@
 """
-Tests for v1.0.4 security and reliability fixes.
+Tests for v1.0.4 and v1.0.5 security and reliability fixes.
 
 Each test proves a specific vulnerability is closed:
 1. Shell injection in `aria stop` — malicious PID file content must not execute.
 2. File reader sandbox — paths outside ARIA_WORKSPACE must be rejected.
 3. Telegram exception swallowing — failures must be logged, not silenced.
 4. Docker async blocking — container.wait must run in a thread pool.
+5. Code editor sandbox — paths outside ARIA_WORKSPACE must be rejected (P0-2).
+6. Code editor ethics bypass — autonomous apply path must not exist (P0-1).
 """
 
 from __future__ import annotations
@@ -275,3 +277,199 @@ class TestDockerAsyncBlocking:
 
         assert "hello from sandbox" in result
         assert "Exit Code: 0" in result
+
+
+# ── Fix 5 (P0-2): Code editor sandbox — ARIA_WORKSPACE boundary ──────────
+
+
+class TestCodeEditorSandbox:
+    """Prove that the code editor rejects paths outside ARIA_WORKSPACE."""
+
+    def test_path_outside_workspace_is_blocked(self, tmp_path: Path):
+        """Writing to a file outside the workspace must fail."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+
+        # Target a file OUTSIDE the workspace
+        target = tmp_path / "evil.py"
+
+        with patch.dict(os.environ, {"ARIA_WORKSPACE": str(workspace)}):
+            import importlib
+            import aria.tools.code_editor as ce
+
+            importlib.reload(ce)
+
+            tool = ce.CodeEditorTool()
+            result = asyncio.run(
+                tool.execute(
+                    file_path=str(target),
+                    replacement_content="print('pwned')",
+                    explanation="test",
+                )
+            )
+
+        assert "denied" in result.lower() or "outside" in result.lower()
+        # The file must NOT have been created
+        assert not target.exists()
+
+    def test_path_inside_workspace_creates_draft(self, tmp_path: Path):
+        """Writing to a file inside the workspace must succeed as a draft."""
+        workspace = tmp_path / "project"
+        workspace.mkdir()
+
+        with patch.dict(os.environ, {"ARIA_WORKSPACE": str(workspace)}):
+            import importlib
+            import aria.tools.code_editor as ce
+
+            importlib.reload(ce)
+
+            tool = ce.CodeEditorTool()
+            result = asyncio.run(
+                tool.execute(
+                    file_path="hello.py",
+                    replacement_content="print('hello')",
+                    explanation="test",
+                )
+            )
+
+        assert "DRAFT CREATED" in result
+        assert "PENDING HUMAN APPROVAL" in result
+
+    def test_dotenv_blocked_inside_workspace(self, tmp_path: Path):
+        """Even inside the workspace, .env files must be blocked."""
+        workspace = tmp_path / "project"
+        workspace.mkdir()
+
+        with patch.dict(os.environ, {"ARIA_WORKSPACE": str(workspace)}):
+            import importlib
+            import aria.tools.code_editor as ce
+
+            importlib.reload(ce)
+
+            tool = ce.CodeEditorTool()
+            result = asyncio.run(
+                tool.execute(
+                    file_path=".env",
+                    replacement_content="SECRET=leaked",
+                    explanation="test",
+                )
+            )
+
+        assert "denied" in result.lower() or "restricted" in result.lower()
+
+    def test_traversal_attack_blocked(self, tmp_path: Path):
+        """Path traversal (../../etc/passwd) must be caught."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+
+        with patch.dict(os.environ, {"ARIA_WORKSPACE": str(workspace)}):
+            import importlib
+            import aria.tools.code_editor as ce
+
+            importlib.reload(ce)
+
+            tool = ce.CodeEditorTool()
+            result = asyncio.run(
+                tool.execute(
+                    file_path="../../etc/passwd",
+                    replacement_content="root:x:0:0",
+                    explanation="test",
+                )
+            )
+
+        assert "denied" in result.lower() or "outside" in result.lower()
+
+
+# ── Fix 6 (P0-1): Code editor ethics bypass removed ──────────────────────
+
+
+class TestCodeEditorEthicsBypass:
+    """Prove that the autonomous apply bypass no longer exists."""
+
+    def test_no_autonomous_apply_in_execute(self):
+        """The execute() method must NOT contain an autonomous apply path.
+
+        Specifically: there must be no branch that calls _apply_edit_logic()
+        directly from execute(), regardless of any configuration flag.
+        """
+        import inspect
+        import aria.tools.code_editor as ce
+
+        source = inspect.getsource(ce.CodeEditorTool.execute)
+
+        # The old pattern: `self._apply_edit_logic(proposal)`
+        assert "_apply_edit_logic" not in source, (
+            "execute() still contains a direct call to _apply_edit_logic — "
+            "the autonomous bypass has not been fully removed"
+        )
+
+        # Double-check: no import or reference to code_apply_enabled
+        assert "code_apply_enabled" not in source, (
+            "execute() still references code_apply_enabled — "
+            "the bypass decision must happen in the registry, not the tool"
+        )
+
+    def test_code_apply_flag_does_not_import_in_tool(self):
+        """The code_editor module itself must NOT import code_apply_enabled.
+
+        The flag is the registry's concern, not the tool's.
+        """
+        import inspect
+        import aria.tools.code_editor as ce
+
+        module_source = inspect.getsource(ce)
+        assert "code_apply_enabled" not in module_source, (
+            "code_editor.py still imports code_apply_enabled — "
+            "the autonomy decision must be made by the registry"
+        )
+
+    def test_execute_always_returns_draft(self, tmp_path: Path):
+        """Even with code_apply_enabled=true, execute() must return a DRAFT,
+        never an applied result."""
+        workspace = tmp_path / "project"
+        workspace.mkdir()
+
+        with patch.dict(os.environ, {"ARIA_WORKSPACE": str(workspace)}):
+            import importlib
+            import aria.tools.code_editor as ce
+
+            importlib.reload(ce)
+
+            tool = ce.CodeEditorTool()
+
+            # Simulate code_apply being enabled — shouldn't matter
+            with patch("aria.utils.config.code_apply_enabled", return_value=True):
+                result = asyncio.run(
+                    tool.execute(
+                        file_path="test.py",
+                        replacement_content="print('test')",
+                        explanation="test",
+                    )
+                )
+
+        # Must be a draft, NOT "SUCCESS [AUTONOMOUS MODE]"
+        assert "DRAFT CREATED" in result
+        assert "AUTONOMOUS MODE" not in result
+
+    def test_registry_auto_approves_with_code_apply_flag(self):
+        """When code_apply_enabled=true, the registry should auto-approve
+        repo_write tools (skipping the approval queue) but the tool itself
+        must still only produce drafts."""
+        from aria.tools.registry import ToolRegistry
+        from aria.tools.code_editor import CodeEditorTool
+
+        registry = ToolRegistry.__new__(ToolRegistry)
+        registry.tools = {}
+        registry.ethics = MagicMock()
+
+        tool = CodeEditorTool()
+
+        with patch("aria.tools.registry.require_tool_approvals", return_value=True):
+            # Without code_apply: approval required
+            with patch("aria.tools.registry.code_apply_enabled", return_value=False):
+                assert registry._approval_required(tool) is True
+
+            # With code_apply: approval auto-skipped
+            with patch("aria.tools.registry.code_apply_enabled", return_value=True):
+                assert registry._approval_required(tool) is False
+

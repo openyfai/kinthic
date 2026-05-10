@@ -2,6 +2,7 @@
 Configuration loader for ARIA.
 
 Reads from .env file and provides typed access to all settings.
+PROJECT_ROOT is defined once in aria.runtime.settings and re-exported here.
 """
 
 from __future__ import annotations
@@ -11,15 +12,13 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from aria.runtime.settings import RuntimeSettingsStore
+from aria.runtime.settings import RuntimeSettingsStore, PROJECT_ROOT
 
 
 # ---------------------------------------------------------------------------
-# Paths
+# Paths (derived from the canonical PROJECT_ROOT in settings.py)
 # ---------------------------------------------------------------------------
 
-# Project root — two levels up from this file (aria/utils/config.py → aria/ → root)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 DB_PATH = DATA_DIR / "aria.db"
 TRACES_DIR = DATA_DIR / "traces"

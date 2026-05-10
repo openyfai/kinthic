@@ -19,11 +19,10 @@ except ImportError:
     docker = None
 
 from aria.tools.base import BaseTool
-from aria.utils.config import terminal_execution_enabled
+from aria.utils.config import terminal_execution_enabled, PROJECT_ROOT
 from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.tools.system")
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 WORKSPACE_ROOT = PROJECT_ROOT / "workspace"
 BLOCKED_PATH_PARTS = {".git", "node_modules", ".venv", "venv", "__pycache__"}
 

@@ -617,7 +617,25 @@ class CognitiveLoop:
         return count
 
     async def _process_goals(self, goal_updates: list[GoalUpdate]) -> int:
-        """Process goal updates from the cognitive response."""
+        """Process goal updates from the cognitive response.
+
+        Safety: A cooldown of GOAL_COOLDOWN_SECONDS is enforced between
+        goal state transitions (create/complete/abandon) to prevent the
+        background loop from burning API tokens in a create-complete cycle.
+        """
+        now = datetime.now(timezone.utc)
+        cooldown_seconds = int(os.environ.get("ARIA_GOAL_COOLDOWN_SECONDS", "600"))
+
+        # Check cooldown — skip state transitions if the last one was too recent
+        if hasattr(self, "_last_goal_transition") and self._last_goal_transition:
+            elapsed = (now - self._last_goal_transition).total_seconds()
+            if elapsed < cooldown_seconds:
+                log.debug(
+                    f"Goal cooldown active ({int(cooldown_seconds - elapsed)}s remaining). "
+                    f"Skipping {len(goal_updates)} goal updates."
+                )
+                return 0
+
         count = 0
         for update in goal_updates:
             try:
@@ -627,23 +645,27 @@ class CognitiveLoop:
                         priority=update.priority,
                     )
                     count += 1
+                    log.info(f"🎯 Goal created: {update.description}")
                 elif update.action == "complete":
                     goal = await self.goals.find_by_description(update.description)
                     if goal:
                         await self.goals.complete(goal.id, notes=update.notes)
                         count += 1
+                        log.info(f"✅ Goal completed: {update.description}")
                 elif update.action == "abandon":
                     goal = await self.goals.find_by_description(update.description)
                     if goal:
                         await self.goals.abandon(goal.id, notes=update.notes)
                         count += 1
+                        log.info(f"🚫 Goal abandoned: {update.description}")
                 elif update.action == "update":
                     log.debug(f"Goal update noted: {update.description}")
             except Exception as e:
                 log.warning(f"Failed to process goal update: {e}")
 
         if count > 0:
-            log.debug(f"Processed {count} goal updates")
+            self._last_goal_transition = now
+            log.info(f"Processed {count} goal state transitions")
         return count
 
     # ------------------------------------------------------------------

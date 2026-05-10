@@ -4,63 +4,20 @@ Gemini provider implementation.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
-from functools import wraps
 from typing import Any
 
 from google import genai
 from google.genai import types
-from pydantic import BaseModel
 
-from aria.llm.base import BaseLLMProvider, SchemaT
+from aria.llm.base import BaseLLMProvider, SchemaT, retry_on_transient
 from aria.runtime.settings import RuntimeSettingsStore
 from aria.runtime.usage import UsageTracker
 from aria.utils.config import get_provider_secret, get_provider_settings
 from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.llm")
-
-# ---------------------------------------------------------------------------
-# Retry decorator for transient API errors
-# ---------------------------------------------------------------------------
-
-_TRANSIENT_ERROR_CODES = {"503", "429", "500", "UNAVAILABLE", "RESOURCE_EXHAUSTED"}
-
-
-def _is_transient(error: Exception) -> bool:
-    """Check if an exception is a transient API error worth retrying."""
-    error_str = str(error)
-    return any(code in error_str for code in _TRANSIENT_ERROR_CODES)
-
-
-def retry_on_transient(max_retries: int = 3, base_delay: float = 1.0):
-    """
-    Decorator that retries async functions on transient API errors.
-    Uses exponential backoff with jitter.
-    """
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            last_error = None
-            for attempt in range(max_retries):
-                try:
-                    return await func(*args, **kwargs)
-                except Exception as e:
-                    last_error = e
-                    if _is_transient(e) and attempt < max_retries - 1:
-                        delay = base_delay * (2 ** attempt)
-                        log.warning(
-                            f"Transient API error (attempt {attempt + 1}/{max_retries}), "
-                            f"retrying in {delay:.1f}s: {e}"
-                        )
-                        await asyncio.sleep(delay)
-                        continue
-                    raise
-            raise last_error  # Should never reach here, but safety net
-        return wrapper
-    return decorator
 
 
 # ---------------------------------------------------------------------------

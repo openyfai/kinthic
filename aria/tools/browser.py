@@ -27,16 +27,28 @@ except ImportError:
     stealth_async = None
 
 from aria.tools.base import BaseTool
-from aria.utils.config import browser_actions_enabled
+from aria.utils.config import browser_actions_enabled, PROJECT_ROOT
 from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.tools.browser")
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 BROWSER_OUTPUT_DIR = PROJECT_ROOT / "workspace" / "browser"
 ALLOWED_SCHEMES = {"http", "https"}
 
 
 def _validate_public_url(url: str) -> None:
+    """Validate that a URL points to a public internet address.
+
+    Known limitation — DNS rebinding (TOCTOU):
+      This function resolves the hostname and checks if the IP is private.
+      However, the actual HTTP request happens *after* this validation.
+      An attacker could set up a DNS record that resolves to a public IP
+      during validation, then changes to 127.0.0.1 by the time Playwright
+      makes the request (a DNS rebinding attack).
+
+      The proper fix is to pin the resolved IP and pass it to Playwright via
+      ``--host-resolver-rules``. This is tracked as a known security backlog
+      item. Risk is low for local-only deployments.
+    """
     parsed = urlparse(url)
     if parsed.scheme not in ALLOWED_SCHEMES or not parsed.hostname:
         raise ValueError("Only http and https URLs with a hostname are allowed.")

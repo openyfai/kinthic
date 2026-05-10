@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
@@ -38,7 +39,7 @@ class UsageTracker:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                f"{provider}-{model}-{datetime.now(timezone.utc).timestamp()}",
+                str(uuid.uuid4()),
                 session_id,
                 provider,
                 model,

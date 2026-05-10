@@ -4,7 +4,7 @@ import json
 import time
 from base64 import b64encode
 
-from aria.llm.base import BaseLLMProvider, SchemaT
+from aria.llm.base import BaseLLMProvider, SchemaT, retry_on_transient, repair_json
 from aria.runtime.usage import UsageTracker
 from aria.utils.logger import setup_logger
 
@@ -36,6 +36,7 @@ class AnthropicProvider(BaseLLMProvider):
             raise RuntimeError("Anthropic client not connected.")
         return self._client
 
+    @retry_on_transient(max_retries=3, base_delay=1.5)
     async def complete_json(
         self,
         *,
@@ -84,7 +85,14 @@ class AnthropicProvider(BaseLLMProvider):
                 block.text for block in response.content
                 if getattr(block, "type", "") == "text"
             )
-            return schema.model_validate(json.loads(text))
+
+            # Try direct parse first, then repair if needed
+            try:
+                return schema.model_validate(json.loads(text))
+            except (json.JSONDecodeError, Exception):
+                log.warning("Anthropic returned non-parseable JSON. Attempting repair...")
+                repaired = repair_json(text)
+                return schema.model_validate(json.loads(repaired))
         except Exception as exc:
             error_text = str(exc)
             raise

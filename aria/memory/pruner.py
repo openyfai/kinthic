@@ -9,7 +9,7 @@ import logging
 from typing import List, Dict, Any
 
 from aria.llm.base import SupportsLLM
-from aria.models.schemas import Turn
+from aria.models.schemas import Turn, ConsolidationResult
 from aria.utils.config import get_provider_settings
 from aria.utils.logger import setup_logger
 
@@ -74,3 +74,48 @@ class ContextPruner:
         except Exception as e:
             log.error(f"Context pruning failed: {e}")
             return turns # Return original if compression fails
+
+    async def consolidate_memories(self, memory_store):
+        """Weekly background task to cluster and consolidate redundant memories."""
+        memories = await memory_store.db.fetch_all(
+            "SELECT * FROM memories WHERE archived_at IS NULL"
+        )
+        if len(memories) < 20:
+            return
+            
+        mem_objs = [memory_store._row_to_memory(dict(r)) for r in memories]
+        prompt = (
+            "You are ARIA's Memory Consolidator. "
+            "Review the following active memories. Group highly similar or redundant facts "
+            "into higher-level abstract concepts. "
+            "Return a list of clusters with the 'synthesis' (the new merged fact) "
+            "and the 'original_ids' of the memories that were merged. "
+            "Only cluster things that mean the same thing or are granular details of the same pattern. "
+            "Leave distinct, unconnected facts alone."
+        )
+        
+        mem_text = "\n".join([f"[{m.id}] {m.content}" for m in mem_objs])
+        
+        try:
+            result = await self.llm.complete_json(
+                schema=ConsolidationResult,
+                system_prompt=prompt,
+                user_input=f"Memories to cluster:\n\n{mem_text}",
+                model_override=get_provider_settings()["reasoning_model"]
+            )
+            
+            count = 0
+            for cluster in result.clusters:
+                if len(cluster.original_ids) > 1:
+                    new_mem = await memory_store.add_manual(
+                        content=cluster.synthesis,
+                        importance=0.9
+                    )
+                    count += 1
+                    for old_id in cluster.original_ids:
+                        if old_id != new_mem.id:
+                            await memory_store.archive(old_id)
+                            
+            log.info(f"Consolidated {sum(len(c.original_ids) for c in result.clusters if len(c.original_ids) > 1)} memories into {count} abstractions.")
+        except Exception as e:
+            log.error(f"Memory consolidation failed: {e}")

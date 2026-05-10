@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -124,13 +124,24 @@ class NodeType(str, Enum):
 class Memory(BaseModel):
     """A single unit of knowledge that ARIA remembers."""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    content: str = Field(description="The actual fact or knowledge")
+    content: str = Field(
+        description="The actual fact or knowledge",
+        min_length=5,
+        max_length=1000
+    )
     source: MemorySource = Field(default=MemorySource.USER)
     memory_type: MemoryType = Field(default=MemoryType.SEMANTIC)
     importance: float = Field(
-        default=0.5, ge=0.0, le=1.0,
+        default=0.6, ge=0.0, le=1.0,
         description="Retrieval priority. 1.0 = critical knowledge, 0.0 = trivial"
     )
+
+    @field_validator("importance", mode="before")
+    def map_importance(cls, v):
+        if isinstance(v, str):
+            mapping = {"trivial": 0.3, "situational": 0.6, "core": 0.9}
+            return mapping.get(v.lower(), 0.6)
+        return v
     created_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
@@ -294,14 +305,18 @@ class StoredHypothesis(BaseModel):
 
 class NewMemory(BaseModel):
     """A memory that ARIA wants to persist from this interaction."""
-    content: str = Field(description="The fact or knowledge to remember")
+    content: str = Field(
+        description="The fact or knowledge to remember",
+        min_length=5,
+        max_length=1000
+    )
     source: str = Field(
         default="inference",
         description="Where this memory came from: 'user', 'inference', or 'reflection'"
     )
-    importance: float = Field(
-        default=0.5, ge=0.0, le=1.0,
-        description="How important is this memory? 0.0 = trivial, 1.0 = critical"
+    importance: Literal["trivial", "situational", "core"] = Field(
+        default="situational",
+        description="Qualitative importance tag: trivial, situational, or core"
     )
     tags: list[str] = Field(
         default_factory=list,
@@ -316,6 +331,12 @@ class NewMemory(BaseModel):
         description="How reliable this memory is"
     )
 
+class MemoryCluster(BaseModel):
+    synthesis: str = Field(description="The higher-level abstraction combining the facts")
+    original_ids: list[str] = Field(description="IDs of the original memories merged")
+
+class ConsolidationResult(BaseModel):
+    clusters: list[MemoryCluster]
 
 class GoalUpdate(BaseModel):
     """A change ARIA wants to make to goals."""
@@ -461,6 +482,7 @@ class CognitiveResponse(BaseModel):
     )
     new_memories: list[NewMemory] = Field(
         default_factory=list,
+        max_length=5,
         description=(
             "Facts or knowledge to persist from this interaction. "
             "Only store things worth remembering — not every detail, "
