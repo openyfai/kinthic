@@ -15,6 +15,48 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.0.4] - 2026-05-10
+
+### Security
+
+- **Fixed a command injection vulnerability in `aria stop`.** The old code read a process ID from a file and passed it directly into a shell command. If that file was ever tampered with, the contents would execute as a real command on your machine. The fix validates the PID as a number and uses Python's `os.kill()` directly — no shell involved.
+- **Fixed the file reader sandbox leaking outside your project.** When ARIA was installed via `pip install`, the file reader tool's safe boundary accidentally pointed to Python's `site-packages` folder — meaning the AI could read files from other installed packages. The fix uses a new `ARIA_WORKSPACE` environment variable (defaulting to your current directory) to keep the sandbox tight and predictable.
+
+### Fixed
+
+- **Telegram proactive messages no longer fail silently.** If ARIA tried to send you a proactive Telegram message and it failed (bad token, rate limit, network issue), the error was completely hidden — no log, no warning. Now all failures are logged so you can actually diagnose problems.
+- **The Docker sandbox tool no longer freezes the entire app.** When ARIA ran a command inside Docker, it blocked everything — no chat, no WebSocket updates, nothing — for up to 60 seconds while waiting for the container. Now the Docker calls run in a background thread so the rest of ARIA keeps working.
+
+### Added
+
+- **`tests/test_security_fixes.py`**: Four test classes proving each vulnerability is closed — shell injection, sandbox escape, swallowed errors, and async blocking.
+
+---
+
+## [1.0.3] - 2026-05-10
+
+### Fixed
+
+- **ARIA no longer crashes when a previous session didn't shut down cleanly.** If ARIA was killed (power loss, Ctrl+C, crash) and you tried to start it again, it would refuse with a scary "Another ARIA process is already using this data directory" error. Now it checks whether that old process is actually still running. If it's dead, ARIA cleans up the stale lock file and starts normally.
+- **Running `aria web` when ARIA is already running now opens your browser** instead of crashing. It detects the existing process and opens `http://127.0.0.1:8000` for you.
+- **First-time developers no longer see a blank fallback page.** If you cloned the repo and ran `aria web` without building the UI first, you got a plain HTML page saying the dashboard was missing. Now ARIA detects the situation, runs `npm install && npm run build` automatically, and shows you the progress.
+
+---
+
+## [1.0.2] - 2026-05-10
+
+### Changed
+
+- **Simplified installation.** All dependencies are now included in the base package. The install command is simply `pip install openyfai-aria` — no more `[full]` extra.
+- **Simplified README.** Replaced the technical multi-path setup instructions with a clean, three-step quickstart.
+
+### Added
+
+- **GitHub Actions release workflow** (`.github/workflows/release.yml`): Push a version tag and the package is automatically built and published to PyPI.
+
+---
+
+
 ## [1.0.1] - 2026-05-10
 
 ### Changed
@@ -128,6 +170,9 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/openyfai/aria/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/openyfai/aria/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/openyfai/aria/compare/v1.0.3...v1.0.4
+[1.0.3]: https://github.com/openyfai/aria/compare/v1.0.2...v1.0.3
+[1.0.2]: https://github.com/openyfai/aria/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/openyfai/aria/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/openyfai/aria/releases/tag/v1.0.0
