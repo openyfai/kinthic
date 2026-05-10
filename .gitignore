@@ -16,6 +16,7 @@ notes/
 **/AGENTS.md
 **/CLAUDE.md
 .aria_pending_edits.json
+backups/
 
 # Workspace & ad-hoc experiments
 scratch/

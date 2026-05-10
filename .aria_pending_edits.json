@@ -1,6 +1,0 @@
-{
-    "file_path": "E:\\AGI\\aria\\core\\tool_definitions.py",
-    "target_content": "    \"name\": \"apply_approved_edit\",\n    \"description\": \"Applies a pending code edit. ONLY use this tool if the user has explicitly typed 'approve edit', 'yes', or otherwise given you direct permission to apply the drafted code changes.\",\n    \"args\": {}",
-    "replacement_content": "    \"name\": \"apply_approved_edit\",\n    \"description\": \"Applies specified pending code edits. ONLY use this tool if the user has explicitly typed 'approve edit', 'yes', or otherwise given you direct permission to apply the drafted code changes.\",\n    \"args\": {\n        \"edit_ids\": \"array (list of strings, representing the unique IDs of the edits to apply)\"\n    }",
-    "explanation": "Modifies the `apply_approved_edit` tool to accept a list of `edit_ids`, enabling granular control over which pending code changes are applied. This addresses the current limitation of global application and improves architectural flexibility for self-improvement."
-}
