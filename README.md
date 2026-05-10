@@ -1,46 +1,24 @@
-# ARIA (Bringing AGI to the Public)
+# ARIA by OpenYF AI
 
-**What this is:** ARIA is an **experimental, local-first AI agent** from **[OpenYF AI](https://github.com/openyfai)**. It combines chat with **persistent memory**, a living **knowledge graph**, governed **tools**, an optional **web dashboard**, and **Telegram** integration. Sources and updates live at **[github.com/openyfai/aria](https://github.com/openyfai/aria)**.
+ARIA is a local AI agent that lives on your machine, remembers everything, 
+and works 24/7 — even while you sleep.
 
-**Who it's for:** people who want **more than a raw chat completion** — operators who configure providers, approvals, identity, and (optionally) 24/7 proactive behavior behind clear safety defaults.
+Built by OpenYF AI as part of an open journey toward general intelligence.
 
-We are building in public; you can adopt it as-is, customize skills, or follow the codebase as the project evolves.
-
----
-
-**In one sentence:** install once, run **`aria setup`** or open the dashboard with **`aria web`**, optionally pair Telegram, and chat.
-
-## Quick start (PyPI — recommended)
-
-You need **Python 3.11 or newer** (latest stable 3.x is recommended).
+## Install
 
 ```bash
-pip install "openyfai-aria[full]"
+pip install openyfai-aria
 ```
 
-**Option A — browser setup (default):**
-
-```bash
-aria web
-```
-
-Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)**, complete provider and safety settings in the UI, then use Chat (and Graph / Operator / Settings as you like).
-
-**Option B — terminal setup only:**
+## Start
 
 ```bash
 aria setup
 ```
 
-Then run **`aria`** for the terminal agent or **`aria web`** for the dashboard.
-
-**Optional:** background daemon (non-Windows / see notes in CLI): **`aria start`**
-
-PyPI wheels include a **pre-built dashboard** when published through the project’s release workflow; you should **not** need Node or `npm` for a normal install.
-
-Try a first prompt such as: *Analyze this repo and build a knowledge graph of the architecture.*
-
-More detail: [`docs/quickstart.md`](docs/quickstart.md).
+That's it. Open http://127.0.0.1:8000 and start talking.
+No options A and B. No jargon. One path.
 
 ## Developing from source (contributors)
 
