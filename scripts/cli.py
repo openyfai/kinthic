@@ -168,8 +168,50 @@ def run_models() -> None:
 
 
 def run_web() -> None:
-    from scripts import web_server
+    import subprocess
+    import shutil
+    import webbrowser
+    from pathlib import Path
+    import json
+    import os
 
+    # 1. UI Build Check
+    web_dist = Path("aria/web_dist/index.html")
+    ui_out = Path("aria-ui/out/index.html")
+    
+    if not web_dist.exists() and not ui_out.exists():
+        if Path("aria-ui/package.json").exists() and shutil.which("npm"):
+            print("\n✨ First run detected: Building the ARIA dashboard UI...")
+            print("This usually takes 1-2 minutes.\n")
+            try:
+                subprocess.run("npm install && npm run build", shell=True, cwd="aria-ui", check=True)
+                print("\n✅ Dashboard built successfully!\n")
+            except subprocess.CalledProcessError:
+                print("\n❌ Failed to build the UI. Check the output above.")
+                return
+        else:
+            print("\n❌ Corrupted installation: The web dashboard is missing from this package.")
+            print("Please run `pip install --upgrade openyfai-aria`.\n")
+            return
+
+    # 2. Duplicate Process Check
+    lock_path = Path("data/.aria_lock")
+    if lock_path.exists():
+        try:
+            lock_data = json.loads(lock_path.read_text(encoding="utf-8").strip())
+            pid = lock_data.get("pid")
+            if pid:
+                os.kill(pid, 0)
+                print(f"\n⚡ ARIA is already running in the background (PID {pid}).")
+                print("Opening dashboard...")
+                webbrowser.open(f"http://{get_web_host()}:{get_web_port()}")
+                return
+        except OSError:
+            pass
+        except Exception:
+            pass
+
+    from scripts import web_server
     uvicorn.run(web_server.app, host=get_web_host(), port=get_web_port())
 
 

@@ -1096,12 +1096,20 @@ class CognitiveLoop:
             return
         role = get_process_role()
         if self._process_lock_path.exists():
-            existing = self._process_lock_path.read_text(encoding="utf-8").strip()
-            if existing:
-                raise RuntimeError(
-                    "Another ARIA process is already using this data directory. "
-                    f"Existing lock: {existing}. Set ARIA_ALLOW_MULTI_WRITER=true only if you understand the risk."
-                )
+            try:
+                existing = self._process_lock_path.read_text(encoding="utf-8").strip()
+                if existing:
+                    import os
+                    lock_data = json.loads(existing)
+                    pid = lock_data.get("pid")
+                    if pid:
+                        try:
+                            os.kill(pid, 0)
+                            raise RuntimeError(f"LOCK_EXISTS:{pid}")
+                        except OSError:
+                            self._process_lock_path.unlink(missing_ok=True)
+            except (json.JSONDecodeError, KeyError, ValueError):
+                pass
         self._process_lock_path.write_text(
             json.dumps(
                 {
