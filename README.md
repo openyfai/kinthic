@@ -1,141 +1,119 @@
-# ARIA
+# ARIA (Bringing AGI to the Public)
 
-ARIA is a local-first AI agent with a visible brain: persistent memory, a live knowledge graph, governed tool use, and hackable Markdown skills.
+**What this is:** ARIA is an **experimental, local-first AI agent** from **[OpenYF AI](https://github.com/openyfai)**. It combines chat with **persistent memory**, a living **knowledge graph**, governed **tools**, an optional **web dashboard**, and **Telegram** integration. Sources and updates live at **[github.com/openyfai/aria](https://github.com/openyfai/aria)**.
 
-It is built for people who want more than chat. You can run it locally, inspect how it reasons, choose your provider and model without editing code, and keep high-impact actions behind operator approval.
+**Who it's for:** people who want **more than a raw chat completion** — operators who configure providers, approvals, identity, and (optionally) 24/7 proactive behavior behind clear safety defaults.
 
-![Onboarding provider selection placeholder](docs/assets/onboarding-provider-selection.svg)
-![Chat and monologue placeholder](docs/assets/chat-internal-monologue.svg)
-![Graph view placeholder](docs/assets/graph-view-growing.svg)
-![Operator panel placeholder](docs/assets/operator-approval-usage.svg)
+We are building in public; you can adopt it as-is, customize skills, or follow the codebase as the project evolves.
+
+---
+
+**In one sentence:** install once, run **`aria setup`** or open the dashboard with **`aria web`**, optionally pair Telegram, and chat.
+
+## Quick start (PyPI — recommended)
+
+You need **Python 3.11 or newer** (latest stable 3.x is recommended).
+
+```bash
+pip install "openyfai-aria[full]"
+```
+
+**Option A — browser setup (default):**
+
+```bash
+aria web
+```
+
+Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)**, complete provider and safety settings in the UI, then use Chat (and Graph / Operator / Settings as you like).
+
+**Option B — terminal setup only:**
+
+```bash
+aria setup
+```
+
+Then run **`aria`** for the terminal agent or **`aria web`** for the dashboard.
+
+**Optional:** background daemon (non-Windows / see notes in CLI): **`aria start`**
+
+PyPI wheels include a **pre-built dashboard** when published through the project’s release workflow; you should **not** need Node or `npm` for a normal install.
+
+Try a first prompt such as: *Analyze this repo and build a knowledge graph of the architecture.*
+
+More detail: [`docs/quickstart.md`](docs/quickstart.md).
+
+## Developing from source (contributors)
+
+Clone the repo and use an editable install when you are changing Python or the Next.js UI:
+
+```bash
+git clone https://github.com/openyfai/aria.git && cd aria
+pip install -e ".[full,dev]"
+```
+
+If you change the **web frontend**, build it once so `aria web` can serve `aria-ui/out` from your checkout:
+
+```bash
+cd aria-ui && npm install && npm run build && cd ..
+```
+
+Release builds (CI) copy this output into `aria/web_dist/` for **PyPI** wheels — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Why ARIA
 
 - Local-first memory and state backed by SQLite.
 - A visible graph of what the agent believes.
-- Provider and model choice from CLI or web onboarding.
+- Provider and model choice from the setup wizard or `aria setup`.
 - Operator controls for approvals, usage, Telegram pairing, and remote access.
 - Markdown skills that let contributors extend behavior without editing Python.
 
-## See The Visual Brain In 60 Seconds
+## More ways to run
 
-```bash
-git clone https://github.com/0xopenYF/aria.git
-cd aria
-pip install -e ".[full,dev]"
-aria setup
-aria web
-```
-
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000), then try:
-
-`Analyze this repo and build a knowledge graph of the architecture.`
-
-The demo walkthrough lives in `scripts/demo.py`, and the short recording script lives in [`docs/demo-script.md`](docs/demo-script.md).
-
-## Install Paths
-
-### Terminal Agent
-
-`aria` starts the terminal agent.
-
-```bash
-pip install -e ".[full,dev]"
-aria setup
-aria
-```
-
-### Web UI
-
-`aria web` or `aria-web` starts the web UI backed by FastAPI and the static Next.js export.
-
-```bash
-aria web
-```
-
-The first-run web flow lets you choose a provider, test the key, set safe defaults, and continue into chat.
-
-### Docker Web UI
-
-Docker is the easiest way to demo the visual brain remotely, but it requires an `.env` file.
-
-1. Copy `.env.example` to `.env`.
-2. Set:
-   - `ARIA_WEB_HOST=0.0.0.0`
-   - `ARIA_WEB_API_KEY=<long-random-secret>`
-   - one provider API key such as `GEMINI_API_KEY`
-3. Start the web profile:
-
-```bash
-docker compose --profile web up --build
-```
-
-Then open [http://localhost:8000](http://localhost:8000), enter the web API key, and continue through setup.
+| Path | When to use |
+|------|-------------|
+| **Web UI** (`aria web`) | Default: finish setup in the browser. |
+| **Terminal agent** (`aria` after setup) | Keyboard-first use. |
+| **CLI setup only** (`aria setup`) | You prefer not to use the web wizard once. |
+| **Docker** | Deploy to a server or share on a LAN; needs `.env` and a web API key. See [`docs/quickstart.md`](docs/quickstart.md#deploy--server-docker). |
 
 ## Requirements
 
-- Python `>=3.12`
-- Node `20` for `aria-ui/`
-- Docker optional for containerized web and Telegram deployments
+- **Python** `>=3.11` (matches package metadata on PyPI).
+- **Node 20+** — only if you develop or rebuild `aria-ui/` from source (not required for standard `pip install` wheels).
+- **Docker** — optional.
 
-## Useful Commands
-
-```bash
-aria doctor
-aria models
-aria web
-aria telegram run
-aria telegram pair
-python -m build
-```
-
-## Provider Support
-
-ARIA currently supports configuration for:
-
-- Gemini
-- OpenAI
-- Anthropic
-- OpenRouter
-- DeepSeek
-- Mistral
-- Groq
-- Ollama and local OpenAI-compatible endpoints
-
-Provider settings can come from the setup wizard, `aria setup`, local runtime files in `data/`, or environment variables for headless deployments.
-
-## Safe Defaults
+## Safe defaults
 
 - Tool approvals are on.
 - Terminal execution is off.
 - Direct code writes are off.
 - Background actions are off.
 - Remote web binds require `ARIA_WEB_API_KEY`.
-- Telegram is deny-by-default until paired.
+- Telegram is deny-by-default until paired from **Operator**.
 
 Read [`SECURITY.md`](SECURITY.md) before exposing ARIA beyond localhost.
 
+## Power user / troubleshooting
+
+If chat or setup fails after you have saved provider keys, see [`docs/quickstart.md`](docs/quickstart.md#power-user--troubleshooting-commands) for `aria doctor`, `aria doctor --ping`, and related commands. You do not need these for a first successful run.
+
+## Provider support
+
+Gemini, OpenAI, Anthropic, OpenRouter, DeepSeek, Mistral, Groq, Ollama, and local OpenAI-compatible endpoints. Settings come from the wizard, `aria setup`, `data/` runtime files, or environment variables.
+
 ## Skills
 
-Skills are the easiest contribution loop in the project.
+Add a Markdown file under `skills/`, restart ARIA, and the agent can use that workflow. Start with [`skills/repo_researcher.md`](skills/repo_researcher.md) or [`skills/README.md`](skills/README.md).
 
-Add a Markdown file to `skills/`, restart ARIA, and the agent can use that workflow guidance during reasoning. Start with [`skills/repo_researcher.md`](skills/repo_researcher.md) or read [`skills/README.md`](skills/README.md).
-
-### Submit Your First Skill In 5 Minutes
-
-1. Copy an existing file from `skills/`.
-2. Rewrite it for one concrete workflow.
-3. Test it locally with `aria` or `aria web`.
-4. Open a PR or use the skill request template.
-
-## Repository Guide
+## Repository guide
 
 - Core loop: `aria/core/cognitive_loop.py`
 - Providers: `aria/llm/`
 - Web backend: `scripts/web_server.py`
-- Terminal and admin CLI: `scripts/cli.py`
-- Telegram bot: `scripts/telegram_bot.py`
+- CLI: `scripts/cli.py`
+- Telegram: `scripts/telegram_bot.py`
 - Web UI: `aria-ui/src/`
+- Packaged static UI (release builds): `aria/web_dist/`
 - Skills: `skills/`
 
 ## Development
@@ -143,18 +121,18 @@ Add a Markdown file to `skills/`, restart ARIA, and the agent can use that workf
 ```bash
 python -m pytest tests
 ruff check .
-cd aria-ui
-npm install
-npm run lint
-npm run build
+cd aria-ui && npm install && npm run lint && npm run build
 ```
 
-## Project Docs
+## Project docs
 
-- [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- [`SECURITY.md`](SECURITY.md)
-- [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
-- [`ROADMAP.md`](ROADMAP.md)
+- [`docs/quickstart.md`](docs/quickstart.md) — install paths, Docker, troubleshooting  
+- [`CONTRIBUTING.md`](CONTRIBUTING.md)  
+- [`SECURITY.md`](SECURITY.md)  
+- [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)  
+- [`docs/planning/ROADMAP.md`](docs/planning/ROADMAP.md) — phased roadmap  
+- [`docs/planning/launch-checklist.md`](docs/planning/launch-checklist.md) — pre-public-release checklist  
+- [`docs/planning/launch-issue-backlog.md`](docs/planning/launch-issue-backlog.md) — seeded “good first issue” ideas  
 - [`CHANGELOG.md`](CHANGELOG.md)
 
 ## License

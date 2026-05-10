@@ -5,5 +5,5 @@ A persistent cognitive agent with memory, goals, reasoning traces, and reflectio
 Operators configure providers, autonomy policy, and identity through settings.
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.1"
 __codename__ = "Cognitive Core"

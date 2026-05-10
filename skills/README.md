@@ -4,6 +4,8 @@ Skills are the fastest way to contribute to ARIA.
 
 Drop a Markdown file into `skills/`, restart ARIA, and the agent can use that workflow guidance during reasoning.
 
+This **`README.md` is contributor documentation only**—the loader skips files whose stem is `README`, so this page is never injected into the agent prompt as a skill.
+
 ## Skill format
 
 Each skill is a plain Markdown file with:

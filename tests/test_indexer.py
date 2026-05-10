@@ -5,6 +5,7 @@ class FakeVectorStore:
     def __init__(self):
         self.deleted = []
         self.added = []
+        self.is_active = True
 
     def delete_by_path(self, file_path: str):
         self.deleted.append(file_path)
@@ -39,3 +40,19 @@ def test_indexer_is_incremental(tmp_path):
 
     assert first_count == 1
     assert len(store.added) == 1
+
+
+def test_indexer_skips_when_vector_store_inactive(tmp_path):
+    (tmp_path / "notes.md").write_text("orphan", encoding="utf-8")
+
+    class InactiveStore:
+        is_active = False
+
+        def delete_by_path(self, file_path: str) -> None:
+            raise AssertionError("indexer should not touch store when inactive")
+
+        def add_chunks(self, texts, metadatas, ids=None) -> None:
+            raise AssertionError("indexer should not touch store when inactive")
+
+    indexer = WorkspaceIndexer(InactiveStore(), str(tmp_path), manifest_path=tmp_path / "manifest.json")
+    indexer.run()

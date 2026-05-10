@@ -1,11 +1,31 @@
+# 1. EXCLUDE PRIVATE DATA & WORKING DIRS
+prune data
+prune backups
+prune workspace
+prune scratch
+prune audit_plan1
+prune .cursor
+prune build
+prune dist
+
+# 2. EXCLUDE INTERNAL DOCS & LAUNCH MATERIELS
+prune docs
+
+# 3. EXCLUDE UI BUILD ARTIFACTS
 prune aria-ui/node_modules
 recursive-exclude aria-ui/node_modules *
 global-exclude */node_modules/*
 prune aria-ui/.next
 prune aria-ui/out
-prune .cursor
-prune build
-prune dist
-prune workspace
-prune scratch
-exclude test_screenshot.png
+
+# 4. EXCLUDE ALL ROOT MARKDOWN FILES GLOBALLY (e.g. ARIA_*.md, phase plans, context.md)
+exclude *.md
+
+# 5. RE-INCLUDE ONLY THE OPEN SOURCE ESSENTIALS
+include README.md
+include CHANGELOG.md
+include CONTRIBUTING.md
+include SECURITY.md
+include CODE_OF_CONDUCT.md
+include LICENSE
+include pyproject.toml

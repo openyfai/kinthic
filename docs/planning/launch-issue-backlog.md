@@ -1,5 +1,8 @@
 # Beginner-Friendly Launch Issue Backlog
 
+**Published on 2026-05-08.**  
+See the open issues [here on GitHub](https://github.com/openyfai/aria/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+
 Seed these as `good first issue` items before public launch.
 
 1. Add another Ollama model preset to the catalog.

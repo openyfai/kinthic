@@ -70,6 +70,12 @@ class SemanticSearchTool(BaseTool):
         n_results = min(int(kwargs.get("n_results", 5)), 10)
         log.info(f"Executing semantic_search for: '{query}'")
 
+        if not getattr(self.vs, "is_active", False):
+            return (
+                "Semantic search is disabled: vector memory (ChromaDB) is not installed. "
+                'Install with pip install "openyfai-aria[vector]" or `pip install chromadb`, then restart ARIA.'
+            )
+
         try:
             results = self.vs.search(query, n_results=n_results)
             

@@ -4,6 +4,10 @@ from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.skills")
 
+# Filenames excluded from loading as executable skills (contributor docs, etc.).
+_SKIP_SKILL_NAMES = frozenset({"readme"})
+
+
 class SkillLoader:
     """
     Dynamically loads Markdown (.md) files from the /skills directory.
@@ -26,6 +30,8 @@ class SkillLoader:
 
         count = 0
         for file_path in self.skills_dir.glob("*.md"):
+            if file_path.stem.lower() in _SKIP_SKILL_NAMES:
+                continue
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()

@@ -46,7 +46,7 @@ class ToolRegistry:
         self.register(RunTerminalCommandTool())
         self.register(BrowserTool())
         
-        if self.vector_store:
+        if self.vector_store and getattr(self.vector_store, "is_active", False):
             self.register(SemanticSearchTool(self.vector_store))
 
     def register(self, tool: BaseTool) -> None:

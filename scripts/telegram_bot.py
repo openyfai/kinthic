@@ -172,10 +172,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     chat_id = update.effective_chat.id
     
     if not _telegram_user_allowed(user_id):
+        # Auto-detect if they just pasted the pairing code directly
+        potential_code = user_text.strip().upper()
+        if potential_code.startswith("PAIR-"):
+            if settings_store.consume_pair_code(potential_code, user_id, update.effective_user.username):
+                await update.message.reply_text("Pairing successful. Connection secured.\n\nHi, I'm ARIA. What are we working on today?")
+                return
+            
         log.warning(f"Unauthorized access attempt from User ID: {user_id}")
         await update.message.reply_text(
             f"🚫 **Access Denied**\n\n"
-            f"Pair this Telegram account first with `/start CODE` or `/pair CODE`.\n"
+            f"Send your exact pairing code (eg. `PAIR-XYZ`) to secure this connection.\n"
             f"Your Telegram ID: `{user_id}`",
             parse_mode="Markdown"
         )

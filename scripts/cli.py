@@ -25,7 +25,12 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("setup", help="Run interactive local setup")
-    subparsers.add_parser("doctor", help="Show local setup and security status")
+    doctor_parser = subparsers.add_parser("doctor", help="Show local setup and security status")
+    doctor_parser.add_argument(
+        "--ping",
+        action="store_true",
+        help="Run a tiny live API call to verify configured provider credentials",
+    )
     subparsers.add_parser("models", help="List supported providers and models")
     subparsers.add_parser("web", help="Run the ARIA web server")
 
@@ -33,6 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
     telegram_sub = telegram_parser.add_subparsers(dest="telegram_command")
     telegram_sub.add_parser("run", help="Run the Telegram bot")
     telegram_sub.add_parser("pair", help="Generate a Telegram pairing code")
+
+    subparsers.add_parser("start", help="Start ARIA daemon in the background")
+    subparsers.add_parser("stop", help="Stop the ARIA background daemon")
 
     return parser
 
@@ -76,7 +84,7 @@ def run_setup() -> None:
     print("- Local settings stored in data/settings.json and data/secrets.json")
 
 
-def run_doctor() -> None:
+def run_doctor(*, ping: bool = False) -> None:
     store = RuntimeSettingsStore()
     settings = store.load_settings()
     status = store.setup_status()
@@ -91,6 +99,11 @@ def run_doctor() -> None:
     print(f"Browser actions enabled: {browser_actions_enabled()}")
     print(f"Terminal execution enabled: {terminal_execution_enabled()}")
     print(f"Direct code apply enabled: {code_apply_enabled()}")
+    print(
+        "\nCatalog note: Model IDs are preset names from ARIA's catalog; the provider API "
+        "validates them only when you chat or run `doctor --ping`. If you see an unknown-model error, "
+        "pick another ID from `aria models` or Settings."
+    )
 
     warnings: list[str] = []
     if telegram_public_mode_enabled():
@@ -110,6 +123,38 @@ def run_doctor() -> None:
             print(f"- {warning}")
     else:
         print("\nWarnings: none")
+
+    if ping:
+        import asyncio
+
+        from aria.llm.provider_test import ping_provider
+        from aria.utils.config import get_provider_secret
+
+        provider = str(settings.get("provider", "") or status.get("provider") or "gemini").strip()
+        model_raw = str(settings.get("model", "") or "").strip()
+        model = model_raw or None
+        key = (get_provider_secret(provider, settings_store=store) or "").strip()
+        if provider != "ollama" and not key:
+            print(
+                "\nLive provider check skipped: no API key stored for the selected provider.\n"
+                "- Run `aria setup`, or finish the web setup wizard and click “Test provider”.\n"
+                "- If the key is only in an env var, copy it into the runtime store via setup."
+            )
+        else:
+            print("\nLive provider check (one small API call)…")
+            result = asyncio.run(ping_provider(provider, key, model))
+            if result.get("ok"):
+                print(f"  [ok] {result.get('message', 'Connected.')}")
+            else:
+                print(f"  [fail] {result.get('message', 'Connectivity check failed.')}")
+                if result.get("hint"):
+                    print(f"  Hint: {result['hint']}")
+                if result.get("code"):
+                    print(f"  Code: {result['code']}")
+                print(
+                    "  If the error mentions an unknown or invalid model name, compare your selection "
+                    "with `aria models` (catalog presets may not match your provider account)."
+                )
 
 
 def run_models() -> None:
@@ -141,6 +186,56 @@ def generate_pair_code() -> None:
     print("Send it to your bot with /start CODE or /pair CODE")
 
 
+def run_start() -> None:
+    print("Generating and starting ARIA background daemon...")
+    import sys
+    import subprocess
+    import platform
+    
+    if sys.platform == "win32":
+        print("Windows daemonization not fully implemented natively yet. Please run `aria web` in a persistent terminal or use NSSM.")
+        return
+        
+    # Super simple fallback daemon using nohup
+    log_file = Path("data/aria.log").absolute()
+    cmd = f"nohup {sys.executable} -m scripts.cli web > {log_file} 2>&1 & echo $!"
+    try:
+        proc = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, text=True)
+        pid = proc.stdout.strip()
+        print(f"ARIA daemon started (PID {pid}). Logs at {log_file}")
+        with open("data/aria.pid", "w") as f:
+            f.write(pid)
+    except Exception as e:
+        print(f"Failed to start ARIA daemon: {e}")
+
+def run_stop() -> None:
+    import sys
+    import subprocess
+    
+    pid_file = Path("data/aria.pid")
+    if not pid_file.exists():
+        print("ARIA daemon is not running (no PID file found).")
+        return
+    
+    pid = pid_file.read_text().strip()
+    if sys.platform == "win32":
+        try:
+            subprocess.run(f"taskkill /F /PID {pid}", shell=True, check=True)
+            print(f"Stopped ARIA (PID {pid})")
+        except:
+            print("Failed to stop ARIA.")
+    else:
+        try:
+            subprocess.run(f"kill {pid}", shell=True, check=True)
+            print(f"Stopped ARIA daemon (PID {pid})")
+        except:
+            print("Failed to stop ARIA daemon.")
+    
+    try:
+        pid_file.unlink()
+    except:
+        pass
+
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
@@ -155,7 +250,7 @@ def main() -> None:
         run_setup()
         return
     if args.command == "doctor":
-        run_doctor()
+        run_doctor(ping=getattr(args, "ping", False))
         return
     if args.command == "models":
         run_models()
@@ -168,6 +263,12 @@ def main() -> None:
             generate_pair_code()
             return
         run_telegram()
+        return
+    if args.command == "start":
+        run_start()
+        return
+    if args.command == "stop":
+        run_stop()
         return
 
 

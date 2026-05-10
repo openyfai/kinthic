@@ -26,11 +26,30 @@ pytest
 cd aria-ui && npm run lint && npm run build
 ```
 
+## PyPI release (maintainers)
+
+Published wheels embed the **built** dashboard under `aria/web_dist/`. CI runs on each **published GitHub Release** (see `.github/workflows/publish-pypi.yml`): ensure **`version` in `pyproject.toml` and `aria/__init__.py`** match the release tag before publishing.
+
+1. Build `aria-ui` (`npm ci` + `npm run build`).
+2. Copy `aria-ui/out/*` into `aria/web_dist/` (keeping tracked `__init__.py`).
+3. Run `python -m build` and upload with **PyPI Trusted Publishing** (configure the GitHub repo as a trusted publisher for project `openyfai-aria` in PyPI settings).
+
+**Manual wheel (optional):** after a local `aria-ui` build:
+
+```bash
+# bash (Git Bash / WSL / macOS / Linux)
+find aria/web_dist -mindepth 1 -maxdepth 1 ! -name '__init__.py' -exec rm -rf {} +
+cp -r aria-ui/out/. aria/web_dist/
+python -m build
+```
+
+On Windows PowerShell, use Explorer or equivalent `robocopy` / manual copy instead of `cp`.
+
 ## Clean-Room Install Checklist
 
 Use this before merging onboarding, packaging, or release changes:
 
-1. Start from a fresh checkout on Python `3.12+`.
+1. Start from a fresh checkout on Python `3.11+`.
 2. Run `pip install -e ".[full,dev]"`.
 3. Confirm `aria models`, `aria doctor`, `aria setup`, and `aria web` work.
 4. Run the web UI once with a new browser profile or cleared local storage.

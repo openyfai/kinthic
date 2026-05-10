@@ -20,6 +20,9 @@ const PANEL_WIDTH = 420;
 const PANEL_REVEAL_WIDTH = PANEL_WIDTH;
 const DRAG_OPEN_THRESHOLD = 100;
 
+/** Session flag so the post-setup checklist survives a refresh until dismissed. */
+const POST_SETUP_NEXT_PENDING_KEY = "aria_post_setup_next_pending";
+
 type RuntimeSettings = {
   provider: string;
   model: string;
@@ -83,8 +86,9 @@ export default function Home() {
   const [authNeeded, setAuthNeeded] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [runtimeLoading, setRuntimeLoading] = useState(true);
-  const [setupSuccess, setSetupSuccess] = useState<string | null>(null);
+  const [postSetupNextOpen, setPostSetupNextOpen] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [setupWizardReview, setSetupWizardReview] = useState(false);
   const shellX = useMotionValue(0);
   const socketEnabled = !runtimeLoading && !authNeeded;
 
@@ -98,6 +102,13 @@ export default function Home() {
   const panelScale = useTransform(shellX, [-PANEL_REVEAL_WIDTH, 0], [1, 0.985]);
   const panelOpacity = useTransform(shellX, [-PANEL_REVEAL_WIDTH, 0], [1, 0]);
   const shellRadius = useTransform(shellX, [-PANEL_REVEAL_WIDTH, 0], [34, 26]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (sessionStorage.getItem(POST_SETUP_NEXT_PENDING_KEY) === "1") {
+      queueMicrotask(() => setPostSetupNextOpen(true));
+    }
+  }, []);
 
   useEffect(() => {
     const controls = animate(shellX, isMonologueOpen ? -PANEL_REVEAL_WIDTH : 0, {
@@ -244,16 +255,22 @@ export default function Home() {
         </div>
       )}
 
-      {runtimeData && runtimeData.status && !runtimeData.status.setup_completed && (
+      {runtimeData && runtimeData.status && (!runtimeData.status.setup_completed || setupWizardReview) && (
         <SetupWizard
           providers={runtimeData.providers ?? []}
           initialSettings={runtimeData.settings}
+          variant={runtimeData.status.setup_completed ? "review" : "first-run"}
+          onCancel={runtimeData.status.setup_completed ? () => setSetupWizardReview(false) : undefined}
           onComplete={(payload) => {
+            setSetupWizardReview(false);
             setRuntimeData((current) => mergeRuntimeData(current, {
               settings: payload.settings,
               status: payload.status,
             }));
-            setSetupSuccess("ARIA is configured. Try the visual brain demo prompts below.");
+            if (typeof window !== "undefined") {
+              sessionStorage.setItem(POST_SETUP_NEXT_PENDING_KEY, "1");
+            }
+            setPostSetupNextOpen(true);
           }}
         />
       )}
@@ -337,9 +354,89 @@ export default function Home() {
                 </div>
               )}
 
-              {setupSuccess && currentView === "chat" && (
-                <div className="absolute top-4 left-1/2 z-30 -translate-x-1/2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs font-medium text-emerald-200">
-                  {setupSuccess}
+              {postSetupNextOpen &&
+                runtimeData?.status?.setup_completed &&
+                currentView === "chat" && (
+                <div className="absolute top-4 left-1/2 z-30 w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-2xl border border-border bg-card/95 px-5 py-4 shadow-xl backdrop-blur-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                        Next steps
+                      </div>
+                      <p className="mt-2 text-sm font-medium text-foreground">
+                        ARIA is ready. Try a prompt below, or explore:
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Dismiss next steps"
+                      onClick={() => {
+                        setPostSetupNextOpen(false);
+                        if (typeof window !== "undefined") {
+                          sessionStorage.removeItem(POST_SETUP_NEXT_PENDING_KEY);
+                        }
+                      }}
+                      className="shrink-0 rounded-lg px-2 py-1 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                  <ul className="mt-4 grid gap-2 text-sm text-foreground">
+                    <li className="flex flex-wrap items-center gap-2">
+                      <span className="text-muted-foreground">Chat</span>
+                      <span className="text-xs text-muted-foreground">— you are here; use the box or starter prompts.</span>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentView("graph");
+                          setPostSetupNextOpen(false);
+                          if (typeof window !== "undefined") {
+                            sessionStorage.removeItem(POST_SETUP_NEXT_PENDING_KEY);
+                          }
+                        }}
+                        className="font-medium text-foreground underline decoration-white/20 underline-offset-4 transition hover:decoration-foreground"
+                      >
+                        Open Graph
+                      </button>
+                      <span className="text-xs text-muted-foreground"> — inspect the knowledge graph.</span>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentView("goals");
+                          setPostSetupNextOpen(false);
+                          if (typeof window !== "undefined") {
+                            sessionStorage.removeItem(POST_SETUP_NEXT_PENDING_KEY);
+                          }
+                        }}
+                        className="font-medium text-foreground underline decoration-white/20 underline-offset-4 transition hover:decoration-foreground"
+                      >
+                        Open Goals
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentView("operator");
+                          setPostSetupNextOpen(false);
+                          if (typeof window !== "undefined") {
+                            sessionStorage.removeItem(POST_SETUP_NEXT_PENDING_KEY);
+                          }
+                        }}
+                        className="font-medium text-foreground underline decoration-white/20 underline-offset-4 transition hover:decoration-foreground"
+                      >
+                        Open Operator
+                      </button>
+                      <span className="text-xs text-muted-foreground">
+                        {" "}
+                        — approvals, usage, optional Telegram pairing.
+                      </span>
+                    </li>
+                  </ul>
                 </div>
               )}
 
@@ -412,6 +509,10 @@ export default function Home() {
                 <SettingsView
                   providers={runtimeData.providers ?? []}
                   settings={runtimeData.settings}
+                  onOpenOnboarding={() => {
+                    setCurrentView("settings");
+                    setSetupWizardReview(true);
+                  }}
                   onSaved={(payload) => {
                     setRuntimeData((current) => mergeRuntimeData(current, {
                       settings: payload.settings,

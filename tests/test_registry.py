@@ -93,6 +93,27 @@ async def test_registry_escalates_background_network_actions():
 
 
 @pytest.mark.asyncio
+async def test_semantic_search_omitted_when_vector_inactive():
+    class InactiveVS:
+        is_active = False
+
+    registry = ToolRegistry(vector_store=InactiveVS())
+    assert "semantic_search" not in registry.tools
+
+
+@pytest.mark.asyncio
+async def test_semantic_search_execute_explains_when_inactive():
+    from aria.tools.search import SemanticSearchTool
+
+    class InactiveVS:
+        is_active = False
+
+    tool = SemanticSearchTool(InactiveVS())
+    msg = await tool.execute(query="anything")
+    assert "disabled" in msg.lower()
+
+
+@pytest.mark.asyncio
 async def test_registry_refuses_destructive_actions():
     registry = ToolRegistry()
     registry.tools = {}

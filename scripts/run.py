@@ -200,6 +200,28 @@ async def run() -> None:
                     show_hypotheses(hypos)
                     continue
 
+                elif cmd in (":hypo-confirm", ":hypc"):
+                    if not cmd_arg:
+                        show_warning("Usage: :hypo-confirm <hypothesis-uuid>")
+                        continue
+                    ok = await loop.resolve_hypothesis(cmd_arg, "confirm")
+                    if ok:
+                        show_success(f"Hypothesis {cmd_arg.strip()[:8]}… marked confirmed.")
+                    else:
+                        show_error("Hypothesis not found or not pending.")
+                    continue
+
+                elif cmd in (":hypo-deny", ":hypd"):
+                    if not cmd_arg:
+                        show_warning("Usage: :hypo-deny <hypothesis-uuid>")
+                        continue
+                    ok = await loop.resolve_hypothesis(cmd_arg, "deny")
+                    if ok:
+                        show_success(f"Hypothesis {cmd_arg.strip()[:8]}… marked denied.")
+                    else:
+                        show_error("Hypothesis not found or not pending.")
+                    continue
+
                 elif cmd in (":export",):
                     filepath = await loop.export_session()
                     if filepath:
@@ -247,6 +269,28 @@ async def run() -> None:
                 elif cmd in (":proposals", ":prop"):
                     proposals = await loop.get_proposals()
                     show_proposals(proposals)
+                    continue
+
+                elif cmd in (":prop-approve",):
+                    if not cmd_arg:
+                        show_warning("Usage: :prop-approve <proposal-uuid>")
+                        continue
+                    ok = await loop.resolve_improvement_proposal(cmd_arg.strip(), "approved")
+                    if ok:
+                        show_success("Proposal marked approved.")
+                    else:
+                        show_error("Proposal not found or invalid status transition.")
+                    continue
+
+                elif cmd in (":prop-reject",):
+                    if not cmd_arg:
+                        show_warning("Usage: :prop-reject <proposal-uuid>")
+                        continue
+                    ok = await loop.resolve_improvement_proposal(cmd_arg.strip(), "rejected")
+                    if ok:
+                        show_success("Proposal marked rejected.")
+                    else:
+                        show_error("Proposal not found or invalid status transition.")
                     continue
 
                 elif cmd in (":benchmark", ":bench"):

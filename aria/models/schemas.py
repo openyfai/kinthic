@@ -388,6 +388,34 @@ class Hypothesis(BaseModel):
     )
 
 
+class HypothesisResolution(BaseModel):
+    """Resolve a stored pending hypothesis when new evidence arrives."""
+
+    hypothesis_id: str = Field(
+        description="Exact UUID from PENDING HYPOTHESES in your context (hypothesis_id field)."
+    )
+    action: Literal["confirm", "deny"] = Field(
+        description="Whether new evidence in this turn confirms or refutes the hypothesis."
+    )
+    notes: str = Field(
+        default="",
+        description="Brief justification (what in this turn justified the resolution)",
+    )
+
+
+class UncertaintyTrackingEntry(BaseModel):
+    """Ask the system to persist an open knowledge gap (Phase 4 uncertainties table)."""
+
+    topic: str = Field(
+        max_length=500,
+        description="Short label for what is uncertain (used for dedup and UI lists).",
+    )
+    why_uncertain: str = Field(
+        max_length=2000,
+        description="What is missing or contested — why ARIA cannot assert ground truth yet.",
+    )
+
+
 class ToolCall(BaseModel):
     """ARIA's intent to use a tool."""
     tool_name: str = Field(description="The exact name of the tool to use (e.g. 'web_search')")
@@ -465,6 +493,13 @@ class CognitiveResponse(BaseModel):
         default_factory=list,
         description="Specific things you're not sure about in this response"
     )
+    uncertainty_tracking: list[UncertaintyTrackingEntry] = Field(
+        default_factory=list,
+        description=(
+            "Optional: persistent knowledge gaps to record when a topic needs external verification "
+            "or future follow-up. Each entry is stored as an open uncertainty (see Phase 4)."
+        ),
+    )
 
     # Phase 2 — World Model outputs
     causal_observations: list[CausalObservation] = Field(
@@ -490,6 +525,14 @@ class CognitiveResponse(BaseModel):
             "If the causal graph implies something the user hasn't told you, "
             "state it as a testable hypothesis. Be bold but honest about confidence."
         )
+    )
+    hypothesis_resolutions: list[HypothesisResolution] = Field(
+        default_factory=list,
+        description=(
+            "When pending hypotheses list is non-empty: if this turn's evidence confirms "
+            "or refutes one of them, reference its hypothesis_id and set action to confirm or deny. "
+            "Leave empty if nothing was resolved."
+        ),
     )
 
     # Phase 5 — Tool Use

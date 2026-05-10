@@ -43,6 +43,8 @@ from aria.models.schemas import (
     CausalObservation,
     CognitiveResponse,
     Contradiction,
+    HypothesisResolution,
+    UncertaintyTrackingEntry,
     EdgeType,
     GoalUpdate,
     Hypothesis,
@@ -120,7 +122,13 @@ class CognitiveLoop:
 
         # Phase 7: Semantic Disambiguation
         self.ontology = Ontology()
-        # In a real app, we would load the ontology from disk/DB here
+        _ontology_overlay = DATA_DIR / "ontology.json"
+        if _ontology_overlay.is_file():
+            try:
+                self.ontology.merge_from_json_file(_ontology_overlay)
+                log.info("Loaded ontology overlay from %s", _ontology_overlay)
+            except Exception as exc:
+                log.warning("Ontology overlay at %s was not loaded: %s", _ontology_overlay, exc)
         self.semantic_parser = SemanticParser(self.ontology)
 
         self.context_builder = ContextBuilder(
@@ -131,6 +139,7 @@ class CognitiveLoop:
             tool_registry=self.tool_registry,
             generalization_engine=self.generalization_engine,
             skill_loader=self.skill_loader,
+            settings_store=self.settings_store,
             semantic_parser=self.semantic_parser, # Pass parser to context builder
             pruner=self.pruner,
             creativity_stack=self.creativity_stack
@@ -161,11 +170,12 @@ class CognitiveLoop:
         # Phase 2: Load knowledge graph into memory
         await self.kg.load()
 
-        # Phase B: Milestone 2 — Start background indexing
-        from aria.memory.indexer import WorkspaceIndexer
-        indexer = WorkspaceIndexer(self.vector_store, str(PROJECT_ROOT))
-        # Run in a separate thread/task to not block startup
-        asyncio.create_task(asyncio.to_thread(indexer.run))
+        # Phase B: Milestone 2 — Start background indexing (only when Chroma is available)
+        if self.vector_store.is_active:
+            from aria.memory.indexer import WorkspaceIndexer
+
+            indexer = WorkspaceIndexer(self.vector_store, str(PROJECT_ROOT))
+            asyncio.create_task(asyncio.to_thread(indexer.run))
 
         # Phase 7: Load semantic profiles
         profiles = await self.memory.get_all_semantic_profiles()
@@ -441,6 +451,12 @@ class CognitiveLoop:
         # Step 11: Store hypotheses
         hypotheses_stored = await self._process_hypotheses(cognitive.hypotheses)
 
+        # Step 11.25: Resolve hypotheses when the model (or operator path) supplies resolutions
+        await self._process_hypothesis_resolutions(cognitive.hypothesis_resolutions)
+
+        # Step 11.4: Record explicit uncertainty topics (Phase 4 — uncertainties table)
+        await self._process_uncertainty_tracking(cognitive.uncertainty_tracking)
+
         # Step 11.5: Process self-improvement proposals (Phase 7 — Safety Locked)
         if cognitive.improvement_proposals and self.session.current:
             try:
@@ -475,9 +491,11 @@ class CognitiveLoop:
             self_reflection="Failed to reason. Need to investigate the error.",
             confidence=0.0,
             uncertainty_flags=["internal_error"],
+            uncertainty_tracking=[],
             causal_observations=[],
             contradictions_detected=[],
             hypotheses=[],
+            hypothesis_resolutions=[],
             tool_calls=[],
         )
 
@@ -728,6 +746,61 @@ class CognitiveLoop:
             log.debug(f"Stored {count} hypotheses")
         return count
 
+    async def _process_hypothesis_resolutions(
+        self, resolutions: list[HypothesisResolution]
+    ) -> int:
+        """Apply confirm/deny for pending hypotheses (structured model output)."""
+        if not resolutions:
+            return 0
+        count = 0
+        for hr in resolutions:
+            try:
+                stored = await self.hypotheses.get_by_id(hr.hypothesis_id)
+                if not stored:
+                    log.warning(
+                        f"Hypothesis resolution skipped — unknown id {hr.hypothesis_id[:8]}..."
+                    )
+                    continue
+                if stored.status != "pending":
+                    log.debug(
+                        f"Hypothesis {hr.hypothesis_id[:8]} already {stored.status}, skipping resolution"
+                    )
+                    continue
+                if hr.action == "confirm":
+                    await self.hypotheses.confirm(hr.hypothesis_id)
+                else:
+                    await self.hypotheses.deny(hr.hypothesis_id)
+                if hr.notes:
+                    log.debug(f"Hypothesis {hr.action}: {hr.notes[:80]}")
+                count += 1
+            except Exception as e:
+                log.warning(f"Failed to process hypothesis resolution: {e}")
+        if count > 0:
+            log.debug(f"Resolved {count} hypotheses")
+        return count
+
+    async def _process_uncertainty_tracking(
+        self, entries: list[UncertaintyTrackingEntry]
+    ) -> int:
+        """Persist structured uncertainty notes via DebateEngine (uncertainties table)."""
+        if not entries:
+            return 0
+        count = 0
+        for e in entries:
+            topic = (e.topic or "").strip()
+            why = (e.why_uncertain or "").strip()
+            if not topic or not why:
+                log.debug("Skipping uncertainty_tracking entry with empty topic or reason")
+                continue
+            try:
+                await self.debate_engine.track_uncertainty(topic, why)
+                count += 1
+            except Exception as ex:
+                log.warning(f"Failed to record uncertainty: {ex}")
+        if count > 0:
+            log.debug(f"Recorded {count} uncertainty topics")
+        return count
+
     # ------------------------------------------------------------------
     # UI Command Handlers
     # ------------------------------------------------------------------
@@ -795,6 +868,24 @@ class CognitiveLoop:
     async def get_all_hypotheses(self) -> list[StoredHypothesis]:
         return await self.hypotheses.get_all()
 
+    async def resolve_hypothesis(self, hypothesis_id: str, action: str) -> bool:
+        """
+        Mark a pending hypothesis confirmed or denied (CLI / operator).
+
+        action must be 'confirm' or 'deny'. Returns True if a row was updated.
+        """
+        aid = hypothesis_id.strip()
+        if action not in ("confirm", "deny"):
+            return False
+        stored = await self.hypotheses.get_by_id(aid)
+        if not stored or stored.status != "pending":
+            return False
+        if action == "confirm":
+            await self.hypotheses.confirm(aid)
+        else:
+            await self.hypotheses.deny(aid)
+        return True
+
     async def get_recent_improvements(self):
         """Fetch recent self-corrections."""
         return await self.improver.get_recent_improvements()
@@ -814,6 +905,23 @@ class CognitiveLoop:
     async def get_all_proposals(self):
         """Fetch all self-improvement proposals."""
         return await self.meta_reasoning.get_all_proposals()
+
+    async def resolve_improvement_proposal(self, proposal_id: str, status: str) -> bool:
+        """
+        Operator workflow: approve, reject, or mark implemented. Validates UUID row exists.
+        """
+        allowed = {"approved", "rejected", "implemented"}
+        if status not in allowed:
+            return False
+        pid = proposal_id.strip()
+        row = await self.db.fetch_one(
+            "SELECT id FROM improvement_proposals WHERE id = ?",
+            (pid,),
+        )
+        if not row:
+            return False
+        await self.meta_reasoning.update_status(pid, status)
+        return True
 
     async def run_benchmark(self, status_callback=None):
         """Run the benchmark suite."""
@@ -957,6 +1065,14 @@ class CognitiveLoop:
 
     async def list_supported_providers(self) -> list[dict]:
         return list_providers()
+
+    async def test_provider_credentials(
+        self, *, provider: str, api_key: str, model: str | None = None
+    ) -> dict[str, Any]:
+        """Live connectivity check using a throwaway config (does not overwrite runtime keys)."""
+        from aria.llm.provider_test import ping_provider
+
+        return await ping_provider(provider, api_key, model=model)
 
     def reload_provider(self) -> None:
         provider_settings = get_provider_settings(self.settings_store)

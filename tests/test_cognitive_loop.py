@@ -19,9 +19,11 @@ class FakeGemini:
             self_reflection="No issues.",
             confidence=0.8,
             uncertainty_flags=[],
+            uncertainty_tracking=[],
             causal_observations=[],
             contradictions_detected=[],
             hypotheses=[],
+            hypothesis_resolutions=[],
             tool_calls=[],
         )
 
@@ -96,5 +98,35 @@ async def test_store_memories_marks_normative_and_character_provenance(tmp_path)
         assert character.provenance["identity_relevant"] is True
         assert character.provenance["requires_review"] is False
         assert character.provenance["memory_type"] == "character"
+    finally:
+        await loop.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_resolve_hypothesis_manual_confirm(tmp_path):
+    from aria.models.schemas import Hypothesis as HypothesisOut
+
+    loop = CognitiveLoop()
+    loop.db.db_path = str(tmp_path / "aria.db")
+
+    await loop.db.connect()
+    await loop.kg.load()
+    await loop.session.start_session()
+
+    try:
+        h = await loop.hypotheses.store_hypothesis(
+            HypothesisOut(claim="The sky is green on Tuesdays.", reasoning="Test.")
+        )
+        assert h.status == "pending"
+
+        ok = await loop.resolve_hypothesis(h.id, "confirm")
+        assert ok is True
+
+        row = await loop.hypotheses.get_by_id(h.id)
+        assert row is not None
+        assert row.status == "confirmed"
+
+        ok2 = await loop.resolve_hypothesis(h.id, "deny")
+        assert ok2 is False
     finally:
         await loop.shutdown()

@@ -49,7 +49,7 @@ def get_provider_settings(settings_store: RuntimeSettingsStore | None = None) ->
     store = settings_store or _settings_store
     saved = store.load_settings()
     provider = os.getenv("ARIA_PROVIDER", saved.get("provider", "gemini"))
-    model = os.getenv("ARIA_MODEL", saved.get("model", "gemini-2.5-flash"))
+    model = os.getenv("ARIA_MODEL", saved.get("model", "gemini-3.1-flash-lite"))
     fast_model = os.getenv("ARIA_FAST_MODEL", saved.get("fast_model", model))
     reasoning_model = os.getenv("ARIA_REASONING_MODEL", saved.get("reasoning_model", fast_model))
     return {

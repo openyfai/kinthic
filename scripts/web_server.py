@@ -18,17 +18,21 @@ import sys
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import aria
 from aria.core.cognitive_loop import CognitiveLoop
+from aria.utils.dashboard_static import resolve_dashboard_dir
 from aria.utils.config import (
     background_actions_enabled,
     get_web_allowed_origins,
@@ -47,6 +51,14 @@ _MAX_TOTAL_IMAGE_BYTES = int(os.getenv("ARIA_WS_MAX_TOTAL_IMAGE_BYTES", str(10 *
 _ALLOWED_IMAGE_MIMES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 _WEB_HOST = get_web_host()
 _ALLOWED_ORIGINS = get_web_allowed_origins()
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_PKG_ARIA_ROOT = Path(aria.__file__).resolve().parent
+_RESOLVED_WEB_UI = resolve_dashboard_dir(
+    packaged_aria_pkg=_PKG_ARIA_ROOT,
+    repo_root_from_scripts=Path(__file__).resolve().parent.parent,
+)
+_WEB_UI_OUT = str(_RESOLVED_WEB_UI) if _RESOLVED_WEB_UI else ""
+_WEB_UI_PACKAGED = bool(_RESOLVED_WEB_UI)
 
 
 class RateLimiter:
@@ -145,6 +157,39 @@ async def background_loop():
         if background_actions_enabled() and _cognitive_loop:
             await _cognitive_loop.tick()
 
+async def proactive_telegram_loop():
+    import random
+    from aria.runtime.settings import RuntimeSettingsStore
+    store = RuntimeSettingsStore()
+    
+    while True:
+        # Check every 2-6 hours randomly to simulate organic thought pattern
+        delay = random.randint(7200, 21600)
+        await asyncio.sleep(delay)
+        
+        if background_actions_enabled() and _cognitive_loop:
+            settings = store.load_settings()
+            paired_users = settings.get("telegram", {}).get("paired_users", [])
+            
+            if not paired_users:
+                continue
+                
+            bot_token = settings.get("telegram_token") or os.getenv("TELEGRAM_BOT_TOKEN")
+            
+            if bot_token and paired_users:
+                # Randomly pick a paired user to message
+                user_id = random.choice(paired_users)["user_id"]
+                
+                # Have the loop generate a proactive message
+                try:
+                    result = await _cognitive_loop.process(
+                        "System background directive: Proactively reflect on our last conversations and send an unprompted message to the user with a hypothesis, question, or thought you formed while they were away. Be completely in character. Make it brief."
+                    )
+                    from telegram import Bot
+                    bot = Bot(token=bot_token)
+                    await bot.send_message(chat_id=user_id, text=result.response, parse_mode="Markdown")
+                except Exception:
+                    pass
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -158,8 +203,10 @@ async def lifespan(app: FastAPI):
     _db = _cognitive_loop.db
     _kg = _cognitive_loop.kg
     bg_task = asyncio.create_task(background_loop())
+    proactive_task = asyncio.create_task(proactive_telegram_loop())
     yield
     bg_task.cancel()
+    proactive_task.cancel()
     if _cognitive_loop:
         await _cognitive_loop.shutdown()
 
@@ -187,6 +234,7 @@ async def bootstrap_state(request: Request):
     return {
         "auth_required": _auth_required(),
         "has_local_api_key": bool(_current_api_key()),
+        "ui_packaged": _WEB_UI_PACKAGED,
         "setup": await _cognitive_loop.get_setup_status(),
         "providers": await _cognitive_loop.list_supported_providers(),
     }
@@ -226,6 +274,24 @@ async def complete_setup(
     if not _cognitive_loop:
         raise HTTPException(status_code=503, detail="System booting")
     payload = {**payload, "setup_completed": True}
+    
+    # Handle Telegram Pairing Code provided by UI
+    telegram_pairing_code = payload.pop("telegram_pairing_code", None)
+    if telegram_pairing_code:
+        store = _cognitive_loop.context_builder.settings_store
+        settings = store.load_settings()
+        from datetime import datetime, timezone, timedelta
+        pair_codes = list(settings.get("telegram", {}).get("pair_codes", []))
+        pair_codes.append({
+            "code": telegram_pairing_code.strip().upper(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": (datetime.now(timezone.utc) + timedelta(days=365)).isoformat(), # Long expiration for setup
+            "consumed_at": None,
+            "paired_user_id": None,
+        })
+        settings.setdefault("telegram", {})["pair_codes"] = pair_codes
+        store.save_settings(settings)
+        
     saved = await _cognitive_loop.update_runtime_settings(payload)
     return {"ok": True, "settings": saved, "status": await _cognitive_loop.get_setup_status()}
 
@@ -237,14 +303,15 @@ async def test_provider_connection(
     authorization: str | None = Header(default=None),
 ):
     _check_auth(authorization, rate_key=f"setup-test:{_request_key(request)}")
+    if not _cognitive_loop:
+        raise HTTPException(status_code=503, detail="System booting")
     provider = str(payload.get("provider", "")).strip()
     api_key = str(payload.get("api_key", "")).strip()
-    known = {entry["id"] for entry in await _cognitive_loop.list_supported_providers()} if _cognitive_loop else set()
+    model = str(payload.get("model", "")).strip() or None
+    known = {entry["id"] for entry in await _cognitive_loop.list_supported_providers()}
     if provider not in known:
         raise HTTPException(status_code=400, detail="Unknown provider.")
-    if provider != "ollama" and not api_key:
-        return {"ok": False, "message": "API key is required for this provider."}
-    return {"ok": True, "message": "Provider settings look valid."}
+    return await _cognitive_loop.test_provider_credentials(provider=provider, api_key=api_key, model=model)
 
 
 @app.post("/api/settings")
@@ -446,14 +513,25 @@ async def websocket_chat(websocket: WebSocket):
                         "goals_updated": len(response.goal_updates),
                     }
                 )
-            except Exception:
-                await websocket.send_json(
-                    {
-                        "type": "error",
-                        "text": "Internal error while generating a response.",
-                        "error_kind": "model_error",
-                    }
-                )
+            except Exception as exc:
+                detail = str(exc)
+                low = detail.lower()
+                if "api" in low and ("key" in low or "401" in detail or "403" in detail):
+                    user_msg = (
+                        "The model provider rejected this request. Check your API key and quota in Settings "
+                        "or run `aria doctor --ping` from a terminal on this machine."
+                    )
+                elif "429" in detail or ("rate" in low and "limit" in low):
+                    user_msg = "Provider rate limit hit — wait a moment and try again, or switch model/provider."
+                elif "quota" in low or "billing" in low or "exhausted" in low:
+                    user_msg = "Provider quota or billing limit — verify your account in the provider dashboard."
+                elif "timeout" in low or "timed out" in low:
+                    user_msg = "The request timed out — try a shorter prompt, a faster model, or check local Ollama is running."
+                elif "model" in low and ("not found" in low or "does not exist" in low):
+                    user_msg = "That model name was not found — pick another model under Settings or `aria models`."
+                else:
+                    user_msg = "Generation failed. Check the ARIA server logs for details or run `aria doctor --ping`."
+                await websocket.send_json({"type": "error", "text": user_msg, "error_kind": "model_error"})
     except WebSocketDisconnect:
         return
 
@@ -489,11 +567,30 @@ async def get_graph_data(request: Request, authorization: str | None = Header(de
     return {"nodes": nodes, "links": edges}
 
 
-out_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "aria-ui", "out")
-if os.path.exists(out_dir):
-    app.mount("/", StaticFiles(directory=out_dir, html=True), name="static")
+_MISSING_UI_HTML = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/><title>ARIA — Dashboard assets missing</title></head>
+<body style="font-family:system-ui,sans-serif;max-width:42rem;margin:2rem auto;line-height:1.5;">
+<h1>ARIA API is running</h1>
+<p>Official <code>pip install openyfai-aria</code> wheels should include the dashboard. If you installed from PyPI and see this page, try upgrading the package or file an issue.</p>
+<p><strong>Developers</strong> (git clone): build the Next.js app so <code>aria-ui/out/index.html</code> exists, then restart <code>aria web</code>:</p>
+<pre style="background:#f4f4f5;padding:1rem;">cd aria-ui &amp;&amp; npm install &amp;&amp; npm run build</pre>
+<p><strong>Maintainers</strong> publishing wheels: run the release workflow (or copy <code>aria-ui/out</code> into <code>aria/web_dist/</code>) before <code>python -m build</code>. See CONTRIBUTING.md.</p>
+<p>REST and WebSocket APIs under <code>/api/*</code> and <code>/ws/chat</code> remain available.</p>
+</body></html>"""
+
+
+if _WEB_UI_PACKAGED:
+    app.mount("/", StaticFiles(directory=_WEB_UI_OUT, html=True), name="static")
 else:
-    print("WARNING: aria-ui/out directory not found. Web UI will not be served. Run 'npm run build' in aria-ui/.")
+
+    @app.get("/", response_class=HTMLResponse)
+    async def _ui_not_built_placeholder():
+        return HTMLResponse(content=_MISSING_UI_HTML)
+
+    print(
+        "WARNING: Dashboard static files not found (aria/web_dist after release build, "
+        "or aria-ui/out when developing). Serving `/` help HTML; REST and WebSockets still run."
+    )
 
 
 if __name__ == "__main__":

@@ -44,6 +44,12 @@ class WorkspaceIndexer:
 
     def run(self):
         """Incrementally index changed workspace files."""
+        if not getattr(self.vector_store, "is_active", False):
+            log.info(
+                "Skipping workspace indexing: vector store inactive "
+                "(install ChromaDB / openyfai-aria[vector])."
+            )
+            return
         log.info(f"Starting workspace indexing for: {self.root_dir}")
         previous_manifest = self._load_manifest(self.manifest_path)
         next_manifest: dict[str, dict] = {}

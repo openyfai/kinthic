@@ -1,3 +1,7 @@
+import json
+from pathlib import Path
+
+
 class Ontology:
     """
     Formally defines ARIA's objective ontology for mapping subjective human concepts.
@@ -46,6 +50,31 @@ class Ontology:
 
     def serialize(self):
         return {'concepts': self.concepts, 'relationships': self.relationships}
+
+    def merge_from_json_file(self, path: str | Path) -> None:
+        """Merge overlay concepts/relationships from JSON (same shape as serialize())."""
+        p = Path(path)
+        data = json.loads(p.read_text(encoding="utf-8"))
+        for name, payload in data.get("concepts", {}).items():
+            if isinstance(payload, dict) and "attributes" in payload:
+                attrs = payload["attributes"] or {}
+            elif isinstance(payload, dict):
+                attrs = payload
+            else:
+                attrs = {}
+            if name in self.concepts:
+                self.concepts[name].setdefault("attributes", {}).update(attrs)
+            else:
+                self.add_concept(name, attrs)
+        for from_c, targets in data.get("relationships", {}).items():
+            if not isinstance(targets, dict):
+                continue
+            for to_c, rel_list in targets.items():
+                if not isinstance(rel_list, list):
+                    continue
+                for rel in rel_list:
+                    if isinstance(rel, dict) and rel.get("type"):
+                        self.add_relationship(from_c, to_c, rel["type"], rel.get("properties") or {})
 
     @classmethod
     def deserialize(cls, data):

@@ -47,6 +47,10 @@ class VectorStore:
         )
         log.info(f"VectorStore initialized at {self.persist_path} (Collection: {collection_name})")
 
+    @property
+    def is_active(self) -> bool:
+        return self.client is not None
+
     def add_chunks(self, texts: List[str], metadatas: List[Dict[str, Any]], ids: Optional[List[str]] = None):
         """Adds a list of text chunks to the vector store."""
         if not self.client: return

@@ -60,8 +60,8 @@ type LoadedTurn = {
   response: string;
 };
 
-const WS_RECONNECT_DELAY = 2000;
-const WS_MAX_RETRIES = 10;
+const WS_RECONNECT_BASE_MS = 1800;
+const WS_MAX_RETRIES = 12;
 
 export function useAriaSocket(url: string, enabled = true) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -79,9 +79,14 @@ export function useAriaSocket(url: string, enabled = true) {
   const [lastEventTime, setLastEventTime] = useState<string | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  /** True only after the server has accepted the WebSocket auth handshake. */
+  const linkReadyRef = useRef(false);
+  /** User prompt waiting for link + auth before `send` runs (text-only; attachments cannot be queued). */
+  const pendingSendRef = useRef<{ text: string } | null>(null);
   const streamingMsgIdRef = useRef<string | null>(null);
   const retriesRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeSessionIdRef = useRef<string | null>(null);
 
   const pushActivity = useCallback((entry: Omit<ActivityEntry, 'id' | 'time'>) => {
     const now = new Date();
@@ -134,6 +139,27 @@ export function useAriaSocket(url: string, enabled = true) {
     return () => window.clearInterval(interval);
   }, [busyStartedAt, isThinking, isStreaming]);
 
+  useEffect(() => {
+    activeSessionIdRef.current = activeSessionId;
+  }, [activeSessionId]);
+
+  const flushPendingSend = useCallback(() => {
+    const pending = pendingSendRef.current;
+    if (!pending || !linkReadyRef.current) return;
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    pendingSendRef.current = null;
+    setLastError(null);
+    const { text } = pending;
+    setCurrentThought('Thinking...');
+    setBusyStartedAt(Date.now());
+    pushActivity({
+      tone: 'thinking',
+      title: 'Sending queued prompt',
+      detail: text.trim() ? text.slice(0, 160) : 'Queued message',
+    });
+    wsRef.current.send(JSON.stringify({ text, session_id: activeSessionIdRef.current }));
+  }, [pushActivity]);
+
   // ----- WebSocket with auto-reconnect -----
   const connectWs = useCallback(function connectWs() {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
@@ -156,6 +182,7 @@ export function useAriaSocket(url: string, enabled = true) {
 
       switch (data.type) {
         case 'auth_ok': {
+          linkReadyRef.current = true;
           setIsConnected(true);
           retriesRef.current = 0;
           setLastError(null);
@@ -164,6 +191,7 @@ export function useAriaSocket(url: string, enabled = true) {
             title: 'Live link established',
             detail: 'ARIA is connected and ready for new prompts.'
           });
+          flushPendingSend();
           break;
         }
 
@@ -303,6 +331,7 @@ export function useAriaSocket(url: string, enabled = true) {
     };
 
     ws.onclose = () => {
+      linkReadyRef.current = false;
       setIsConnected(false);
       pushActivity({
         tone: 'error',
@@ -311,18 +340,25 @@ export function useAriaSocket(url: string, enabled = true) {
           ? 'Attempting to reconnect to ARIA.'
           : 'The connection has stopped retrying.'
       });
-      // Auto-reconnect
+      // Auto-reconnect with capped exponential backoff
       if (retriesRef.current < WS_MAX_RETRIES) {
         retriesRef.current += 1;
+        const delayMs = Math.min(
+          28000,
+          Math.round(WS_RECONNECT_BASE_MS * Math.pow(1.45, retriesRef.current - 1))
+        );
         reconnectTimerRef.current = setTimeout(() => {
           connectWs();
-        }, WS_RECONNECT_DELAY);
+        }, delayMs);
+      } else {
+        setLastError('Could not reconnect — refresh the page or confirm `aria web` is running.');
       }
     };
-  }, [url, fetchSessions, pushActivity]);
+  }, [url, fetchSessions, pushActivity, flushPendingSend]);
 
   useEffect(() => {
     if (!enabled) {
+      linkReadyRef.current = false;
       setIsConnected(false);
       return;
     }
@@ -335,10 +371,31 @@ export function useAriaSocket(url: string, enabled = true) {
 
   // ----- Send message -----
   const sendMessage = useCallback(async (text: string, files?: File[]) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      console.error("WebSocket not connected");
+    const hasFiles = Boolean(files && files.length > 0);
+    if (!linkReadyRef.current || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      if (hasFiles) {
+        setLastError('Wait until the live link shows “WebSocket live” before sending images.');
+        return;
+      }
+      pendingSendRef.current = { text };
+      setMessages(prev => [...prev, {
+        id: 'user-' + Date.now(),
+        sender: 'user',
+        text,
+        status: 'done',
+      }]);
+      setIsThinking(true);
+      setCurrentThought('Queued — waiting for a live link…');
+      setBusyStartedAt(Date.now());
+      setLastError('Message queued — will send automatically when the connection is ready.');
+      pushActivity({
+        tone: 'system',
+        title: 'Prompt queued',
+        detail: 'ARIA is reconnecting; your text will send after the link is authenticated.'
+      });
       return;
     }
+
     const fileUrls = files ? files.map(f => URL.createObjectURL(f)) : [];
     setMessages(prev => [...prev, {
       id: 'user-' + Date.now(),
@@ -401,6 +458,10 @@ export function useAriaSocket(url: string, enabled = true) {
 
   // ----- Regenerate last response -----
   const regenerate = useCallback(() => {
+    if (!linkReadyRef.current || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      setLastError('Not connected — wait for “WebSocket live” or refresh the page.');
+      return;
+    }
     const lastUserMsg = [...messages].reverse().find(m => m.sender === 'user');
     if (!lastUserMsg) return;
     setMessages(prev => {
@@ -409,22 +470,24 @@ export function useAriaSocket(url: string, enabled = true) {
       if (lastAriaIdx !== -1) copy.splice(lastAriaIdx, 1);
       return copy;
     });
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      setIsThinking(true);
-      setCurrentThought("Regenerating...");
-      setBusyStartedAt(Date.now());
-      setLastError(null);
-      pushActivity({
-        tone: 'thinking',
-        title: 'Regeneration requested',
-        detail: 'ARIA is producing a fresh version of the last response.'
-      });
-      wsRef.current.send(JSON.stringify({ text: lastUserMsg.text, session_id: activeSessionId }));
-    }
+    setIsThinking(true);
+    setCurrentThought("Regenerating...");
+    setBusyStartedAt(Date.now());
+    setLastError(null);
+    pushActivity({
+      tone: 'thinking',
+      title: 'Regeneration requested',
+      detail: 'ARIA is producing a fresh version of the last response.'
+    });
+    wsRef.current.send(JSON.stringify({ text: lastUserMsg.text, session_id: activeSessionId }));
   }, [messages, activeSessionId, pushActivity]);
 
   // ----- Edit & resend -----
   const editAndResend = useCallback((messageId: string, newText: string) => {
+    if (!linkReadyRef.current || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      setLastError('Not connected — wait for “WebSocket live” or refresh the page.');
+      return;
+    }
     setMessages(prev => {
       const idx = prev.findIndex(m => m.id === messageId);
       if (idx === -1) return prev;
@@ -432,22 +495,24 @@ export function useAriaSocket(url: string, enabled = true) {
       truncated.push({ ...prev[idx], text: newText });
       return truncated;
     });
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      setIsThinking(true);
-      setCurrentThought("Thinking...");
-      setBusyStartedAt(Date.now());
-      setLastError(null);
-      pushActivity({
-        tone: 'thinking',
-        title: 'Edited prompt resent',
-        detail: newText
-      });
-      wsRef.current.send(JSON.stringify({ text: newText, session_id: activeSessionId }));
-    }
+    setIsThinking(true);
+    setCurrentThought("Thinking...");
+    setBusyStartedAt(Date.now());
+    setLastError(null);
+    pushActivity({
+      tone: 'thinking',
+      title: 'Edited prompt resent',
+      detail: newText
+    });
+    wsRef.current.send(JSON.stringify({ text: newText, session_id: activeSessionId }));
   }, [activeSessionId, pushActivity]);
 
   // ----- Retry errored -----
   const retryLast = useCallback(() => {
+    if (!linkReadyRef.current || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      setLastError('Not connected — wait for “WebSocket live” or refresh the page.');
+      return;
+    }
     const lastUserMsg = [...messages].reverse().find(m => m.sender === 'user');
     if (!lastUserMsg) return;
     setMessages(prev => {
@@ -458,18 +523,16 @@ export function useAriaSocket(url: string, enabled = true) {
       }
       return copy;
     });
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      setIsThinking(true);
-      setCurrentThought("Retrying...");
-      setBusyStartedAt(Date.now());
-      setLastError(null);
-      pushActivity({
-        tone: 'thinking',
-        title: 'Retry requested',
-        detail: 'ARIA is retrying the last failed response.'
-      });
-      wsRef.current.send(JSON.stringify({ text: lastUserMsg.text, session_id: activeSessionId }));
-    }
+    setIsThinking(true);
+    setCurrentThought("Retrying...");
+    setBusyStartedAt(Date.now());
+    setLastError(null);
+    pushActivity({
+      tone: 'thinking',
+      title: 'Retry requested',
+      detail: 'ARIA is retrying the last failed response.'
+    });
+    wsRef.current.send(JSON.stringify({ text: lastUserMsg.text, session_id: activeSessionId }));
   }, [messages, activeSessionId, pushActivity]);
 
   // ----- Load past session -----

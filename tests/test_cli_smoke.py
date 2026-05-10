@@ -17,7 +17,7 @@ def test_models_command_prints_known_provider():
         cli.run_models()
     output = buffer.getvalue()
     assert "Google Gemini" in output
-    assert "gemini-2.5-flash" in output
+    assert "gemini-3.1-flash-lite" in output
 
 
 def test_doctor_command_reports_status(tmp_path: Path):

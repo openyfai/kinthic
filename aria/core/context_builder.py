@@ -48,6 +48,7 @@ class ContextBuilder:
         tool_registry=None,
         generalization_engine=None,
         skill_loader=None,
+        settings_store=None,
         semantic_parser=None,
         pruner=None,
         creativity_stack=None,
@@ -61,6 +62,7 @@ class ContextBuilder:
         self.tool_registry = tool_registry
         self.generalization_engine = generalization_engine
         self.skill_loader = skill_loader
+        self.settings_store = settings_store
         self.semantic_parser = semantic_parser
         self.pruner = pruner
         self.creativity_stack = creativity_stack
@@ -83,7 +85,8 @@ class ContextBuilder:
         sections: list[str] = []
 
         # Section 1: Identity
-        sections.append(build_identity_section())
+        settings = self.settings_store.load_settings() if self.settings_store else None
+        sections.append(build_identity_section(settings))
 
         # Section 2: Knowledge Graph context
         if self.kg and self.kg.graph.number_of_nodes() > 0:
@@ -266,8 +269,13 @@ class ContextBuilder:
         ]
 
         for i, h in enumerate(hypotheses, 1):
-            lines.append(f"  [{i}] {h.claim}")
+            lines.append(f"  [{i}] hypothesis_id: {h.id}")
+            lines.append(f"      claim: {h.claim}")
             lines.append(f"      reasoning: {h.reasoning[:80]}")
+            lines.append(
+                "      To resolve when this turn provides evidence: put an entry in "
+                "hypothesis_resolutions with this exact hypothesis_id and action confirm or deny."
+            )
             lines.append("")
 
         return "\n".join(lines)

@@ -11,7 +11,30 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- PyPI/project package name renamed from `aria-agi` to `aria`; optional extras are unchanged (`aria[full]`, `aria[providers]`, etc.).
+- (nothing yet)
+
+---
+
+## [1.0.1] - 2026-05-10
+
+### Changed
+
+- **README** and **docs/quickstart**: single Python story (**>=3.11**); **PyPI-first** quick start (`pip install "openyfai-aria[full]"` then `aria web` / `aria setup`); contributor path for git clone + editable install; Node only for frontend development.
+- **PyPI one-line description** in `pyproject.toml` clarified for the project page.
+
+### Added
+
+- **`aria/web_dist/`** for **pre-built dashboard** assets shipped inside wheels (populated in CI, not committed except `__init__.py`).
+- **`aria.utils.dashboard_static.resolve_dashboard_dir`**: serves packaged `web_dist/` after `pip install`, or `aria-ui/out/` in a source checkout.
+- **`.github/workflows/publish-pypi.yml`**: build `aria-ui`, copy export into `aria/web_dist/`, `python -m build`, publish to PyPI via **Trusted Publishing** (configure in PyPI project settings).
+
+### Notes
+
+- Configure **Trusted Publishing** on [pypi.org](https://pypi.org) for repository `openyfai/aria` and workflow **`publish-pypi.yml`** (optional: match a GitHub **Environment** like `pypi` on both GitHub and PyPI for approval gates). Alternative: **`PYPI_API_TOKEN`** secret and the `with: user/password` block in the workflow file.
+
+---
+
+## [1.0.0] - 2026-05-08
 
 ### Added
 
@@ -64,12 +87,12 @@ Versions use [Semantic Versioning](https://semver.org/).
 - `CONTRIBUTING.md`: Clean-room install checklist for onboarding/packaging PRs.
 - `SECURITY.md`: Private vulnerability reporting guidance and security contact path.
 - `CHANGELOG.md`: This file.
-- `ROADMAP.md`: Phased public roadmap.
+- `docs/planning/ROADMAP.md`: Phased public roadmap.
 - `CODE_OF_CONDUCT.md`: Community standards.
-- `docs/assets/`: Four placeholder SVG assets (onboarding, chat/monologue, graph, operator/usage) ready to replace with real screenshots before launch.
+- `docs/assets/`: Included real screenshots and GIFs (onboarding, chat/monologue, graph, operator/usage) for the README.
 - `docs/demo-script.md`: 30-second launch demo recording script.
-- `docs/launch-checklist.md`: Pre-public-release gate checklist.
-- `docs/launch-issue-backlog.md`: 20 seeded beginner-friendly issues for launch day.
+- `docs/planning/launch-checklist.md`: Pre-public-release gate checklist.
+- `docs/planning/launch-issue-backlog.md`: 20 seeded beginner-friendly issues for launch day.
 
 **CI and packaging**
 - `.github/workflows/ci.yml`: `ruff` lint, optional `mypy`, `pytest`, `python -m build` smoke test, UI lint, UI build, and Docker build.
@@ -105,4 +128,6 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/0xopenYF/aria/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/openyfai/aria/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/openyfai/aria/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/openyfai/aria/releases/tag/v1.0.0

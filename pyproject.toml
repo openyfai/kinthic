@@ -1,21 +1,22 @@
 [project]
-name = "aria"
-version = "1.0.0"
-description = "ARIA — a local-first AI agent with persistent memory, an inspectable knowledge graph, governed tool use, and Markdown skills."
+name = "openyfai-aria"
+version = "1.0.1"
+description = "Local-first AI agent with memory, knowledge graph, tools, web dashboard, and Telegram (OpenYF AI)."
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 authors = [
     { name = "Youel" },
 ]
 maintainers = [
-    { name = "ARIA Maintainers" },
+    { name = "OpenYF AI" },
 ]
 keywords = ["ai-agent", "local-first", "knowledge-graph", "llm", "autonomy", "telegram", "tools", "memory"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
@@ -79,11 +80,11 @@ aria-web = "scripts.cli:run_web"
 aria-telegram = "scripts.telegram_bot:main"
 
 [project.urls]
-Homepage = "https://github.com/0xopenYF/aria"
-Repository = "https://github.com/0xopenYF/aria"
-Issues = "https://github.com/0xopenYF/aria/issues"
-Changelog = "https://github.com/0xopenYF/aria/blob/main/CHANGELOG.md"
-Documentation = "https://github.com/0xopenYF/aria#readme"
+Homepage = "https://github.com/openyfai/aria"
+Repository = "https://github.com/openyfai/aria"
+Issues = "https://github.com/openyfai/aria/issues"
+Changelog = "https://github.com/openyfai/aria/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/openyfai/aria#readme"
 
 [build-system]
 requires = ["setuptools>=75.0"]
@@ -92,6 +93,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 include-package-data = true
 py-modules = []
+
+[tool.setuptools.package-data]
+aria = ["web_dist/**/*"]
 
 [tool.setuptools.packages.find]
 include = ["aria*", "scripts*"]

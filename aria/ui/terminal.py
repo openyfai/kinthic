@@ -386,6 +386,8 @@ def show_help() -> None:
   [aria.command]:why <A> -> <B>[/]    Find causal chain from A to B
   [aria.command]:contradictions[/]    Show unresolved contradictions
   [aria.command]:hypotheses[/]        Show pending predictions
+  [aria.command]:hypo-confirm <id>[/]  Mark a hypothesis confirmed (UUID)
+  [aria.command]:hypo-deny <id>[/]    Mark a hypothesis denied (UUID)
 
 [bold bright_white]🎯 Goals[/]
   [aria.command]:goals[/]             Show all goals (active and completed)
@@ -405,6 +407,8 @@ def show_help() -> None:
 
 [bold bright_white]🔄 Self-Improvement[/]  [dim](Phase 7)[/]
   [aria.command]:proposals[/]         Show pending improvement proposals
+  [aria.command]:prop-approve <uuid>[/]  Mark proposal approved (human review)
+  [aria.command]:prop-reject <uuid>[/]   Mark proposal rejected
   [aria.command]:benchmark[/]         Run the capability benchmark suite
   [aria.command]:meta[/]              Trigger meta-reasoning analysis
 
@@ -760,7 +764,8 @@ def show_proposals(proposals) -> None:
             f"[bold white]Change:[/] {p.description}\n"
             f"[bold white]Rationale:[/] {p.rationale}\n"
             f"[bold white]Success Metric:[/] {p.success_metric}\n"
-            f"[dim]ID: {p.id[:8]} | Status: {p.status} | {p.created_at[:10]}[/]",
+            f"[dim]Full ID (for :prop-approve / :prop-reject):[/]\n[white]{p.id}[/]\n"
+            f"[dim]Status: {p.status} | {p.created_at[:10]}[/]",
             title="🔄 Self-Improvement Proposal",
             border_style="bright_red",
             padding=(1, 2),

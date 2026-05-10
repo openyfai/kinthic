@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { apiUrl, getAuthHeaders, setApiBase, setApiKey } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 type ProviderModel = {
   id: string;
@@ -33,15 +34,20 @@ type SettingsData = {
     warning_threshold_usd?: number | null;
     disable_expensive_models?: boolean;
   };
+  identity?: {
+    assistant_name?: string;
+    persona?: string;
+  };
 };
 
 interface Props {
   providers: ProviderInfo[];
   settings: SettingsData;
   onSaved: (payload: { settings?: SettingsData }) => void;
+  onOpenOnboarding?: () => void;
 }
 
-export default function SettingsView({ providers, settings, onSaved }: Props) {
+export default function SettingsView({ providers, settings, onSaved, onOpenOnboarding }: Props) {
   const [provider, setProvider] = useState(settings.provider);
   const [model, setModel] = useState(settings.model);
   const [apiKey, setProviderKey] = useState("");
@@ -55,6 +61,8 @@ export default function SettingsView({ providers, settings, onSaved }: Props) {
   const [codeApply, setCodeApply] = useState(settings.security?.code_apply ?? false);
   const [backgroundActions, setBackgroundActions] = useState(settings.security?.background_actions ?? false);
   const [disableExpensive, setDisableExpensive] = useState(settings.usage?.disable_expensive_models ?? false);
+  const [assistantName, setAssistantName] = useState(settings.identity?.assistant_name || "ARIA");
+  const [persona, setPersona] = useState(settings.identity?.persona || "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -92,6 +100,10 @@ export default function SettingsView({ providers, settings, onSaved }: Props) {
             warning_threshold_usd: warningThreshold ? Number(warningThreshold) : null,
             disable_expensive_models: disableExpensive,
           },
+          identity: {
+            assistant_name: assistantName,
+            persona: persona,
+          },
         }),
       });
       if (!response.ok) {
@@ -121,6 +133,20 @@ export default function SettingsView({ providers, settings, onSaved }: Props) {
             Switch providers and models, rotate secrets, set local cost guardrails, and tune
             ARIA&apos;s autonomy policy without editing the codebase.
           </p>
+          {onOpenOnboarding && (
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={onOpenOnboarding}
+                className="rounded-2xl border border-white/15 bg-white/[0.06] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.1]"
+              >
+                Open first-run setup (review)
+              </button>
+              <span className="text-xs text-white/45">
+                Full-screen onboarding UI — nothing is deleted; Close exits without changes.
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
@@ -178,19 +204,43 @@ export default function SettingsView({ providers, settings, onSaved }: Props) {
                   <input value={warningThreshold} onChange={(e) => setWarningThreshold(e.target.value)} className={inputClassName} placeholder="e.g. 5" />
                 </Field>
               </div>
-
-              {error && <div className="rounded-2xl border border-red-500/20 bg-red-500/8 px-4 py-3 text-sm text-red-200">{error}</div>}
-
-              <button
-                type="button"
-                onClick={() => void saveSettings()}
-                disabled={saving}
-                className="mt-2 rounded-2xl bg-white px-4 py-3 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {saving ? "Saving settings..." : "Save settings"}
-              </button>
             </div>
           </section>
+        </div>
+
+        <section className="rounded-[28px] border border-white/10 bg-white/[0.03] p-6">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold tracking-tight text-white">Identity</h2>
+            <p className="mt-1 text-sm text-white/60">
+              Customize how the assistant speaks. Leave persona blank to use the default professional tone.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-[200px_1fr]">
+            <Field label="Assistant name">
+              <input value={assistantName} onChange={(e) => setAssistantName(e.target.value)} className={inputClassName} placeholder="e.g. ARIA" />
+            </Field>
+            <Field label="Persona / instructions">
+              <textarea 
+                value={persona} 
+                onChange={(e) => setPersona(e.target.value)} 
+                className={cn(inputClassName, "min-h-[120px] resize-y py-3")} 
+                placeholder="Describe tone, role, taboos, language..." 
+              />
+            </Field>
+          </div>
+        </section>
+
+        {error && <div className="rounded-2xl border border-red-500/20 bg-red-500/8 px-4 py-3 text-sm text-red-200">{error}</div>}
+
+        <div className="flex justify-end pt-4">
+          <button
+            type="button"
+            onClick={() => void saveSettings()}
+            disabled={saving}
+            className="mt-2 rounded-2xl bg-white px-4 py-3 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? "Saving settings..." : "Save settings"}
+          </button>
         </div>
       </div>
     </div>

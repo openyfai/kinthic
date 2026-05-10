@@ -91,6 +91,15 @@ class HypothesisEngine:
         )
         return [self._row_to_hypothesis(r) for r in rows]
 
+    async def get_by_id(self, hypothesis_id: str) -> StoredHypothesis | None:
+        """Return a hypothesis by primary key, or None."""
+        row = await self.db.fetch_one(
+            "SELECT * FROM hypotheses WHERE id = ?", (hypothesis_id.strip(),)
+        )
+        if row is None:
+            return None
+        return self._row_to_hypothesis(row)
+
     async def get_all(self) -> list[StoredHypothesis]:
         """Get all hypotheses."""
         rows = await self.db.fetch_all(

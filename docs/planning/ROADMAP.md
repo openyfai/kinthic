@@ -16,7 +16,7 @@
 - [x] CI: Python tests, ruff, mypy, package build, UI lint/build, Docker build.
 - [x] Dependabot for pip, npm, and GitHub Actions.
 - [x] CHANGELOG, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, ROADMAP, issue templates.
-- [x] Demo script and launch checklist in `docs/`.
+- [x] Demo script and launch checklist in `docs/planning/`.
 
 ---
 
@@ -61,8 +61,7 @@ The focus is depth over breadth: make the existing surfaces faster, safer, and m
 ## Community Loop
 
 - Replace `docs/assets/` placeholder SVGs with real screenshots and GIFs.
-- Record the 30-second launch demo using `docs/demo-script.md`.
-- Publish the 20 seeded issues from `docs/launch-issue-backlog.md`.
+- Publish the 20 seeded issues from `docs/planning/launch-issue-backlog.md`.
 - Provider adapters contributed by the community.
 - External security review of the autonomy and approval surface.
 - Benchmark suite expanded with community-contributed test cases.

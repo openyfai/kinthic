@@ -9,8 +9,8 @@ MODEL_CATALOG: dict[str, dict[str, Any]] = {
         "env_key": "GEMINI_API_KEY",
         "models": [
             {
-                "id": "gemini-2.5-flash",
-                "label": "Gemini 2.5 Flash",
+                "id": "gemini-3.1-flash-lite",
+                "label": "Gemini 3.1 Flash-Lite",
                 "tier": "fast",
                 "supports_images": True,
                 "supports_structured_json": True,
@@ -19,8 +19,8 @@ MODEL_CATALOG: dict[str, dict[str, Any]] = {
                 "estimated_cost": "medium",
             },
             {
-                "id": "gemini-2.5-pro",
-                "label": "Gemini 2.5 Pro",
+                "id": "gemini-3.1-pro",
+                "label": "Gemini 3.1 Pro",
                 "tier": "reasoning",
                 "supports_images": True,
                 "supports_structured_json": True,
@@ -35,22 +35,22 @@ MODEL_CATALOG: dict[str, dict[str, Any]] = {
         "env_key": "OPENAI_API_KEY",
         "models": [
             {
-                "id": "gpt-4.1-mini",
-                "label": "GPT-4.1 Mini",
+                "id": "gpt-5.4-mini",
+                "label": "GPT-5.4 Mini",
                 "tier": "fast",
                 "supports_images": True,
                 "supports_structured_json": True,
-                "context_window": 128_000,
+                "context_window": 400_000,
                 "recommended_for": "fast chat and lightweight planning",
                 "estimated_cost": "medium",
             },
             {
-                "id": "gpt-4.1",
-                "label": "GPT-4.1",
+                "id": "gpt-5.5",
+                "label": "GPT-5.5",
                 "tier": "reasoning",
                 "supports_images": True,
                 "supports_structured_json": True,
-                "context_window": 128_000,
+                "context_window": 1_000_000,
                 "recommended_for": "higher quality reasoning",
                 "estimated_cost": "high",
             },
@@ -61,22 +61,22 @@ MODEL_CATALOG: dict[str, dict[str, Any]] = {
         "env_key": "ANTHROPIC_API_KEY",
         "models": [
             {
-                "id": "claude-sonnet-4-5",
-                "label": "Claude Sonnet 4.5",
+                "id": "claude-sonnet-4-6",
+                "label": "Claude Sonnet 4.6",
                 "tier": "fast",
                 "supports_images": True,
-                "supports_structured_json": False,
-                "context_window": 200_000,
+                "supports_structured_json": True,
+                "context_window": 1_000_000,
                 "recommended_for": "strong general reasoning",
                 "estimated_cost": "high",
             },
             {
-                "id": "claude-opus-4-1",
-                "label": "Claude Opus 4.1",
+                "id": "claude-opus-4-7",
+                "label": "Claude Opus 4.7",
                 "tier": "reasoning",
                 "supports_images": True,
-                "supports_structured_json": False,
-                "context_window": 200_000,
+                "supports_structured_json": True,
+                "context_window": 1_000_000,
                 "recommended_for": "hard analysis and judgment",
                 "estimated_cost": "high",
             },
@@ -88,22 +88,22 @@ MODEL_CATALOG: dict[str, dict[str, Any]] = {
         "base_url": "https://openrouter.ai/api/v1",
         "models": [
             {
-                "id": "openai/gpt-4.1-mini",
-                "label": "OpenRouter GPT-4.1 Mini",
+                "id": "openai/gpt-5.5",
+                "label": "OpenRouter GPT-5.5",
                 "tier": "fast",
                 "supports_images": True,
                 "supports_structured_json": True,
-                "context_window": 128_000,
+                "context_window": 1_000_000,
                 "recommended_for": "broad provider routing",
                 "estimated_cost": "variable",
             },
             {
-                "id": "anthropic/claude-sonnet-4.5",
-                "label": "OpenRouter Claude Sonnet 4.5",
+                "id": "anthropic/claude-opus-4-7",
+                "label": "OpenRouter Claude Opus 4.7",
                 "tier": "reasoning",
                 "supports_images": True,
                 "supports_structured_json": True,
-                "context_window": 200_000,
+                "context_window": 1_000_000,
                 "recommended_for": "quality reasoning via a single gateway",
                 "estimated_cost": "variable",
             },
@@ -115,8 +115,8 @@ MODEL_CATALOG: dict[str, dict[str, Any]] = {
         "base_url": "https://api.deepseek.com/v1",
         "models": [
             {
-                "id": "deepseek-chat",
-                "label": "DeepSeek Chat",
+                "id": "deepseek-v4-flash",
+                "label": "DeepSeek V4 Flash",
                 "tier": "fast",
                 "supports_images": False,
                 "supports_structured_json": True,
@@ -125,8 +125,8 @@ MODEL_CATALOG: dict[str, dict[str, Any]] = {
                 "estimated_cost": "low",
             },
             {
-                "id": "deepseek-reasoner",
-                "label": "DeepSeek Reasoner",
+                "id": "deepseek-v4-pro",
+                "label": "DeepSeek V4 Pro",
                 "tier": "reasoning",
                 "supports_images": False,
                 "supports_structured_json": True,
@@ -218,14 +218,19 @@ def list_providers() -> list[dict[str, Any]]:
 def get_provider_defaults(provider: str) -> dict[str, Any]:
     payload = MODEL_CATALOG.get(provider)
     if not payload:
-        raise KeyError(f"Unknown provider: {provider}")
-    fast_model = next((model["id"] for model in payload["models"] if model.get("tier") == "fast"), payload["models"][0]["id"])
-    reasoning_model = next((model["id"] for model in payload["models"] if model.get("tier") == "reasoning"), fast_model)
+        raise ValueError(f"Unknown provider: {provider}")
+    models = payload.get("models")
+    if not models:
+        raise ValueError(f"No models defined for provider: {provider}")
+    fast_model = next((m for m in models if m.get("tier") == "fast"), models[0])
+    reasoning_model = next((m for m in models if m.get("tier") == "reasoning"), models[0])
+    fast_id = fast_model["id"]
+    reasoning_id = reasoning_model["id"]
     return {
         "provider": provider,
-        "model": fast_model,
-        "fast_model": fast_model,
-        "reasoning_model": reasoning_model,
+        "model": fast_id,
+        "fast_model": fast_id,
+        "reasoning_model": reasoning_id,
         "label": payload["label"],
         "env_key": payload.get("env_key", ""),
         "base_url": payload.get("base_url", ""),

@@ -10,14 +10,7 @@ id_rsa*
 
 # Builder-only & personal planning docs (keep on your machine only)
 .cursor/
-aria_packaging.md
-context.md
-aria_launch_plan.md
-aria_expansion_plan.md
-aria_conclusion_state.md
-aria_phase*_plan.md
-ARIA_*.md
-docs/phase_f_plan.md
+notes/
 
 # IDE / assistant scratch (can contain project-specific prompts)
 **/AGENTS.md
@@ -44,6 +37,10 @@ aria-ui/.next/
 aria-ui/out/
 aria-ui/dist/
 aria-ui/huge*.txt
+
+# Packaged web UI: only __init__.py is tracked; release CI copies Next export here
+aria/web_dist/*
+!aria/web_dist/__init__.py
 
 # IDE
 .vscode/

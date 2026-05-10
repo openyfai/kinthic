@@ -54,9 +54,9 @@ def default_settings() -> dict[str, Any]:
         "version": 1,
         "setup_completed": False,
         "provider": "gemini",
-        "model": "gemini-2.5-flash",
-        "fast_model": "gemini-2.5-flash",
-        "reasoning_model": "gemini-2.5-pro",
+        "model": "gemini-3.1-flash-lite",
+        "fast_model": "gemini-3.1-flash-lite",
+        "reasoning_model": "gemini-3.1-pro",
         "providers": {},
         "security": {
             "require_tool_approvals": True,
@@ -75,6 +75,10 @@ def default_settings() -> dict[str, Any]:
             "soft_cap_usd": None,
             "warning_threshold_usd": None,
             "disable_expensive_models": False,
+        },
+        "identity": {
+            "assistant_name": "ARIA",
+            "persona": "",
         },
         "updated_at": _now(),
     }
@@ -105,6 +109,7 @@ class RuntimeSettingsStore:
         merged["security"] = {**default_settings()["security"], **data.get("security", {})}
         merged["telegram"] = {**default_settings()["telegram"], **data.get("telegram", {})}
         merged["usage"] = {**default_settings()["usage"], **data.get("usage", {})}
+        merged["identity"] = {**default_settings()["identity"], **data.get("identity", {})}
         merged["providers"] = data.get("providers", {})
         return merged
 
@@ -117,6 +122,8 @@ class RuntimeSettingsStore:
             merged["telegram"] = {**current.get("telegram", {}), **payload["telegram"]}
         if "usage" in payload:
             merged["usage"] = {**current.get("usage", {}), **payload["usage"]}
+        if "identity" in payload:
+            merged["identity"] = {**current.get("identity", {}), **payload["identity"]}
         if "providers" in payload:
             merged["providers"] = {**current.get("providers", {}), **payload["providers"]}
         merged["updated_at"] = _now()

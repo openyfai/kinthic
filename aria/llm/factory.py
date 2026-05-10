@@ -31,7 +31,7 @@ def build_provider(
     extra_headers: dict[str, str] = {}
     if provider == "openrouter":
         extra_headers = {
-            "HTTP-Referer": "https://github.com/0xopenYF/aria",
+            "HTTP-Referer": "https://github.com/openyfai/aria",
             "X-Title": "ARIA",
         }
 

@@ -30,5 +30,4 @@ This checklist is the pre-public-release gate for ARIA packaging.
 ## Before public announcement
 
 - [ ] Replace placeholder assets in `docs/assets/` with real screenshots or GIFs.
-- [ ] Record the 30-second launch demo using `docs/demo-script.md`.
-- [ ] Create and publish at least 20 beginner-friendly GitHub issues from `docs/launch-issue-backlog.md`.
+- [ ] Create and publish at least 20 beginner-friendly GitHub issues from `docs/planning/launch-issue-backlog.md`.
