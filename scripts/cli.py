@@ -251,32 +251,36 @@ def run_start() -> None:
         print(f"Failed to start ARIA daemon: {e}")
 
 def run_stop() -> None:
-    import sys
-    import subprocess
-    
+    import signal
+
     pid_file = Path("data/aria.pid")
     if not pid_file.exists():
         print("ARIA daemon is not running (no PID file found).")
         return
-    
-    pid = pid_file.read_text().strip()
-    if sys.platform == "win32":
-        try:
-            subprocess.run(f"taskkill /F /PID {pid}", shell=True, check=True)
-            print(f"Stopped ARIA (PID {pid})")
-        except:
-            print("Failed to stop ARIA.")
-    else:
-        try:
-            subprocess.run(f"kill {pid}", shell=True, check=True)
-            print(f"Stopped ARIA daemon (PID {pid})")
-        except:
-            print("Failed to stop ARIA daemon.")
-    
+
+    raw = pid_file.read_text().strip()
     try:
-        pid_file.unlink()
-    except:
-        pass
+        pid = int(raw)
+    except ValueError:
+        print(f"Corrupted PID file (contents: {raw!r}). Removing it.")
+        pid_file.unlink(missing_ok=True)
+        return
+
+    # Verify the process actually exists before killing
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        print(f"No running process with PID {pid}. Cleaning up stale PID file.")
+        pid_file.unlink(missing_ok=True)
+        return
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+        print(f"Stopped ARIA (PID {pid})")
+    except OSError as e:
+        print(f"Failed to stop ARIA (PID {pid}): {e}")
+
+    pid_file.unlink(missing_ok=True)
 
 def main() -> None:
     parser = build_parser()

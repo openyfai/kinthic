@@ -188,8 +188,8 @@ async def proactive_telegram_loop():
                     from telegram import Bot
                     bot = Bot(token=bot_token)
                     await bot.send_message(chat_id=user_id, text=result.response, parse_mode="Markdown")
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.warning("Proactive Telegram message failed: %s", e)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

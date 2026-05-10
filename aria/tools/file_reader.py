@@ -7,6 +7,7 @@ Dotfiles and sensitive paths are blocked to prevent credential leaks.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import aiofiles
 from aria.tools.base import BaseTool
@@ -18,8 +19,10 @@ log = setup_logger("aria.tools.file_reader")
 # Security — define the sandbox boundary
 # ---------------------------------------------------------------------------
 
-# Project root: three levels up from this file (aria/tools/file_reader.py → aria/tools → aria → root)
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+# Sandbox root: use ARIA_WORKSPACE env var, or fall back to <cwd>/workspace.
+# This ensures pip-installed copies don't accidentally expose site-packages.
+_workspace_env = os.environ.get("ARIA_WORKSPACE")
+_PROJECT_ROOT = Path(_workspace_env).resolve() if _workspace_env else Path.cwd()
 
 # Patterns that are ALWAYS blocked, even inside the project root
 _BLOCKED_NAMES = {

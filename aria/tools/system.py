@@ -161,11 +161,11 @@ class RunTerminalCommandTool(BaseTool):
             # but for a tool call, we wait.
             
             try:
-                result = container.wait(timeout=60)
+                result = await asyncio.to_thread(container.wait, timeout=60)
             except Exception:
                 container.kill()
                 return "Error: Sandboxed command timed out after 60 seconds."
-            logs = container.logs().decode("utf-8", errors="replace")
+            logs = (await asyncio.to_thread(container.logs)).decode("utf-8", errors="replace")
             
             exit_code = result.get("StatusCode", 0)
             
