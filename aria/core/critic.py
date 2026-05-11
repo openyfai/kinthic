@@ -57,8 +57,9 @@ MAX_CONSECUTIVE_FAILURES = 3
 class ResponseCritic:
     """Evaluates draft responses for quality and triggers retries if needed."""
 
-    def __init__(self, llm_client: SupportsLLM):
+    def __init__(self, llm_client: SupportsLLM, model_override: str | None = None):
         self.llm = llm_client
+        self.model_override = model_override
         self._consecutive_failures = 0
 
     async def critique(
@@ -72,7 +73,7 @@ class ResponseCritic:
         Evaluate a draft response using Gemini.
         Returns a structured CritiqueResponse.
         """
-        log.debug("Critiquing draft response...")
+        log.debug(f"Critiquing draft response (model: {self.model_override or 'default'})...")
 
         evaluation_prompt = (
             f"SYSTEM CONTEXT GIVEN TO ARIA:\n{system_context}\n\n"
@@ -89,6 +90,7 @@ class ResponseCritic:
                 user_input=evaluation_prompt,
                 temperature=0.2,
                 request_kind="critic",
+                model_override=self.model_override,
             )
             
             # Reset failure counter on success

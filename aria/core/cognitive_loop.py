@@ -68,6 +68,7 @@ from aria.utils.config import allow_multi_writer, get_process_role, get_provider
 from aria.utils.config import max_tool_calls_per_turn
 from aria.utils.config import telegram_public_mode_enabled
 from aria.utils.logger import setup_logger
+from aria.utils.sanitize import sanitize_for_injection
 from aria.world.contradictions import ContradictionDetector
 from aria.world.graph import KnowledgeGraph
 from aria.world.hypotheses import HypothesisEngine
@@ -146,7 +147,7 @@ class CognitiveLoop:
         )
 
         # Phase 3 — Self-Improvement
-        self.critic = ResponseCritic(self.gemini)
+        self.critic = ResponseCritic(self.gemini, model_override=provider_settings.get("critic_model"))
         self.improver = ImprovementLogger(self.db)
 
         # Phase 4 — Multi-Agent Debate
@@ -155,6 +156,9 @@ class CognitiveLoop:
         # Phase 7 — Recursive Self-Improvement
         self.meta_reasoning = MetaReasoningEngine(self.gemini, self.db)
         self.benchmark = BenchmarkRunner(self.gemini, self.db)
+
+        # Wire meta_reasoning into context_builder for active directive injection
+        self.context_builder.meta_reasoning = self.meta_reasoning
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -278,6 +282,10 @@ class CognitiveLoop:
 
             # Step 2: Think (Pass 1)
             cognitive = await self.gemini.think(system_prompt, user_input, images=images, model_override=target_model)
+            
+            # Step 2.5: Reasoning Consistency Check (Detect "Intent Drift")
+            await self._check_reasoning_consistency(cognitive, status_callback=status_callback)
+
             plan_id = None
             if self.planner.should_plan(user_input, tool_count=len(cognitive.tool_calls)):
                 plan = await self.planner.create_plan(
@@ -369,15 +377,26 @@ class CognitiveLoop:
                 draft_reasoning=cognitive.reasoning,
             )
             
-            # Step 6: Retry if rejected
-            if not critique.is_acceptable:
+            # Step 6: Critique → closed retry loop (max 3 attempts, keep best)
+            MAX_CRITIC_ATTEMPTS = 3
+            best_cognitive = cognitive
+            best_score = sum([
+                critique.scores.accuracy,
+                critique.scores.depth,
+                critique.scores.honesty,
+            ])
+            attempt_num = 1
+
+            while not critique.is_acceptable and attempt_num < MAX_CRITIC_ATTEMPTS:
+                attempt_num += 1
                 if status_callback:
                     status_callback(
                         f"[yellow]  ⚠ Draft rejected (Acc:{critique.scores.accuracy:.1f}, "
                         f"Dep:{critique.scores.depth:.1f}, "
-                        f"Hon:{critique.scores.honesty:.1f}). Retrying...[/]"
+                        f"Hon:{critique.scores.honesty:.1f}). "
+                        f"Retrying (attempt {attempt_num}/{MAX_CRITIC_ATTEMPTS})...[/]"
                     )
-                
+
                 retry_prompt = current_context + (
                     "\n\n═══════════════════════════════════════════════════════════\n"
                     "CRITIQUE OF PREVIOUS DRAFT\n"
@@ -387,21 +406,49 @@ class CognitiveLoop:
                     "Do NOT apologize. Do NOT mention the critic. Just output a better response "
                     "that fixes these specific issues."
                 )
-                
-                final_cognitive = await self.gemini.think(retry_prompt, user_input, model_override=target_model)
-                
+
+                retry_cognitive = await self.gemini.think(retry_prompt, user_input, model_override=target_model)
+
+                # Re-run critic on the new attempt
+                retry_critique = await self.critic.critique(
+                    user_input=user_input,
+                    system_context=current_context,
+                    draft_response=retry_cognitive.response,
+                    draft_reasoning=retry_cognitive.reasoning,
+                )
+
+                retry_score = sum([
+                    retry_critique.scores.accuracy,
+                    retry_critique.scores.depth,
+                    retry_critique.scores.honesty,
+                ])
+
+                # Log improvement attempt
                 if self.session.current:
+                    await self._log_failure("critic_rejection", f"Attempt {attempt_num} rejected: {critique.feedback[:100]}")
                     await self.improver.log_improvement(
                         session_id=self.session.current.id,
                         turn_number=self.session.current.turn_count + 1,
                         draft=cognitive,
                         critique=critique,
-                        final=final_cognitive
+                        final=retry_cognitive,
                     )
-                
-                cognitive = final_cognitive
+
+                # Keep the best-scoring attempt (not just the last)
+                if retry_score > best_score:
+                    best_cognitive = retry_cognitive
+                    best_score = retry_score
+
+                cognitive = retry_cognitive
+                critique = retry_critique
+
                 if status_callback:
-                    status_callback("[bright_cyan]  ARIA is thinking (Attempt 2)...[/]")
+                    status_callback(f"[bright_cyan]  Attempt {attempt_num} complete (score: {retry_score:.2f}).[/]")
+
+            # Accept best attempt found across all retries
+            if best_cognitive is not cognitive:
+                log.info(f"Critic: accepting best attempt (score {best_score:.2f}) over final attempt.")
+            cognitive = best_cognitive
 
             await self.planner.complete_plan(plan_id, blocked=tool_failures)
 
@@ -479,6 +526,64 @@ class CognitiveLoop:
         )
 
         return cognitive
+
+    async def _check_reasoning_consistency(
+        self, cognitive: CognitiveResponse, status_callback: Callable[..., Any] | None = None
+    ) -> None:
+        """Verify that tool_calls match the intent described in reasoning."""
+        if not cognitive.tool_calls and "tool" not in cognitive.reasoning.lower():
+            return
+
+        tool_names = [tc.tool_name for tc in cognitive.tool_calls]
+        # Check if reasoning mentions tools but none were called, or vice-versa
+        mentioned_tool = any(word in cognitive.reasoning.lower() for word in ["call", "use", "run", "search", "browse"])
+        
+        has_mismatch = False
+        if cognitive.tool_calls and not mentioned_tool:
+            has_mismatch = True
+            log.warning(f"Reasoning Consistency: Model called tools {tool_names} but reasoning does not mention tool use.")
+        elif not cognitive.tool_calls and mentioned_tool and len(cognitive.reasoning) > 50:
+            # Only flag if reasoning is substantial (prevents false positives on "I don't need tools")
+            if any(word in cognitive.reasoning.lower() for word in ["will call", "decided to use", "need to search"]):
+                has_mismatch = True
+                log.warning("Reasoning Consistency: Model reasoning indicates tool use, but no tool_calls were generated.")
+
+        if has_mismatch and self.session.current:
+            # Log this as a "soft failure" for the meta-reasoning analyst
+            await self.db.execute(
+                """
+                INSERT INTO uncertainties (id, topic, why_uncertain, status, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    str(uuid.uuid4()),
+                    "Reasoning Consistency",
+                    f"Reasoning vs Tools mismatch. Reasoning: {cognitive.reasoning[:100]}... Tools: {tool_names}",
+                    "open",
+                    datetime.now(timezone.utc).isoformat()
+                )
+            )
+            if status_callback:
+                status_callback("[yellow]  ⚠ Reasoning consistency mismatch detected and logged.[/]")
+            await self._log_failure("consistency_mismatch", f"Reasoning vs Tools mismatch: {tool_names}")
+
+    async def _log_failure(self, failure_type: str, description: str) -> None:
+        """Log a failure for recent context window awareness."""
+        if not self.session.current:
+            return
+        await self.db.execute(
+            """
+            INSERT INTO recent_failures (id, session_id, failure_type, description, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid.uuid4()),
+                self.session.current.id,
+                failure_type,
+                description,
+                datetime.now(timezone.utc).isoformat()
+            )
+        )
 
     @staticmethod
     def _make_error_response(user_message: str) -> CognitiveResponse:
@@ -568,10 +673,12 @@ class CognitiveLoop:
                     f"{result.ethical_decision.action.value} "
                     f"({result.ethical_decision.principle})\n"
                 )
-            results_text += f"Actual Result:\n{result.actual_outcome}\n\n"
+            safe_outcome = sanitize_for_injection(result.actual_outcome)
+            results_text += f"Actual Result:\n<tool_output>\n{safe_outcome}\n</tool_output>\n\n"
             
             if not result.success:
                 any_failures = True
+                await self._log_failure("tool_error", f"Tool {call.tool_name} failed: {result.actual_outcome[:100]}")
                 
         return results_text, any_failures, tool_results
 

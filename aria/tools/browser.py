@@ -139,6 +139,8 @@ class BrowserTool(BaseTool):
                 h.ignore_images = True
                 h.body_width = 0
                 markdown = h.handle(html_content)
+                # Strip known prompt injection keywords
+                markdown = re.sub(r'(?i)(system instruction|critical instruction|ignore previous|you are now|system override|forget all)', '[REDACTED]', markdown)
                 return await self._observation("scrape", markdown[:8000])
 
             elif action == "screenshot":

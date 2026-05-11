@@ -197,6 +197,38 @@ class SessionManager:
         turns.reverse()  # Chronological order
         return turns
 
+    async def get_last_reflection(self) -> str | None:
+        """Get the self_reflection from the most recent turn in the current session."""
+        if self._current is None:
+            return None
+        row = await self.db.fetch_one(
+            """
+            SELECT self_reflection FROM turns
+            WHERE session_id = ?
+            ORDER BY turn_number DESC
+            LIMIT 1
+            """,
+            (self._current.id,),
+        )
+        if row and row["self_reflection"]:
+            return row["self_reflection"]
+        return None
+
+    async def get_recent_failures(self, limit: int = 3) -> list[dict]:
+        """Fetch the most recent failures from the current session."""
+        if self._current is None:
+            return []
+        rows = await self.db.fetch_all(
+            """
+            SELECT failure_type, description, created_at FROM recent_failures
+            WHERE session_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (self._current.id, limit),
+        )
+        return [dict(r) for r in rows]
+
     async def get_all_sessions(self) -> list[Session]:
         """Get all past sessions."""
         rows = await self.db.fetch_all(

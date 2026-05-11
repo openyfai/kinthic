@@ -22,6 +22,7 @@ from aria.memory.session import SessionManager
 from aria.models.schemas import Goal, Memory, Turn
 from aria.utils.config import MAX_HISTORY_TURNS
 from aria.utils.logger import setup_logger
+from aria.utils.sanitize import sanitize_for_injection
 from aria.world.contradictions import ContradictionDetector
 from aria.world.graph import KnowledgeGraph
 from aria.world.hypotheses import HypothesisEngine
@@ -66,6 +67,7 @@ class ContextBuilder:
         self.semantic_parser = semantic_parser
         self.pruner = pruner
         self.creativity_stack = creativity_stack
+        self.meta_reasoning = None  # Injected by CognitiveLoop after init
 
     async def build(self, user_input: str, semantic_analysis: dict | None = None) -> str:
         """
@@ -87,6 +89,22 @@ class ContextBuilder:
         # Section 1: Identity
         settings = self.settings_store.load_settings() if self.settings_store else None
         sections.append(build_identity_section(settings))
+
+        # Section 1.5: Previous turn self-reflection (makes reflection causal)
+        last_reflection = await self.session.get_last_reflection()
+        if last_reflection:
+            sections.append(self._format_previous_reflection(last_reflection))
+
+        # Section 1.6: Active Directives from approved meta-reasoning proposals
+        if self.meta_reasoning:
+            approved = await self.meta_reasoning.get_approved_proposals()
+            if approved:
+                sections.append(self._format_active_directives(approved))
+
+        # Section 1.7: Recent Failures (makes failure awareness causal)
+        recent_failures = await self.session.get_recent_failures()
+        if recent_failures:
+            sections.append(self._format_recent_failures(recent_failures))
 
         # Section 2: Knowledge Graph context
         if self.kg and self.kg.graph.number_of_nodes() > 0:
@@ -121,6 +139,7 @@ class ContextBuilder:
             # We prune if we have more than 10 turns
             recent_turns = await self.pruner.prune(recent_turns, threshold=10)
             
+        history_idx = len(sections)
         sections.append(self._format_history(recent_turns))
 
         # Section 8: Semantic Analysis (Phase 7)
@@ -157,14 +176,17 @@ class ContextBuilder:
         # the end get truncated first if the prompt exceeds the budget.
         full_prompt = "\n".join(sections)
 
+        while len(full_prompt) > MAX_PROMPT_CHARS and len(recent_turns) > 1:
+            log.warning(f"Prompt exceeds budget ({len(full_prompt)} > {MAX_PROMPT_CHARS}). Dropping oldest history turn.")
+            recent_turns.pop(0)
+            sections[history_idx] = self._format_history(recent_turns)
+            full_prompt = "\n".join(sections)
+            
         if len(full_prompt) > MAX_PROMPT_CHARS:
-            log.warning(
-                f"Prompt exceeds budget ({len(full_prompt)} > {MAX_PROMPT_CHARS}). "
-                f"Truncating to fit."
-            )
-            full_prompt = full_prompt[:MAX_PROMPT_CHARS] + (
-                "\n\n[CONTEXT TRUNCATED — prompt budget exceeded]"
-            )
+            # If it STILL exceeds after dropping all but 1 turn, drop sections entirely from bottom up
+            while len(full_prompt) > MAX_PROMPT_CHARS and len(sections) > history_idx + 1:
+                sections.pop()
+                full_prompt = "\n".join(sections)
 
         log.debug(f"Built context: {len(full_prompt)} chars")
         return full_prompt
@@ -172,6 +194,61 @@ class ContextBuilder:
     # ------------------------------------------------------------------
     # Formatters
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _format_previous_reflection(reflection: str) -> str:
+        """Inject the previous turn's self-reflection into the system prompt."""
+        safe = sanitize_for_injection(reflection)
+        return (
+            "═══════════════════════════════════════════════════════════\n"
+            "YOUR PREVIOUS SELF-REFLECTION\n"
+            "(Read this carefully — it is your own assessment from your last turn.)\n"
+            "═══════════════════════════════════════════════════════════\n"
+            "\n"
+            "<previous_reflection>\n"
+            f"{safe}\n"
+            "</previous_reflection>\n"
+            "\n"
+            "If this reflection identified an error or weakness, actively correct it this turn.\n"
+        )
+
+    @staticmethod
+    def _format_active_directives(proposals: list) -> str:
+        """Inject approved meta-reasoning proposals as active behavioral directives."""
+        lines = [
+            "═══════════════════════════════════════════════════════════",
+            "ACTIVE DIRECTIVES (approved self-improvement proposals)",
+            "(These are behavioral requirements you must follow this turn.)",
+            "═══════════════════════════════════════════════════════════",
+            "",
+            "<active_directives>",
+        ]
+        for i, p in enumerate(proposals, 1):
+            desc = sanitize_for_injection(p.description)
+            target = sanitize_for_injection(p.target_system)
+            lines.append(f"  [{i}] [{target.upper()}] {desc}")
+        lines.append("</active_directives>")
+        lines.append("")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_recent_failures(failures: list[dict]) -> str:
+        """Inject recent failure history into the system prompt."""
+        lines = [
+            "═══════════════════════════════════════════════════════════",
+            "RECENT SESSION FAILURES",
+            "(Learn from these immediate mistakes to avoid repeating them.)",
+            "═══════════════════════════════════════════════════════════",
+            "",
+            "<recent_failures>",
+        ]
+        for i, f in enumerate(failures, 1):
+            ftype = f["failure_type"].replace("_", " ").upper()
+            desc = sanitize_for_injection(f["description"])
+            lines.append(f"  [{i}] [{ftype}] {desc}")
+        lines.append("</recent_failures>")
+        lines.append("")
+        return "\n".join(lines)
 
     def _format_graph_context(self, graph_context: list[dict]) -> str:
         """Format knowledge graph context for the system prompt."""
@@ -181,12 +258,14 @@ class ContextBuilder:
             f"({len(graph_context)} relevant knowledge nodes)",
             "═══════════════════════════════════════════════════════════",
             "",
+            "<world_model>",
         ]
 
         for i, node in enumerate(graph_context, 1):
             conf = node.get("confidence", 0.5)
             node_type = node.get("type", "fact")
-            lines.append(f"  [{i}] ({node_type}) {node['content']}")
+            content = sanitize_for_injection(node['content'])
+            lines.append(f"  [{i}] ({node_type}) {content}")
             lines.append(f"      confidence: {conf:.1f}")
 
             if node.get("caused_by"):
@@ -207,6 +286,7 @@ class ContextBuilder:
 
             lines.append("")
 
+        lines.append("</world_model>")
         return "\n".join(lines)
 
     def _format_memories(self, memories: list[Memory]) -> str:
@@ -239,8 +319,9 @@ class ContextBuilder:
             tags_str = f" [{', '.join(mem.tags)}]" if mem.tags else ""
             provenance = mem.provenance.get("source_ref") or mem.provenance.get("tool") or mem.provenance.get("session_id")
             provenance_str = f" | provenance: {provenance}" if provenance else ""
+            content = sanitize_for_injection(mem.content)
             lines.append(
-                f"  [{i}] {mem.content}\n"
+                f"  [{i}] {content}\n"
                 f"      importance: {importance_bar} {mem.importance:.1f} | "
                 f"type: {mem.memory_type} | confidence: {mem.confidence:.1f} | "
                 f"source: {mem.source} | accessed: {mem.access_count}x{tags_str}{provenance_str}"
@@ -260,7 +341,8 @@ class ContextBuilder:
         ]
 
         for i, c in enumerate(contradictions, 1):
-            lines.append(f"  [{i}] {c.analysis[:100]}")
+            analysis = sanitize_for_injection(c.analysis[:100])
+            lines.append(f"  [{i}] {analysis}")
             lines.append("")
 
         return "\n".join(lines)
@@ -276,8 +358,10 @@ class ContextBuilder:
 
         for i, h in enumerate(hypotheses, 1):
             lines.append(f"  [{i}] hypothesis_id: {h.id}")
-            lines.append(f"      claim: {h.claim}")
-            lines.append(f"      reasoning: {h.reasoning[:80]}")
+            claim = sanitize_for_injection(h.claim)
+            reasoning = sanitize_for_injection(h.reasoning[:80])
+            lines.append(f"      claim: {claim}")
+            lines.append(f"      reasoning: {reasoning}")
             lines.append(
                 "      To resolve when this turn provides evidence: put an entry in "
                 "hypothesis_resolutions with this exact hypothesis_id and action confirm or deny."
@@ -308,8 +392,9 @@ class ContextBuilder:
                     "medium": "🟡",
                     "low": "🟢",
                 }.get(goal.priority.value, "⚪")
+                desc = sanitize_for_injection(goal.description)
                 lines.append(
-                    f"  {priority_icon} [{goal.priority.value.upper()}] {goal.description}"
+                    f"  {priority_icon} [{goal.priority.value.upper()}] {desc}"
                 )
 
         lines.append("")
@@ -329,8 +414,10 @@ class ContextBuilder:
           2. Cap length to prevent context flooding
           3. Neutralize common injection patterns
         """
-        # Strip control characters (keep newlines and tabs as they're legit)
-        sanitized = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+        sanitized = sanitize_for_injection(text)
+        
+        # Strip section delimiter characters that might trick the LLM
+        sanitized = re.sub(r'[═=]{5,}', '', sanitized)
 
         # Cap length
         sanitized = sanitized[:max_length]
@@ -359,7 +446,12 @@ class ContextBuilder:
         else:
             for turn in turns:
                 user_msg = self._sanitize_user_input(turn.user_input, max_length=2000)
+                
+                # Sanitize ARIA's past response (strip prefixes and HTML escape)
                 aria_msg = turn.response[:600]
+                aria_msg = re.sub(r'(?i)^(system|critical|instruction|override):?\s*', '', aria_msg).strip()
+                aria_msg = sanitize_for_injection(aria_msg)
+                
                 lines.append(f"  Turn {turn.turn_number}:")
                 lines.append(f"    <|user_data|>{user_msg}<|/user_data|>")
                 lines.append(f"    ARIA:  {aria_msg}")

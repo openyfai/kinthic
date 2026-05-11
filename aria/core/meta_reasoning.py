@@ -188,6 +188,13 @@ class MetaReasoningEngine:
         )
         return [self._row_to_proposal(r) for r in rows]
 
+    async def get_approved_proposals(self) -> list[SelfImprovementProposal]:
+        """Fetch proposals that the operator has approved — these become active directives."""
+        rows = await self.db.fetch_all(
+            "SELECT * FROM improvement_proposals WHERE status = 'approved' ORDER BY created_at DESC LIMIT 10"
+        )
+        return [self._row_to_proposal(r) for r in rows]
+
     async def update_status(
         self, proposal_id: str, status: str
     ) -> None:

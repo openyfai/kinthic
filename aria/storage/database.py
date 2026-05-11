@@ -255,6 +255,17 @@ CREATE TABLE IF NOT EXISTS ethical_decisions (
 CREATE INDEX IF NOT EXISTS idx_ethical_decisions_session ON ethical_decisions(session_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_ethical_decisions_action ON ethical_decisions(action, created_at);
 
+CREATE TABLE IF NOT EXISTS recent_failures (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    failure_type TEXT NOT NULL, -- 'critic_rejection', 'tool_error', 'consistency_mismatch'
+    description TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_recent_failures_session ON recent_failures(session_id, created_at);
+
 -- =====================================================================
 -- Phase 6 — Transfer + Generalization
 -- =====================================================================

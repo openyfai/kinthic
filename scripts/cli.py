@@ -42,6 +42,14 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("start", help="Start ARIA daemon in the background")
     subparsers.add_parser("stop", help="Stop the ARIA background daemon")
 
+    proposals_parser = subparsers.add_parser("proposals", help="Manage self-improvement proposals")
+    proposals_sub = proposals_parser.add_subparsers(dest="proposals_command")
+    proposals_sub.add_parser("list", help="List all pending proposals")
+    approve_p = proposals_sub.add_parser("approve", help="Approve a proposal by ID prefix")
+    approve_p.add_argument("proposal_id", help="Proposal ID or prefix")
+    reject_p = proposals_sub.add_parser("reject", help="Reject a proposal by ID prefix")
+    reject_p.add_argument("proposal_id", help="Proposal ID or prefix")
+
     return parser
 
 
@@ -294,6 +302,49 @@ def run_stop() -> None:
 
     pid_file.unlink(missing_ok=True)
 
+def run_proposals(command: str, proposal_id: str | None = None) -> None:
+    """List, approve, or reject self-improvement proposals."""
+    import asyncio
+    from aria.storage.database import Database
+    from aria.core.meta_reasoning import MetaReasoningEngine
+    from aria.utils.config import DB_PATH
+
+    async def _run():
+        db = Database(str(DB_PATH))
+        await db.connect()
+        # Pass a dummy LLM — only DB operations needed here
+        engine = MetaReasoningEngine(None, db)  # type: ignore[arg-type]
+
+        if command == "list":
+            proposals = await engine.get_pending_proposals()
+            if not proposals:
+                print("No pending proposals.")
+                return
+            print(f"\n{'ID':38} {'TARGET':20} DESCRIPTION")
+            print("-" * 90)
+            for p in proposals:
+                print(f"  {p.id[:8]}  {p.target_system:20} {p.description[:55]}")
+            print(f"\nTotal: {len(proposals)} pending")
+            print("\nUse `aria proposals approve <id>` or `aria proposals reject <id>` to act.")
+
+        elif command in {"approve", "reject"}:
+            if not proposal_id:
+                print("Error: proposal_id is required.")
+                return
+            proposals = await engine.get_all_proposals()
+            match = next((p for p in proposals if p.id.startswith(proposal_id)), None)
+            if not match:
+                print(f"No proposal found with ID prefix: {proposal_id!r}")
+                return
+            await engine.update_status(match.id, command + "d")
+            action = "Approved" if command == "approve" else "Rejected"
+            print(f"{action}: [{match.target_system}] {match.description[:70]}")
+            if command == "approve":
+                print("  → This directive will be injected into ARIA's system prompt on the next turn.")
+
+    asyncio.run(_run())
+
+
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
@@ -327,6 +378,11 @@ def main() -> None:
         return
     if args.command == "stop":
         run_stop()
+        return
+    if args.command == "proposals":
+        cmd = getattr(args, "proposals_command", None) or "list"
+        pid = getattr(args, "proposal_id", None)
+        run_proposals(cmd, pid)
         return
 
 
