@@ -1,3 +1,6 @@
+import json
+import logging
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -31,6 +34,41 @@ class FakeGemini:
 class FakeCritic:
     async def critique(self, **kwargs):
         return SimpleNamespace(is_acceptable=True)
+
+
+def test_acquire_process_lock_cleans_up_stale_lock(tmp_path, monkeypatch, caplog):
+    loop = CognitiveLoop.__new__(CognitiveLoop)
+    loop._process_lock_path = tmp_path / ".aria-process.lock"
+    loop._process_lock_path.write_text(json.dumps({"pid": 424242, "role": "old"}), encoding="utf-8")
+
+    def fake_kill(pid, sig):
+        raise ProcessLookupError()
+
+    monkeypatch.setattr("aria.core.cognitive_loop.allow_multi_writer", lambda: False)
+    monkeypatch.setattr("aria.core.cognitive_loop.get_process_role", lambda: "test-role")
+    monkeypatch.setattr("aria.core.cognitive_loop.os.kill", fake_kill)
+
+    with caplog.at_level(logging.WARNING, logger="aria.core"):
+        loop._acquire_process_lock()
+
+    assert "stale process lock cleaned up" in caplog.text.lower()
+
+    stored = json.loads(loop._process_lock_path.read_text(encoding="utf-8"))
+    assert stored["pid"] == os.getpid()
+    assert stored["role"] == "test-role"
+
+
+def test_acquire_process_lock_raises_when_pid_is_alive(tmp_path, monkeypatch):
+    loop = CognitiveLoop.__new__(CognitiveLoop)
+    loop._process_lock_path = tmp_path / ".aria-process.lock"
+    loop._process_lock_path.write_text(json.dumps({"pid": 424242, "role": "old"}), encoding="utf-8")
+
+    monkeypatch.setattr("aria.core.cognitive_loop.allow_multi_writer", lambda: False)
+    monkeypatch.setattr("aria.core.cognitive_loop.get_process_role", lambda: "test-role")
+    monkeypatch.setattr("aria.core.cognitive_loop.os.kill", lambda pid, sig: None)
+
+    with pytest.raises(RuntimeError, match="LOCK_EXISTS:424242"):
+        loop._acquire_process_lock()
 
 
 @pytest.mark.asyncio

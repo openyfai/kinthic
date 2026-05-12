@@ -13,7 +13,9 @@ from __future__ import annotations
 import json
 import uuid
 import os
+import signal
 import asyncio
+import errno
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Any
@@ -1228,15 +1230,22 @@ class CognitiveLoop:
             try:
                 existing = self._process_lock_path.read_text(encoding="utf-8").strip()
                 if existing:
-                    import os
                     lock_data = json.loads(existing)
                     pid = lock_data.get("pid")
                     if pid:
                         try:
                             os.kill(pid, 0)
-                            raise RuntimeError(f"LOCK_EXISTS:{pid}")
-                        except OSError:
+                        except ProcessLookupError:
                             self._process_lock_path.unlink(missing_ok=True)
+                            log.warning("Stale process lock cleaned up at %s for pid %s", self._process_lock_path, pid)
+                        except OSError as exc:
+                            if exc.errno == errno.ESRCH or getattr(exc, "winerror", None) == 87:
+                                self._process_lock_path.unlink(missing_ok=True)
+                                log.warning("Stale process lock cleaned up at %s for pid %s", self._process_lock_path, pid)
+                            else:
+                                raise RuntimeError(f"LOCK_EXISTS:{pid}") from exc
+                        else:
+                            raise RuntimeError(f"LOCK_EXISTS:{pid}")
             except (json.JSONDecodeError, KeyError, ValueError):
                 pass
         self._process_lock_path.write_text(
