@@ -1,6 +1,6 @@
 # ARIA by OpenYF AI
 
-> Building toward AGI in public. One phase at a time.
+> Building intelligent systems. One phase at a time.
 
 ARIA is an open source AI agent that lives on your machine, remembers everything you tell it, builds a knowledge graph of what it learns, improves itself over time, and works 24/7 — even while you sleep.
 
