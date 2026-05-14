@@ -76,11 +76,17 @@ def show_banner() -> None:
     )
     banner.append(
         "    ║     "
-        + "Phase 01 — Cognitive Core + Memory".ljust(_border_inner)
+        + "Phase 02 — World Model + Reasoning".ljust(_border_inner)
         + "║\n",
         style="dim bright_cyan",
     )
-    banner.append("    ║     v0.1.0                                                ║\n", style="dim bright_cyan")
+    from aria import __version__
+    banner.append(
+        "    ║     "
+        + f"v{__version__}".ljust(_border_inner)
+        + "║\n",
+        style="dim bright_cyan",
+    )
     banner.append("    ║                                                           ║\n", style="bright_cyan")
     banner.append("    ╚═══════════════════════════════════════════════════════════╝\n", style="bright_cyan")
     console.print()
