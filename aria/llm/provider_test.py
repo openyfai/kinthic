@@ -30,6 +30,9 @@ def humanize_llm_error(exc: BaseException, provider_id: str) -> tuple[str, str, 
     """
     raw = str(exc)
     low = raw.lower()
+    class_name = exc.__class__.__name__.lower()
+    status_code = getattr(exc, "status_code", getattr(exc, "code", None))
+
     if "install aria" in low or "install aria[" in low:
         return (
             "Missing optional dependency for this provider.",
@@ -37,7 +40,10 @@ def humanize_llm_error(exc: BaseException, provider_id: str) -> tuple[str, str, 
             "missing_dependency",
         )
     if (
-        "401" in raw
+        status_code in (401, 403)
+        or "authentication" in class_name
+        or "unauthorized" in class_name
+        or "401" in raw
         or "403" in raw
         or ("incorrect api key" in low)
         or ("invalid" in low and "api" in low)

@@ -26,7 +26,7 @@ COPY skills/ ./skills/
 COPY --from=ui-builder /app/aria-ui/out ./aria-ui/out
 
 # Install python dependencies
-RUN pip install --no-cache-dir -e ".[full]" \
+RUN pip install --no-cache-dir -e "." \
     && python -m playwright install --with-deps chromium
 
 # Set up the data directory for the SQLite database

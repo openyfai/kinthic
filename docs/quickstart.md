@@ -7,7 +7,7 @@ This guide expands on the [README](../README.md) with concrete commands and opti
 You need **Python 3.11+** (latest stable 3.x is fine). For a normal **PyPI** install you do **not** need Node; the published wheel includes a pre-built dashboard from the release pipeline.
 
 ```bash
-pip install "openyfai-aria[full]"
+pip install openyfai-aria
 ```
 
 **Browser onboarding:**
@@ -41,7 +41,7 @@ If you are **contributing** or running from a **git clone**, use an editable ins
 ```bash
 git clone https://github.com/openyfai/aria.git
 cd aria
-pip install -e ".[full,dev]"
+pip install -e ".[dev]"
 cd aria-ui && npm install && npm run build && cd ..
 aria web
 ```

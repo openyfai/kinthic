@@ -13,7 +13,7 @@ Thanks for helping improve ARIA.
 ## Local Setup
 
 ```bash
-pip install -e ".[full,dev]"
+pip install -e ".[dev]"
 cd aria-ui
 npm install
 cd ..
@@ -50,7 +50,7 @@ On Windows PowerShell, use Explorer or equivalent `robocopy` / manual copy inste
 Use this before merging onboarding, packaging, or release changes:
 
 1. Start from a fresh checkout on Python `3.11+`.
-2. Run `pip install -e ".[full,dev]"`.
+2. Run `pip install -e ".[dev]"`.
 3. Confirm `aria models`, `aria doctor`, `aria setup`, and `aria web` work.
 4. Run the web UI once with a new browser profile or cleared local storage.
 5. If Docker behavior changed, verify `docker compose --profile web up --build`.

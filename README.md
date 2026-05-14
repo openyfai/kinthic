@@ -131,7 +131,7 @@ Follow the journey on X: [@openyfai](https://x.com/openyfai)
 
 ```bash
 git clone https://github.com/openyfai/aria.git && cd aria
-pip install -e ".[full,dev]"
+pip install -e ".[dev]"
 python -m pytest tests
 ruff check .
 ```

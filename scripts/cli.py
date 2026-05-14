@@ -69,9 +69,6 @@ def run_setup() -> None:
         print(f"  {index}. {model['label']}{tier}")
     model_choice = input(f"Choose model [1-{len(models)}] (default 1): ").strip() or "1"
     model = models[max(0, min(len(models) - 1, int(model_choice) - 1))]
-    api_key = input("Paste provider API key (leave blank to skip): ").strip()
-    web_api_key = input("Optional web API key for remote access (leave blank for localhost-only): ").strip()
-
     store.save_settings(
         {
             "setup_completed": True,
@@ -81,8 +78,39 @@ def run_setup() -> None:
             "reasoning_model": defaults["reasoning_model"],
         }
     )
-    if api_key:
-        store.set_provider_secret(provider["id"], api_key)
+
+    if provider["id"] == "ollama":
+        print("Local provider selected (Ollama). Verifying connectivity...")
+        from aria.llm.provider_test import ping_provider
+        result = asyncio.run(ping_provider(provider["id"], "", model["id"]))
+        if result.get("ok"):
+            print("Connectivity verified.")
+        else:
+            print(f"Warning: {result.get('message', 'Could not reach Ollama.')}")
+            if result.get("hint"):
+                print(f"Hint: {result['hint']}")
+    else:
+        while True:
+            api_key = input("Paste provider API key (leave blank to skip): ").strip()
+            if not api_key:
+                break
+            
+            print("Verifying API key...")
+            from aria.llm.provider_test import ping_provider
+            result = asyncio.run(ping_provider(provider["id"], api_key, model["id"]))
+            
+            if result.get("ok"):
+                print("API key verified.")
+                store.set_provider_secret(provider["id"], api_key)
+                break
+            else:
+                print(f"That API key does not work — please check it and try again.")
+                print(f"Error: {result.get('message', 'Auth rejected')}")
+                if result.get("hint"):
+                    print(f"Hint: {result['hint']}")
+                print()
+
+    web_api_key = input("Optional web API key for remote access (leave blank for localhost-only): ").strip()
     if web_api_key:
         store.set_web_api_key(web_api_key)
 
@@ -90,6 +118,24 @@ def run_setup() -> None:
     print(f"- Provider: {provider['label']}")
     print(f"- Model: {model['label']}")
     print("- Local settings stored in data/settings.json and data/secrets.json")
+
+    # Windows PATH visibility check
+    if os.name == "nt":
+        import shutil
+        import sys
+        if not shutil.which("aria"):
+            scripts_path = Path(sys.executable).parent / "Scripts"
+            print("\n" + "!" * 60)
+            print("⚠️  ARIA is installed but not currently on your PATH.")
+            print("!" * 60)
+            print("\nTo fix this:")
+            print("1. Close this terminal and open a new one.")
+            print(f"2. If 'aria' still doesn't work, use this fallback command:")
+            print(f"   >>> {sys.executable} -m scripts.cli web")
+            print("\nRecommended: Add the Scripts folder to your PATH environment variable:")
+            print(f"   {scripts_path}")
+            print("   Guide: https://github.com/openyfai/aria/blob/main/docs/windows-path.md")
+            print("!" * 60 + "\n")
 
 
 def run_doctor(*, ping: bool = False) -> None:

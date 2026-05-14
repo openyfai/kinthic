@@ -79,7 +79,7 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- **README** and **docs/quickstart**: single Python story (**>=3.11**); **PyPI-first** quick start (`pip install "openyfai-aria[full]"` then `aria web` / `aria setup`); contributor path for git clone + editable install; Node only for frontend development.
+- **README** and **docs/quickstart**: single Python story (**>=3.11**); **PyPI-first** quick start (`pip install openyfai-aria` then `aria web` / `aria setup`); contributor path for git clone + editable install; Node only for frontend development.
 - **PyPI one-line description** in `pyproject.toml` clarified for the project page.
 
 ### Added
