@@ -1,6 +1,6 @@
 [project]
 name = "openyfai-aria"
-version = "1.0.5"
+version = "1.0.6"
 description = "Local-first AI agent with memory, knowledge graph, tools, web dashboard, and Telegram (OpenYF AI)."
 readme = "README.md"
 license = "Apache-2.0"
@@ -84,7 +84,7 @@ include-package-data = true
 py-modules = []
 
 [tool.setuptools.package-data]
-aria = ["web_dist/*", "web_dist/**/*"]
+aria = ["web_dist/**/*"]
 
 [tool.setuptools.packages.find]
 include = ["aria*", "scripts*"]

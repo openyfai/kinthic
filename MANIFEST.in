@@ -29,4 +29,6 @@ include SECURITY.md
 include CODE_OF_CONDUCT.md
 include LICENSE
 include pyproject.toml
-recursive-include aria/web_dist *
+graft aria/web_dist
+global-exclude __pycache__
+global-exclude *.py[cod]

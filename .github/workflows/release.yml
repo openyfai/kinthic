@@ -36,6 +36,8 @@ jobs:
           find aria/web_dist -mindepth 1 -maxdepth 1 ! -name '__init__.py' -exec rm -rf {} +
           # Copy the build output
           cp -r aria-ui/out/. aria/web_dist/
+          # Verify the copy worked
+          ls -R aria/web_dist/
 
       - name: Set up Python
         uses: actions/setup-python@v5
