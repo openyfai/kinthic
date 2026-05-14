@@ -1239,9 +1239,12 @@ class CognitiveLoop:
                             self._process_lock_path.unlink(missing_ok=True)
                             log.warning("Stale process lock cleaned up at %s for pid %s", self._process_lock_path, pid)
                         except OSError as exc:
-                            if exc.errno == errno.ESRCH or getattr(exc, "winerror", None) == 87:
+                            # Windows: WinError 87 = Invalid Parameter (Not running), WinError 11 = Access Denied.
+                            # We treat both (and Unix ESRCH) as stale lock triggers for recovery.
+                            win_err = getattr(exc, "winerror", None)
+                            if exc.errno == errno.ESRCH or win_err == 87 or win_err == 11:
                                 self._process_lock_path.unlink(missing_ok=True)
-                                log.warning("Stale process lock cleaned up at %s for pid %s", self._process_lock_path, pid)
+                                log.warning("Stale process lock cleaned up at %s for pid %s (err %s)", self._process_lock_path, pid, win_err or exc.errno)
                             else:
                                 raise RuntimeError(f"LOCK_EXISTS:{pid}") from exc
                         else:

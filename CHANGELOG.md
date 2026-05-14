@@ -7,6 +7,22 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.0.7] - 2026-05-14
+
+### Fixed
+
+- **Windows process lock check now handles Access Denied errors.** On Windows, `os.kill(pid, 0)` could throw `WinError 11` for stale locks instead of correctly signaling a dead process. This crashed ARIA startup. Now treats `WinError 11` as a stale lock trigger for safe recovery.
+
+## [1.0.6] - 2026-05-14
+
+### Fixed
+
+- **Web dashboard is now correctly included in PyPI wheels.** Fixed a packaging issue where the `aria/web_dist` directory was omitted by `setuptools` despite being in `pyproject.toml`. Hardened the build workflow to build the UI and copy it into the package before building the wheel.
+
+### Changed
+
+- **Simplified installation.** Removed the redundant `[full]` extra. All core features (dashboard, providers, core tools) are now part of the base `pip install openyfai-aria` command.
+
 ## [1.0.5] - 2026-05-10
 
 ### Security
