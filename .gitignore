@@ -57,3 +57,5 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+audit_scratch/
