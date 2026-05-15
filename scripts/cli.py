@@ -304,8 +304,10 @@ def run_web() -> None:
     import shutil
     import webbrowser
     import json
+    import aria
 
-    web_dist = Path("aria/web_dist/index.html")
+    package_dir = Path(aria.__file__).parent
+    web_dist = package_dir / "web_dist" / "index.html"
     if not web_dist.exists():
         print("Web dashboard missing. Run 'pip install --upgrade openyfai-aria'.")
         return
