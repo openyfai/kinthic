@@ -38,14 +38,8 @@ def _ensure_private_file(path: Path) -> None:
         except OSError:
             pass
     else:
-        # Windows: no chmod equivalent. Log a warning on first creation.
-        import logging
-        logging.getLogger("aria.runtime.settings").warning(
-            "Windows detected: %s has no file permission protection. "
-            "For security, prefer environment variables over storing "
-            "API keys in this file.",
-            path.name,
-        )
+        # Windows: no chmod equivalent.
+        pass
 
 
 def _read_json(path: Path, default: dict[str, Any]) -> dict[str, Any]:

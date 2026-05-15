@@ -255,6 +255,15 @@ def run_doctor(*, ping: bool = False) -> None:
     print(f"Terminal execution enabled: {terminal_execution_enabled()}")
     print(f"Direct code apply enabled: {code_apply_enabled()}")
     
+    warnings = []
+    if os.name == "nt":
+        warnings.append("Windows detected: data/secrets.json has no OS-level file permission protection. (Prefer Env Vars)")
+
+    if warnings:
+        print("\nWarnings:")
+        for warning in warnings:
+            print(f"- {warning}")
+
     if ping:
         import asyncio
         from aria.llm.provider_test import ping_provider
