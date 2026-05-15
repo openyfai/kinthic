@@ -109,6 +109,7 @@ async def ping_provider(
     api_key: str,
     model_id: str | None = None,
     *,
+    base_url: str | None = None,
     timeout_s: float = 45.0,
 ) -> dict[str, Any]:
     """
@@ -151,6 +152,7 @@ async def ping_provider(
                 "model": model_use,
                 "fast_model": model_use,
                 "reasoning_model": defaults["reasoning_model"],
+                "base_url": base_url or "",
             }
         )
         if provider_id != "ollama":

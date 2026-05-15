@@ -131,7 +131,12 @@ async def run_interactive_setup() -> None:
             
             ui.render_step("Authentication", Text("Verifying connectivity...", style="dim", justify="center"))
             from aria.llm.provider_test import ping_provider
-            result = await ping_provider(provider["id"], api_key, model["id"])
+            result = await ping_provider(
+                provider["id"], 
+                api_key, 
+                model["id"], 
+                base_url=custom_base_url if provider["id"] == "custom" else None
+            )
             
             if result.get("ok"):
                 store.set_provider_secret(provider["id"], api_key)
