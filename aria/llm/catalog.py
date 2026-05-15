@@ -416,6 +416,8 @@ MODEL_CATALOG: dict[str, dict[str, Any]] = {
         "label": "Custom Provider",
         "env_key": "CUSTOM_API_KEY",
         "base_url": "",
+        "fast_model": "custom-model",
+        "reasoning_model": "custom-model",
         "models": [
             {
                 "id": "custom-model",

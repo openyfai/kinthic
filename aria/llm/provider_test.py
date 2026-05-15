@@ -133,7 +133,7 @@ async def ping_provider(
 
     defaults = get_provider_defaults(provider_id)
     model_use = (model_id or "").strip() or defaults["fast_model"]
-    if model_id and find_model(provider_id, model_use) is None:
+    if model_id and provider_id != "custom" and find_model(provider_id, model_use) is None:
         return {
             "ok": False,
             "message": f"Model `{model_use}` is not in ARIA's catalog for `{provider_id}`.",
