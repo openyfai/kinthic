@@ -7,6 +7,37 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.5] - 2026-05-15
+
+### Fixed
+
+- **Universal Provider configuration now overrides .env defaults.** Fixed a priority bug where a pre-filled `ARIA_MODEL=gemini-2.5-flash` in the `.env` file would lock the system to Gemini, even if a user configured a custom provider during setup. Custom provider settings now strictly prioritize user-defined models.
+
+## [1.1.4] - 2026-05-15
+
+### Fixed
+
+- **Custom Base URLs are now correctly verified during setup.** The connectivity tester (`ping_provider`) was previously ignoring the user-provided Base URL and falling back to provider defaults (like Google/Gemini). It now correctly routes the verification request to the specified custom endpoint.
+
+## [1.1.3] - 2026-05-15
+
+### Fixed
+
+- **Universal Provider connectivity bypass.** Removed a restrictive internal catalog check that blocked custom model IDs (e.g., `gpt-5.5`) because they weren't in ARIA's static supported list. Setup now allows any model ID through for custom providers.
+
+## [1.1.2] - 2026-05-15
+
+### Added
+
+- **Required field validation in setup.** To prevent terminal pastes from accidentally skipping steps, "Base URL" and "Model ID" are now required fields in the Universal Provider flow. The wizard will re-prompt until a valid input is received.
+
+## [1.1.1] - 2026-05-15
+
+### Changed
+
+- **"Apple Slab" Minimalist Onboarding.** Refined the terminal setup experience into a high-fidelity, distraction-free UI.
+- **Silent Security Diagnostics.** Moved verbose Windows-specific security warnings from the main startup flow to the `aria doctor` command to maintain a clean CLI aesthetic while keeping transparency accessible.
+
 ## [1.0.7] - 2026-05-14
 
 ### Fixed
