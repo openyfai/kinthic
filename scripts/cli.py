@@ -88,14 +88,19 @@ async def run_interactive_setup() -> None:
             Text(f"Configuring '{custom_label}'", justify="center"),
             subtitle="Base URL (e.g. https://api.proxy.com/v1)"
         )
-        custom_base_url = ui.prompt("Base URL")
+        custom_base_url = ""
+        while not custom_base_url:
+            custom_base_url = ui.prompt("Base URL").strip()
         
         ui.render_step(
             "Universal Provider", 
             Text(f"Configuring '{custom_label}'", justify="center"),
             subtitle="Exact Model ID (e.g. mixtral-8x7b-instruct)"
         )
-        model_id = ui.prompt("Model ID")
+        model_id = ""
+        while not model_id:
+            model_id = ui.prompt("Model ID").strip()
+            
         model = {"id": model_id, "label": custom_label}
         defaults = {"fast_model": model_id, "reasoning_model": model_id}
     else:
