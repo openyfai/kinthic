@@ -58,6 +58,7 @@ def get_provider_settings(settings_store: RuntimeSettingsStore | None = None) ->
         "fast_model": fast_model,
         "reasoning_model": reasoning_model,
         "critic_model": critic_model,
+        "base_url": saved.get("base_url", ""),
     }
 
 

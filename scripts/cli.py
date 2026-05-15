@@ -72,17 +72,44 @@ async def run_interactive_setup() -> None:
     choice = ui.prompt(f"Select Provider [1-{len(providers)}]", default="1")
     provider = providers[max(0, min(len(providers) - 1, int(choice) - 1))]
 
-    # 2. Model Selection
-    models = provider["models"]
-    table = Table(show_header=False, box=None, padding=(0, 2))
-    for i, m in enumerate(models, 1):
-        tier = f"({m.get('tier')})" if m.get("tier") else ""
-        table.add_row(Text(f"{i}.", style="dim"), Text(f"{m['label']} {tier}", style="bold white"))
+    custom_base_url = ""
+    custom_label = ""
     
-    ui.render_step(provider["label"], table, subtitle=f"Select the active model for {provider['label']}")
-    m_choice = ui.prompt(f"Select Model [1-{len(models)}]", default="1")
-    model = models[max(0, min(len(models) - 1, int(m_choice) - 1))]
-    defaults = get_provider_defaults(provider["id"])
+    if provider["id"] == "custom":
+        ui.render_step(
+            "Universal Provider", 
+            Text("Configure your custom endpoint.", justify="center"),
+            subtitle="Display Name (e.g. My Private Llama)"
+        )
+        custom_label = ui.prompt("Display Name", default="Custom Model")
+        
+        ui.render_step(
+            "Universal Provider", 
+            Text(f"Configuring '{custom_label}'", justify="center"),
+            subtitle="Base URL (e.g. https://api.proxy.com/v1)"
+        )
+        custom_base_url = ui.prompt("Base URL")
+        
+        ui.render_step(
+            "Universal Provider", 
+            Text(f"Configuring '{custom_label}'", justify="center"),
+            subtitle="Exact Model ID (e.g. mixtral-8x7b-instruct)"
+        )
+        model_id = ui.prompt("Model ID")
+        model = {"id": model_id, "label": custom_label}
+        defaults = {"fast_model": model_id, "reasoning_model": model_id}
+    else:
+        # 2. Model Selection
+        models = provider["models"]
+        table = Table(show_header=False, box=None, padding=(0, 2))
+        for i, m in enumerate(models, 1):
+            tier = f"({m.get('tier')})" if m.get("tier") else ""
+            table.add_row(Text(f"{i}.", style="dim"), Text(f"{m['label']} {tier}", style="bold white"))
+        
+        ui.render_step(provider["label"], table, subtitle=f"Select the active model for {provider['label']}")
+        m_choice = ui.prompt(f"Select Model [1-{len(models)}]", default="1")
+        model = models[max(0, min(len(models) - 1, int(m_choice) - 1))]
+        defaults = get_provider_defaults(provider["id"])
 
     # 3. API Key Verification
     api_key = ""
@@ -166,15 +193,20 @@ async def run_interactive_setup() -> None:
                 ui.prompt("Press Enter to skip")
 
     # 5. Finalize
-    store.save_settings(
-        {
-            "setup_completed": True,
-            "provider": provider["id"],
-            "model": model["id"],
-            "fast_model": defaults["fast_model"],
-            "reasoning_model": defaults["reasoning_model"],
-        }
-    )
+    settings_payload = {
+        "setup_completed": True,
+        "provider": provider["id"],
+        "model": model["id"],
+        "fast_model": defaults["fast_model"],
+        "reasoning_model": defaults["reasoning_model"],
+    }
+    
+    if custom_base_url:
+        settings_payload["base_url"] = custom_base_url
+    if custom_label:
+        settings_payload["custom_label"] = custom_label
+
+    store.save_settings(settings_payload)
     
     ui.render_step(
         "Activation Complete", 
@@ -206,9 +238,14 @@ def run_doctor(*, ping: bool = False) -> None:
     store = RuntimeSettingsStore()
     settings = store.load_settings()
     status = store.setup_status()
+    
+    provider_label = status['provider']
+    if status['provider'] == 'custom':
+        provider_label = f"Custom ({settings.get('custom_label', 'Unknown')})"
+
     print("\nARIA doctor\n")
     print(f"Setup complete: {status['setup_completed']}")
-    print(f"Provider: {status['provider']}")
+    print(f"Provider: {provider_label}")
     print(f"Model: {status['model']}")
     print(f"Provider key configured: {status['provider_configured']}")
     print(f"Web API key configured: {status['web_api_key_configured']}")

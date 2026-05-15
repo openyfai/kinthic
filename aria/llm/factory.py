@@ -28,6 +28,13 @@ def build_provider(
         )
 
     defaults = get_provider_defaults(provider)
+    base_url = defaults.get("base_url", "")
+    
+    # Handle Universal (Custom) Provider override
+    if provider == "custom":
+        base_url = active.get("base_url", "")
+        model = active.get("model", model)
+
     extra_headers: dict[str, str] = {}
     if provider == "openrouter":
         extra_headers = {
@@ -39,7 +46,7 @@ def build_provider(
         provider_name=provider,
         default_model=model,
         api_key=get_provider_secret(provider, settings_store=settings_store),
-        base_url=defaults.get("base_url", ""),
+        base_url=base_url,
         usage_tracker=usage_tracker,
         extra_headers=extra_headers,
     )

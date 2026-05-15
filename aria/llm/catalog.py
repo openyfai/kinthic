@@ -412,6 +412,23 @@ MODEL_CATALOG: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "custom": {
+        "label": "Custom Provider",
+        "env_key": "CUSTOM_API_KEY",
+        "base_url": "",
+        "models": [
+            {
+                "id": "custom-model",
+                "label": "Custom Model",
+                "tier": "fast",
+                "supports_images": True,
+                "supports_structured_json": True,
+                "context_window": 128_000,
+                "recommended_for": "any OpenAI-compatible endpoint",
+                "estimated_cost": "variable",
+            }
+        ],
+    },
 }
 
 
