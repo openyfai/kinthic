@@ -7,6 +7,12 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.6] - 2026-05-15
+
+### Fixed
+
+- **Robust path resolution for the Web Dashboard.** The `aria web` command now correctly locates the dashboard assets relative to the installed package directory, rather than the current terminal folder. This allows you to launch the dashboard from any directory on your system.
+
 ## [1.1.5] - 2026-05-15
 
 ### Fixed
