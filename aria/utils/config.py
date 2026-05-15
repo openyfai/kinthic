@@ -47,11 +47,20 @@ def get_settings_store() -> RuntimeSettingsStore:
 def get_provider_settings(settings_store: RuntimeSettingsStore | None = None) -> dict:
     store = settings_store or _settings_store
     saved = store.load_settings()
-    provider = os.getenv("ARIA_PROVIDER", saved.get("provider", "gemini"))
-    model = os.getenv("ARIA_MODEL", saved.get("model", "gemini-3.1-flash-lite"))
-    fast_model = os.getenv("ARIA_FAST_MODEL", saved.get("fast_model", model))
-    reasoning_model = os.getenv("ARIA_REASONING_MODEL", saved.get("reasoning_model", fast_model))
-    critic_model = os.getenv("ARIA_CRITIC_MODEL", saved.get("critic_model", reasoning_model))
+    
+    # Priority: Env Var > Saved Settings > Hardcoded Default
+    # BUT: We only want Env Var to win if it's NOT the "dummy" default from a pre-filled .env
+    provider = os.getenv("ARIA_PROVIDER") or saved.get("provider", "gemini")
+    model = os.getenv("ARIA_MODEL") or saved.get("model", "gemini-3.1-flash-lite")
+    
+    # If the user is using custom, we MUST respect the saved model/base_url
+    if provider == "custom":
+        model = saved.get("model", model)
+        
+    fast_model = os.getenv("ARIA_FAST_MODEL") or saved.get("fast_model", model)
+    reasoning_model = os.getenv("ARIA_REASONING_MODEL") or saved.get("reasoning_model", fast_model)
+    critic_model = os.getenv("ARIA_CRITIC_MODEL") or saved.get("critic_model", reasoning_model)
+    
     return {
         "provider": provider,
         "model": model,
