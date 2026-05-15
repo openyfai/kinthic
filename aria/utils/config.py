@@ -67,17 +67,9 @@ def get_provider_secret(provider: str, key_name: str = "api_key", settings_store
     if stored:
         return stored
 
-    env_candidates = {
-        "gemini": "GEMINI_API_KEY",
-        "openai": "OPENAI_API_KEY",
-        "anthropic": "ANTHROPIC_API_KEY",
-        "openrouter": "OPENROUTER_API_KEY",
-        "deepseek": "DEEPSEEK_API_KEY",
-        "mistral": "MISTRAL_API_KEY",
-        "groq": "GROQ_API_KEY",
-        "ollama": "",
-    }
-    env_name = env_candidates.get(provider, "")
+    from aria.llm.catalog import MODEL_CATALOG
+    payload = MODEL_CATALOG.get(provider, {})
+    env_name = payload.get("env_key", "")
     if not env_name:
         return ""
     value = os.getenv(env_name, "")

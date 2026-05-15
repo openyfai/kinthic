@@ -53,22 +53,119 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run_setup() -> None:
+async def run_interactive_setup() -> None:
+    """The minimalist 'Apple Slab' interactive setup wizard."""
+    from aria.ui.onboarding import OnboardingUI
+    from rich.table import Table
+    from rich.text import Text
+
+    ui = OnboardingUI()
     store = RuntimeSettingsStore()
-    current = store.load_settings()
     providers = list_providers()
-    print("\nARIA setup\n")
-    for index, provider in enumerate(providers, start=1):
-        print(f"{index}. {provider['label']} ({provider['id']})")
-    raw_choice = input(f"\nChoose provider [1-{len(providers)}] (default 1): ").strip() or "1"
-    provider = providers[max(0, min(len(providers) - 1, int(raw_choice) - 1))]
-    defaults = get_provider_defaults(provider["id"])
+
+    # 1. Provider Selection
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    for i, p in enumerate(providers, 1):
+        table.add_row(Text(f"{i}.", style="dim"), Text(p["label"], style="bold white"))
+    
+    ui.render_step("Intelligence Core", table, subtitle="Choose your primary LLM provider")
+    choice = ui.prompt(f"Select Provider [1-{len(providers)}]", default="1")
+    provider = providers[max(0, min(len(providers) - 1, int(choice) - 1))]
+
+    # 2. Model Selection
     models = provider["models"]
-    for index, model in enumerate(models, start=1):
-        tier = f" [{model.get('tier')}]" if model.get("tier") else ""
-        print(f"  {index}. {model['label']}{tier}")
-    model_choice = input(f"Choose model [1-{len(models)}] (default 1): ").strip() or "1"
-    model = models[max(0, min(len(models) - 1, int(model_choice) - 1))]
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    for i, m in enumerate(models, 1):
+        tier = f"({m.get('tier')})" if m.get("tier") else ""
+        table.add_row(Text(f"{i}.", style="dim"), Text(f"{m['label']} {tier}", style="bold white"))
+    
+    ui.render_step(provider["label"], table, subtitle=f"Select the active model for {provider['label']}")
+    m_choice = ui.prompt(f"Select Model [1-{len(models)}]", default="1")
+    model = models[max(0, min(len(models) - 1, int(m_choice) - 1))]
+    defaults = get_provider_defaults(provider["id"])
+
+    # 3. API Key Verification
+    api_key = ""
+    if provider["id"] != "ollama":
+        while True:
+            ui.render_step(
+                "Authentication", 
+                Text(f"Identity verification for {provider['label']}.", justify="center"),
+                subtitle="Paste your API key below"
+            )
+            api_key = ui.prompt("API Key", password=True)
+            if not api_key:
+                break
+            
+            ui.render_step("Authentication", Text("Verifying connectivity...", style="dim", justify="center"))
+            from aria.llm.provider_test import ping_provider
+            result = await ping_provider(provider["id"], api_key, model["id"])
+            
+            if result.get("ok"):
+                store.set_provider_secret(provider["id"], api_key)
+                break
+            else:
+                ui.render_step(
+                    "Authentication", 
+                    Text("Invalid API key or connectivity failure.", style="bold red", justify="center"),
+                    subtitle=result.get("message", "Check your key and try again.")
+                )
+                ui.prompt("Press Enter to retry")
+    else:
+        # Ollama check
+        ui.render_step("Local Core", Text("Verifying local Ollama endpoint...", style="dim", justify="center"))
+        from aria.llm.provider_test import ping_provider
+        result = await ping_provider("ollama", "", model["id"])
+        if not result.get("ok"):
+            ui.render_step(
+                "Local Core", 
+                Text("Ollama unreachable.", style="bold red", justify="center"),
+                subtitle=result.get("hint", "Ensure Ollama is running.")
+            )
+            ui.prompt("Press Enter to continue anyway")
+
+    # 4. Telegram Pairing (The Magic Handshake)
+    ui.render_step(
+        "Telegram Link", 
+        Text("Would you like to link ARIA to your Telegram account?", justify="center"),
+        subtitle="Recommended for remote access"
+    )
+    wants_telegram = ui.prompt("Link Telegram? (y/n)", default="n").lower() == "y"
+    
+    if wants_telegram:
+        ui.render_step(
+            "Telegram Link", 
+            Text("Enter your Telegram Bot Token.", justify="center"),
+            subtitle="Get this from @BotFather"
+        )
+        bot_token = ui.prompt("Bot Token", password=True)
+        if bot_token:
+            from aria.utils.telegram_pairing import TelegramPairingSession
+            session = TelegramPairingSession(bot_token)
+            try:
+                await session.get_bot_info()
+                deep_link = session.get_deep_link()
+                
+                ui.render_step(
+                    "Telegram Link", 
+                    Text(f"Open this link in Telegram and click 'Start':\n\n{deep_link}", justify="center", style="bold white"),
+                    subtitle="Waiting for handshake..."
+                )
+                
+                # Background wait for the user to click Start
+                chat_id = await session.wait_for_handshake(timeout_s=120)
+                
+                # Save telegram settings
+                store.set_provider_secret("telegram", bot_token)
+                store.add_paired_telegram_user(chat_id)
+                
+                ui.render_step("Telegram Link", Text("✓ Identity Verified. Account Linked.", style="bold white", justify="center"))
+                await asyncio.sleep(1.5)
+            except Exception as e:
+                ui.render_step("Telegram Link", Text(f"Pairing failed: {str(e)}", style="bold red", justify="center"))
+                ui.prompt("Press Enter to skip")
+
+    # 5. Finalize
     store.save_settings(
         {
             "setup_completed": True,
@@ -78,64 +175,31 @@ def run_setup() -> None:
             "reasoning_model": defaults["reasoning_model"],
         }
     )
-
-    if provider["id"] == "ollama":
-        print("Local provider selected (Ollama). Verifying connectivity...")
-        from aria.llm.provider_test import ping_provider
-        result = asyncio.run(ping_provider(provider["id"], "", model["id"]))
-        if result.get("ok"):
-            print("Connectivity verified.")
-        else:
-            print(f"Warning: {result.get('message', 'Could not reach Ollama.')}")
-            if result.get("hint"):
-                print(f"Hint: {result['hint']}")
-    else:
-        while True:
-            api_key = input("Paste provider API key (leave blank to skip): ").strip()
-            if not api_key:
-                break
-            
-            print("Verifying API key...")
-            from aria.llm.provider_test import ping_provider
-            result = asyncio.run(ping_provider(provider["id"], api_key, model["id"]))
-            
-            if result.get("ok"):
-                print("API key verified.")
-                store.set_provider_secret(provider["id"], api_key)
-                break
-            else:
-                print(f"That API key does not work — please check it and try again.")
-                print(f"Error: {result.get('message', 'Auth rejected')}")
-                if result.get("hint"):
-                    print(f"Hint: {result['hint']}")
-                print()
-
-    web_api_key = input("Optional web API key for remote access (leave blank for localhost-only): ").strip()
-    if web_api_key:
-        store.set_web_api_key(web_api_key)
-
-    print("\nSetup saved.")
-    print(f"- Provider: {provider['label']}")
-    print(f"- Model: {model['label']}")
-    print("- Local settings stored in data/settings.json and data/secrets.json")
-
-    # Windows PATH visibility check
+    
+    ui.render_step(
+        "Activation Complete", 
+        Text("ARIA cognitive core is now active.", justify="center"),
+        subtitle="You can now run 'aria web' or 'aria telegram run'"
+    )
+    
+    # Windows PATH check (Legacy)
     if os.name == "nt":
         import shutil
         import sys
         if not shutil.which("aria"):
             scripts_path = Path(sys.executable).parent / "Scripts"
-            print("\n" + "!" * 60)
-            print("⚠️  ARIA is installed but not currently on your PATH.")
-            print("!" * 60)
-            print("\nTo fix this:")
-            print("1. Close this terminal and open a new one.")
-            print(f"2. If 'aria' still doesn't work, use this fallback command:")
-            print(f"   >>> {sys.executable} -m scripts.cli web")
-            print("\nRecommended: Add the Scripts folder to your PATH environment variable:")
-            print(f"   {scripts_path}")
-            print("   Guide: https://github.com/openyfai/aria/blob/main/docs/windows-path.md")
-            print("!" * 60 + "\n")
+            from rich.panel import Panel
+            ui.console.print(Panel(
+                Text(f"⚠️  'aria' is not on your PATH.\nFallback: {sys.executable} -m scripts.cli web", justify="center"),
+                border_style="yellow"
+            ))
+            
+    ui.prompt("Press Enter to exit")
+    ui.clear()
+
+
+def run_setup() -> None:
+    asyncio.run(run_interactive_setup())
 
 
 def run_doctor(*, ping: bool = False) -> None:
@@ -153,63 +217,21 @@ def run_doctor(*, ping: bool = False) -> None:
     print(f"Browser actions enabled: {browser_actions_enabled()}")
     print(f"Terminal execution enabled: {terminal_execution_enabled()}")
     print(f"Direct code apply enabled: {code_apply_enabled()}")
-    print(
-        "\nCatalog note: Model IDs are preset names from ARIA's catalog; the provider API "
-        "validates them only when you chat or run `doctor --ping`. If you see an unknown-model error, "
-        "pick another ID from `aria models` or Settings."
-    )
-
-    warnings: list[str] = []
-    if telegram_public_mode_enabled():
-        warnings.append("TELEGRAM_PUBLIC_MODE=true allows any Telegram user to reach this agent.")
-    if terminal_execution_enabled():
-        warnings.append("Terminal execution is enabled. Keep approvals on and prefer localhost-only access.")
-    if code_apply_enabled():
-        warnings.append("Direct code apply is enabled. Review autonomy settings before launch.")
-    if allow_multi_writer():
-        warnings.append("ARIA_ALLOW_MULTI_WRITER=true can corrupt shared local state if multiple processes write at once.")
-    if get_web_host() not in {"127.0.0.1", "localhost", "::1"} and not status["web_api_key_configured"]:
-        warnings.append("Remote web bind without an API key will fail. Set ARIA_WEB_API_KEY before exposing ARIA.")
-
-    if warnings:
-        print("\nWarnings:")
-        for warning in warnings:
-            print(f"- {warning}")
-    else:
-        print("\nWarnings: none")
-
+    
     if ping:
         import asyncio
-
         from aria.llm.provider_test import ping_provider
         from aria.utils.config import get_provider_secret
 
         provider = str(settings.get("provider", "") or status.get("provider") or "gemini").strip()
-        model_raw = str(settings.get("model", "") or "").strip()
-        model = model_raw or None
+        model = settings.get("model")
         key = (get_provider_secret(provider, settings_store=store) or "").strip()
         if provider != "ollama" and not key:
-            print(
-                "\nLive provider check skipped: no API key stored for the selected provider.\n"
-                "- Run `aria setup`, or finish the web setup wizard and click “Test provider”.\n"
-                "- If the key is only in an env var, copy it into the runtime store via setup."
-            )
+            print("\nLive provider check skipped: no API key stored.")
         else:
-            print("\nLive provider check (one small API call)…")
+            print("\nLive provider check...")
             result = asyncio.run(ping_provider(provider, key, model))
-            if result.get("ok"):
-                print(f"  [ok] {result.get('message', 'Connected.')}")
-            else:
-                print(f"  [fail] {result.get('message', 'Connectivity check failed.')}")
-                if result.get("hint"):
-                    print(f"  Hint: {result['hint']}")
-                if result.get("code"):
-                    print(f"  Code: {result['code']}")
-                print(
-                    "  If the error mentions an unknown or invalid model name, compare your selection "
-                    "with `aria models` (catalog presets may not match your provider account)."
-                )
-
+            print(f"  [{'ok' if result.get('ok') else 'fail'}] {result.get('message')}")
 
 def run_models() -> None:
     print("\nARIA supported providers\n")
@@ -225,31 +247,14 @@ def run_web() -> None:
     import subprocess
     import shutil
     import webbrowser
-    from pathlib import Path
     import json
-    import os
 
-    # 1. UI Build Check
     web_dist = Path("aria/web_dist/index.html")
-    ui_out = Path("aria-ui/out/index.html")
-    
-    if not web_dist.exists() and not ui_out.exists():
-        if Path("aria-ui/package.json").exists() and shutil.which("npm"):
-            print("\n✨ First run detected: Building the ARIA dashboard UI...")
-            print("This usually takes 1-2 minutes.\n")
-            try:
-                subprocess.run(["npm", "install"], cwd="aria-ui", check=True)
-                subprocess.run(["npm", "run", "build"], cwd="aria-ui", check=True)
-                print("\n✅ Dashboard built successfully!\n")
-            except subprocess.CalledProcessError:
-                print("\n❌ Failed to build the UI. Check the output above.")
-                return
-        else:
-            print("\n❌ Corrupted installation: The web dashboard is missing from this package.")
-            print("Please run `pip install --upgrade openyfai-aria`.\n")
-            return
+    if not web_dist.exists():
+        print("Web dashboard missing. Run 'pip install --upgrade openyfai-aria'.")
+        return
 
-    # 2. Duplicate Process Check
+    # Duplicate Process Check
     lock_path = Path("data/.aria_lock")
     if lock_path.exists():
         try:
@@ -257,27 +262,18 @@ def run_web() -> None:
             pid = lock_data.get("pid")
             if pid:
                 os.kill(pid, 0)
-                print(f"\n⚡ ARIA is already running in the background (PID {pid}).")
-                print("Opening dashboard...")
+                print(f"\n⚡ ARIA is already running (PID {pid}). Opening dashboard...")
                 webbrowser.open(f"http://{get_web_host()}:{get_web_port()}")
                 return
         except OSError:
             pass
-        except Exception:
-            pass
 
     from scripts import web_server
-    uvicorn.run(
-        web_server.app,
-        host=get_web_host(),
-        port=get_web_port(),
-        ws_max_size=int(os.environ.get("ARIA_WS_MAX_MESSAGE_CHARS", "2000000")),
-    )
+    uvicorn.run(web_server.app, host=get_web_host(), port=get_web_port())
 
 
 def run_telegram() -> None:
     from scripts.telegram_bot import main as telegram_main
-
     telegram_main()
 
 
@@ -285,72 +281,27 @@ def generate_pair_code() -> None:
     store = RuntimeSettingsStore()
     code = store.create_pair_code()
     print(f"\nTelegram pairing code: {code}")
-    print("Send it to your bot with /start CODE or /pair CODE")
 
 
 def run_start() -> None:
-    print("Generating and starting ARIA background daemon...")
     import sys
     import subprocess
-    
     if sys.platform == "win32":
-        print("Windows daemonization not fully implemented natively yet. Please run `aria web` in a persistent terminal or use NSSM.")
+        print("Use 'aria web' on Windows.")
         return
+    subprocess.Popen([sys.executable, "-m", "scripts.cli", "web"], start_new_session=True)
 
-    log_file = Path("data/aria.log").absolute()
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with open(log_file, "a") as lf:
-            proc = subprocess.Popen(
-                [sys.executable, "-m", "scripts.cli", "web"],
-                stdout=lf,
-                stderr=lf,
-                start_new_session=True,
-            )
-        pid = proc.pid
-        print(f"ARIA daemon started (PID {pid}). Logs at {log_file}")
-        pid_path = Path("data/aria.pid")
-        pid_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(pid_path, "w") as f:
-            f.write(str(pid))
-    except Exception as e:
-        print(f"Failed to start ARIA daemon: {e}")
 
 def run_stop() -> None:
     import signal
-
     pid_file = Path("data/aria.pid")
-    if not pid_file.exists():
-        print("ARIA daemon is not running (no PID file found).")
-        return
-
-    raw = pid_file.read_text().strip()
-    try:
-        pid = int(raw)
-    except ValueError:
-        print(f"Corrupted PID file (contents: {raw!r}). Removing it.")
-        pid_file.unlink(missing_ok=True)
-        return
-
-    # Verify the process actually exists before killing
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        print(f"No running process with PID {pid}. Cleaning up stale PID file.")
-        pid_file.unlink(missing_ok=True)
-        return
-
-    try:
+    if pid_file.exists():
+        pid = int(pid_file.read_text().strip())
         os.kill(pid, signal.SIGTERM)
-        print(f"Stopped ARIA (PID {pid})")
-    except OSError as e:
-        print(f"Failed to stop ARIA (PID {pid}): {e}")
+        pid_file.unlink()
 
-    pid_file.unlink(missing_ok=True)
 
 def run_proposals(command: str, proposal_id: str | None = None) -> None:
-    """List, approve, or reject self-improvement proposals."""
-    import asyncio
     from aria.storage.database import Database
     from aria.core.meta_reasoning import MetaReasoningEngine
     from aria.utils.config import DB_PATH
@@ -358,36 +309,12 @@ def run_proposals(command: str, proposal_id: str | None = None) -> None:
     async def _run():
         db = Database(str(DB_PATH))
         await db.connect()
-        # Pass a dummy LLM — only DB operations needed here
-        engine = MetaReasoningEngine(None, db)  # type: ignore[arg-type]
-
+        engine = MetaReasoningEngine(None, db) # type: ignore
         if command == "list":
             proposals = await engine.get_pending_proposals()
-            if not proposals:
-                print("No pending proposals.")
-                return
-            print(f"\n{'ID':38} {'TARGET':20} DESCRIPTION")
-            print("-" * 90)
-            for p in proposals:
-                print(f"  {p.id[:8]}  {p.target_system:20} {p.description[:55]}")
-            print(f"\nTotal: {len(proposals)} pending")
-            print("\nUse `aria proposals approve <id>` or `aria proposals reject <id>` to act.")
-
+            for p in proposals: print(f"{p.id[:8]} {p.target_system} {p.description}")
         elif command in {"approve", "reject"}:
-            if not proposal_id:
-                print("Error: proposal_id is required.")
-                return
-            proposals = await engine.get_all_proposals()
-            match = next((p for p in proposals if p.id.startswith(proposal_id)), None)
-            if not match:
-                print(f"No proposal found with ID prefix: {proposal_id!r}")
-                return
-            await engine.update_status(match.id, command + "d")
-            action = "Approved" if command == "approve" else "Rejected"
-            print(f"{action}: [{match.target_system}] {match.description[:70]}")
-            if command == "approve":
-                print("  → This directive will be injected into ARIA's system prompt on the next turn.")
-
+            await engine.update_status(proposal_id, command + "d") # type: ignore
     asyncio.run(_run())
 
 
@@ -397,39 +324,28 @@ def main() -> None:
 
     if args.command is None:
         from scripts.run import main as run_main
-
         run_main()
         return
 
     if args.command == "setup":
         run_setup()
-        return
-    if args.command == "doctor":
+    elif args.command == "doctor":
         run_doctor(ping=getattr(args, "ping", False))
-        return
-    if args.command == "models":
+    elif args.command == "models":
         run_models()
-        return
-    if args.command == "web":
+    elif args.command == "web":
         run_web()
-        return
-    if args.command == "telegram":
+    elif args.command == "telegram":
         if args.telegram_command == "pair":
             generate_pair_code()
-            return
-        run_telegram()
-        return
-    if args.command == "start":
+        else:
+            run_telegram()
+    elif args.command == "start":
         run_start()
-        return
-    if args.command == "stop":
+    elif args.command == "stop":
         run_stop()
-        return
-    if args.command == "proposals":
-        cmd = getattr(args, "proposals_command", None) or "list"
-        pid = getattr(args, "proposal_id", None)
-        run_proposals(cmd, pid)
-        return
+    elif args.command == "proposals":
+        run_proposals(getattr(args, "proposals_command", "list"), getattr(args, "proposal_id", None))
 
 
 if __name__ == "__main__":

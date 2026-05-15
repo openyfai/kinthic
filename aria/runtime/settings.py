@@ -253,6 +253,21 @@ class RuntimeSettingsStore:
         self.save_settings(settings)
         return True
 
+    def add_paired_telegram_user(self, user_id: int, username: str | None = None) -> None:
+        """Directly add a user to the paired users list (used by magic handshake)."""
+        settings = self.load_settings()
+        telegram = settings.setdefault("telegram", {})
+        paired_users = telegram.setdefault("paired_users", [])
+        now = _now()
+        
+        if not any(int(user.get("user_id", 0)) == int(user_id) for user in paired_users):
+            paired_users.append({
+                "user_id": int(user_id),
+                "username": username or "",
+                "paired_at": now,
+            })
+            self.save_settings(settings)
+
     def revoke_telegram_user(self, user_id: int) -> None:
         settings = self.load_settings()
         telegram = settings.setdefault("telegram", {})
