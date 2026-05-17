@@ -161,4 +161,4 @@ Apache-2.0. See [`LICENSE`](LICENSE).
 
 ---
 
-*OpenYF AI — building toward general intelligence, in public.*
+*OpenYF AI — building intelligent systems, in public.*
