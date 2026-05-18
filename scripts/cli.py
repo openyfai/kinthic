@@ -41,6 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("start", help="Start ARIA daemon in the background")
     subparsers.add_parser("stop", help="Stop the ARIA background daemon")
+    subparsers.add_parser("daemon", help="Run the V3 Watchdog Supervisor (Foreground)")
 
     proposals_parser = subparsers.add_parser("proposals", help="Manage self-improvement proposals")
     proposals_sub = proposals_parser.add_subparsers(dest="proposals_command")
@@ -404,6 +405,9 @@ def main() -> None:
         run_stop()
     elif args.command == "proposals":
         run_proposals(getattr(args, "proposals_command", "list"), getattr(args, "proposal_id", None))
+    elif args.command == "daemon":
+        from scripts.daemon import main as daemon_main
+        daemon_main()
 
 
 if __name__ == "__main__":
