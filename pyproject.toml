@@ -3,7 +3,7 @@ name = "openyfai-vyn"
 version = "1.2.1"
 description = "VYN — local-first AI operator powered by the ARIA memory engine (OpenYF AI)."
 readme = "README.md"
-license = "Apache-2.0"
+license = {text = "AGPL-3.0-or-later"}
 requires-python = ">=3.11"
 authors = [
     { name = "Youel" },
@@ -15,6 +15,7 @@ keywords = ["ai-agent", "local-first", "knowledge-graph", "llm", "autonomy", "te
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",

@@ -9,7 +9,7 @@ Not a chatbot. A cognitive agent with persistent memory, a world model, tool use
 **Powered by ARIA** — the internal memory engine that manages VYN's knowledge graph, causal world model, and long-term memory.
 
 [![PyPI](https://img.shields.io/pypi/v/openyfai-vyn)](https://pypi.org/project/openyfai-vyn/)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-green)](https://python.org)
 
 ---
@@ -171,7 +171,9 @@ Your existing data in `~/.vyn/` (or your old `data/` folder) will be detected an
 
 ## License
 
-Apache-2.0. See [`LICENSE`](LICENSE).
+AGPL-3.0. See [`LICENSE`](LICENSE).
+
+VYN is licensed under the AGPL-3.0 License. This ensures the project remains truly open-source and prevents proprietary network-based exploitation.
 
 ---
 
