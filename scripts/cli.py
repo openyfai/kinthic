@@ -306,15 +306,16 @@ def run_web() -> None:
     import webbrowser
     import json
     import aria
+    from aria.utils.config import VYN_HOME
 
     package_dir = Path(aria.__file__).parent
     web_dist = package_dir / "web_dist" / "index.html"
     if not web_dist.exists():
-        print("Web dashboard missing. Run 'pip install --upgrade openyfai-aria'.")
+        print("Web dashboard missing. Run 'pip install --upgrade openyfai-vyn'.")
         return
 
     # Duplicate Process Check
-    lock_path = Path("data/.aria_lock")
+    lock_path = VYN_HOME / "web.lock"
     if lock_path.exists():
         try:
             lock_data = json.loads(lock_path.read_text(encoding="utf-8").strip())
@@ -346,7 +347,7 @@ def run_start() -> None:
     import sys
     import subprocess
     if sys.platform == "win32":
-        print("Use 'aria web' on Windows.")
+        print("Use 'vyn web' on Windows.")
         return
     subprocess.Popen([sys.executable, "-m", "scripts.cli", "web"], start_new_session=True)
 
@@ -355,8 +356,25 @@ def run_stop() -> None:
     import signal
     pid_file = Path("data/aria.pid")
     if pid_file.exists():
-        pid = int(pid_file.read_text().strip())
-        os.kill(pid, signal.SIGTERM)
+        try:
+            pid = int(pid_file.read_text().strip())
+        except ValueError:
+            print("Corrupted PID file.")
+            return
+
+        try:
+            # existence check
+            os.kill(pid, 0)
+        except OSError:
+            print("No running process. Cleaning up stale PID file.")
+            pid_file.unlink()
+            return
+
+        try:
+            os.kill(pid, signal.SIGTERM)
+            print(f"Stopped VYN (PID {pid}).")
+        except OSError as e:
+            print(f"Failed to stop VYN: {e}")
         pid_file.unlink()
 
 

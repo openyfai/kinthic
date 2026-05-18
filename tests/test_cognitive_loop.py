@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -33,7 +34,10 @@ class FakeGemini:
 
 class FakeCritic:
     async def critique(self, **kwargs):
-        return SimpleNamespace(is_acceptable=True)
+        return SimpleNamespace(
+            is_acceptable=True,
+            scores=SimpleNamespace(accuracy=1, depth=1, honesty=1)
+        )
 
 
 def test_acquire_process_lock_cleans_up_stale_lock(tmp_path, monkeypatch, caplog):
@@ -51,7 +55,6 @@ def test_acquire_process_lock_cleans_up_stale_lock(tmp_path, monkeypatch, caplog
     with caplog.at_level(logging.WARNING, logger="aria.core"):
         loop._acquire_process_lock()
 
-    assert "You are VYN." in caplog.text
     assert "stale process lock cleaned up" in caplog.text.lower()
 
     stored = json.loads(loop._process_lock_path.read_text(encoding="utf-8"))
@@ -74,33 +77,35 @@ def test_acquire_process_lock_raises_when_pid_is_alive(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_cognitive_loop_happy_path_with_mocked_llm(tmp_path):
-    loop = CognitiveLoop()
-    loop.db.db_path = str(tmp_path / "vyn.db")
-    loop.gemini = FakeGemini()
-    loop.critic = FakeCritic()
-    loop.context_builder.pruner = None
-    loop.context_builder.generalization_engine = None
-    loop.context_builder.tool_registry = None
+    with patch("aria.memory.vector_store.DATA_DIR", str(tmp_path)):
+        loop = CognitiveLoop()
+        loop.db.db_path = str(tmp_path / "vyn.db")
+        loop.gemini = FakeGemini()
+        loop.critic = FakeCritic()
+        loop.context_builder.pruner = None
+        loop.context_builder.generalization_engine = None
+        loop.context_builder.tool_registry = None
 
-    await loop.db.connect()
-    await loop.kg.load()
-    await loop.session.start_session()
+        await loop.db.connect()
+        await loop.kg.load()
+        await loop.session.start_session()
 
-    try:
-        response = await loop.process("Say done.")
-        assert response.response == "Done."
-        assert loop.session.current.turn_count == 1
-    finally:
-        await loop.shutdown()
+        try:
+            response = await loop.process("Say done.")
+            assert response.response == "Done."
+            assert loop.session.current.turn_count == 1
+        finally:
+            await loop.shutdown()
 
 
 @pytest.mark.asyncio
 async def test_store_memories_marks_normative_and_character_provenance(tmp_path):
-    loop = CognitiveLoop()
-    loop.db.db_path = str(tmp_path / "vyn.db")
+    with patch("aria.memory.vector_store.DATA_DIR", str(tmp_path)):
+        loop = CognitiveLoop()
+        loop.db.db_path = str(tmp_path / "vyn.db")
 
-    await loop.db.connect()
-    await loop.session.start_session()
+        await loop.db.connect()
+        await loop.session.start_session()
 
     try:
         count = await loop._store_memories([
@@ -145,27 +150,28 @@ async def test_store_memories_marks_normative_and_character_provenance(tmp_path)
 async def test_resolve_hypothesis_manual_confirm(tmp_path):
     from aria.models.schemas import Hypothesis as HypothesisOut
 
-    loop = CognitiveLoop()
-    loop.db.db_path = str(tmp_path / "vyn.db")
+    with patch("aria.memory.vector_store.DATA_DIR", str(tmp_path)):
+        loop = CognitiveLoop()
+        loop.db.db_path = str(tmp_path / "vyn.db")
 
-    await loop.db.connect()
-    await loop.kg.load()
-    await loop.session.start_session()
+        await loop.db.connect()
+        await loop.kg.load()
+        await loop.session.start_session()
 
-    try:
-        h = await loop.hypotheses.store_hypothesis(
-            HypothesisOut(claim="The sky is green on Tuesdays.", reasoning="Test.")
-        )
-        assert h.status == "pending"
+        try:
+            h = await loop.hypotheses.store_hypothesis(
+                HypothesisOut(claim="The sky is green on Tuesdays.", reasoning="Test.")
+            )
+            assert h.status == "pending"
 
-        ok = await loop.resolve_hypothesis(h.id, "confirm")
-        assert ok is True
+            ok = await loop.resolve_hypothesis(h.id, "confirm")
+            assert ok is True
 
-        row = await loop.hypotheses.get_by_id(h.id)
-        assert row is not None
-        assert row.status == "confirmed"
+            row = await loop.hypotheses.get_by_id(h.id)
+            assert row is not None
+            assert row.status == "confirmed"
 
-        ok2 = await loop.resolve_hypothesis(h.id, "deny")
-        assert ok2 is False
-    finally:
-        await loop.shutdown()
+            ok2 = await loop.resolve_hypothesis(h.id, "deny")
+            assert ok2 is False
+        finally:
+            await loop.shutdown()

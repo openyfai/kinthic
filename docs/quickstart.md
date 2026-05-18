@@ -1,4 +1,4 @@
-# ARIA quick start
+# VYN quick start
 
 This guide expands on the [README](../README.md) with concrete commands and optional paths.
 
@@ -7,13 +7,13 @@ This guide expands on the [README](../README.md) with concrete commands and opti
 You need **Python 3.11+** (latest stable 3.x is fine). For a normal **PyPI** install you do **not** need Node; the published wheel includes a pre-built dashboard from the release pipeline.
 
 ```bash
-pip install openyfai-aria
+pip install openyfai-vyn
 ```
 
 **Browser onboarding:**
 
 ```bash
-aria web
+vyn web
 ```
 
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000), complete provider, model, API keys, and safety toggles in the UI.
@@ -21,12 +21,12 @@ Open [http://127.0.0.1:8000](http://127.0.0.1:8000), complete provider, model, A
 **Or terminal-only setup first:**
 
 ```bash
-aria setup
+vyn setup
 ```
 
-Then run **`aria web`** or the terminal agent with **`aria`**.
+Then run **`vyn web`** or the terminal agent with **`vyn`**.
 
-**Finish setup entirely in the browser** if you use `aria web` first: you do **not** need `aria setup` unless you prefer the CLI wizard.
+**Finish setup entirely in the browser** if you use `vyn web` first: you do **not** need `vyn setup` unless you prefer the CLI wizard.
 
 Try a first prompt such as: *Analyze this repo and build a knowledge graph of the architecture.*
 
@@ -39,11 +39,11 @@ Demo scripts: [`scripts/demo.py`](../scripts/demo.py), recording outline: [`docs
 If you are **contributing** or running from a **git clone**, use an editable install and (when you change the frontend) rebuild `aria-ui`:
 
 ```bash
-git clone https://github.com/openyfai/aria.git
-cd aria
+git clone https://github.com/openyfai/vyn.git
+cd vyn
 pip install -e ".[dev]"
 cd aria-ui && npm install && npm run build && cd ..
-aria web
+vyn web
 ```
 
 PyPI releases run CI that copies **`aria-ui/out`** into **`aria/web_dist/`** before building the wheel. To mirror that locally before `python -m build`, see [`CONTRIBUTING.md`](../CONTRIBUTING.md).
@@ -52,20 +52,20 @@ PyPI releases run CI that copies **`aria-ui/out`** into **`aria/web_dist/`** bef
 
 ## One-line mental model
 
-1. Run **`aria web`** (or **`aria setup`** then **`aria web`**)
+1. Run **`vyn web`** (or **`vyn setup`** then **`vyn web`**)
 2. Complete **setup**
 3. Use **Chat** (and **Graph**, **Operator**, **Settings** when you want more)
 
-Optional later: **Telegram** from **Operator** (pairing code), Docker for a server, or **`aria doctor --ping`** if the model connection fails.
+Optional later: **Telegram** from **Operator** (pairing code), Docker for a server, or **`vyn doctor --ping`** if the model connection fails.
 
 ---
 
 ## Terminal agent (no web)
 
-After install and `aria setup` (or after web setup wrote `data/`):
+After install and `vyn setup` (or after web setup wrote data to `~/.vyn/`):
 
 ```bash
-aria
+vyn
 ```
 
 ---
@@ -95,11 +95,11 @@ Use these **after** the basics work, or when something breaks.
 
 | Command | Purpose |
 |--------|---------|
-| `aria doctor` | Local settings and security summary |
-| `aria doctor --ping` | Live check that the configured provider responds |
-| `aria models` | List providers and model ids |
-| `aria telegram pair` | Create a Telegram pairing code (then `/start CODE` with your bot) |
-| `aria telegram run` | Run the Telegram bot (separate process) |
+| `vyn doctor` | Local settings and security summary |
+| `vyn doctor --ping` | Live check that the configured provider responds |
+| `vyn models` | List providers and model ids |
+| `vyn telegram pair` | Create a Telegram pairing code (then `/start CODE` with your bot) |
+| `vyn telegram run` | Run the Telegram bot (separate process) |
 | `python -m build` | Smoke-test the Python package build |
 
 ---
@@ -114,13 +114,13 @@ Use these **after** the basics work, or when something breaks.
 
 ## Identity & Tone
 
-You can customize how ARIA speaks to you. 
+You can customize how VYN speaks to you. 
 Open the **Settings** view in the web UI to change the **Assistant name** or define a custom **Persona** (e.g. "Speak like a senior research engineer: high signal-to-noise ratio, zero fluff"). This overrides the default helpful tone but retains all cognitive and safety guardrails.
 
 ---
 
 ## Where to read next
 
-- [`SECURITY.md`](../SECURITY.md) — before exposing ARIA beyond localhost  
+- [`SECURITY.md`](../SECURITY.md) — before exposing VYN beyond localhost  
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) — develop, test, and release  
 - [`skills/README.md`](../skills/README.md) — Markdown skills

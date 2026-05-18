@@ -47,7 +47,7 @@ class WorkspaceIndexer:
         if not getattr(self.vector_store, "is_active", False):
             log.info(
                 "Skipping workspace indexing: vector store inactive "
-                "(install ChromaDB / openyfai-aria[vector])."
+                "(install ChromaDB / openyfai-vyn[vector])."
             )
             return
         log.info(f"Starting workspace indexing for: {self.root_dir}")

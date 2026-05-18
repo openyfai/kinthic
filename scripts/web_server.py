@@ -593,8 +593,8 @@ _MISSING_UI_HTML = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"/><title>VYN — Dashboard assets missing</title></head>
 <body style="font-family:system-ui,sans-serif;max-width:42rem;margin:2rem auto;line-height:1.5;">
 <h1>VYN API is running</h1>
-<p>Official <code>pip install openyfai-aria</code> wheels should include the dashboard. If you installed from PyPI and see this page, try upgrading the package or file an issue.</p>
-<p><strong>Developers</strong> (git clone): build the Next.js app so <code>aria-ui/out/index.html</code> exists, then restart <code>aria web</code>:</p>
+<p>Official <code>pip install openyfai-vyn</code> wheels should include the dashboard. If you installed from PyPI and see this page, try upgrading the package or file an issue.</p>
+<p><strong>Developers</strong> (git clone): build the Next.js app so <code>aria-ui/out/index.html</code> exists, then restart <code>vyn web</code>:</p>
 <pre style="background:#f4f4f5;padding:1rem;">cd aria-ui &amp;&amp; npm install &amp;&amp; npm run build</pre>
 <p><strong>Maintainers</strong> publishing wheels: run the release workflow (or copy <code>aria-ui/out</code> into <code>aria/web_dist/</code>) before <code>python -m build</code>. See CONTRIBUTING.md.</p>
 <p>REST and WebSocket APIs under <code>/api/*</code> and <code>/ws/chat</code> remain available.</p>

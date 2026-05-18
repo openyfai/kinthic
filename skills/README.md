@@ -1,8 +1,8 @@
-# ARIA Skills
+# VYN Skills
 
-Skills are the fastest way to contribute to ARIA.
+Skills are the fastest way to extend VYN's capabilities.
 
-Drop a Markdown file into `skills/`, restart ARIA, and the agent can use that workflow guidance during reasoning.
+Drop a Markdown file into `~/.vyn/skills/`, restart VYN, and the agent can use that workflow guidance during reasoning.
 
 This **`README.md` is contributor documentation only**—the loader skips files whose stem is `README`, so this page is never injected into the agent prompt as a skill.
 
@@ -36,8 +36,8 @@ When asked to research a repository:
 
 ## Submit your first skill in 5 minutes
 
-1. Copy one of the existing skills in `skills/`.
+1. Copy one of the existing skills in your skills directory.
 2. Rename it for the workflow you want to add.
 3. Rewrite the title and numbered steps.
-4. Test it locally with `aria` or `aria web`.
+4. Test it locally with `vyn` or `vyn web`.
 5. Open a PR or use the `Skill request` issue template if you want feedback first.

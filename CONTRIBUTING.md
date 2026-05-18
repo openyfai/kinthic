@@ -32,7 +32,7 @@ Published wheels embed the **built** dashboard under `aria/web_dist/`. CI runs o
 
 1. Build `aria-ui` (`npm ci` + `npm run build`).
 2. Copy `aria-ui/out/*` into `aria/web_dist/` (keeping tracked `__init__.py`).
-3. Run `python -m build` and upload with **PyPI Trusted Publishing** (configure the GitHub repo as a trusted publisher for project `openyfai-aria` in PyPI settings).
+3. Run `python -m build` and upload with **PyPI Trusted Publishing** (configure the GitHub repo as a trusted publisher for project `openyfai-vyn` in PyPI settings).
 
 **Manual wheel (optional):** after a local `aria-ui` build:
 
@@ -51,7 +51,7 @@ Use this before merging onboarding, packaging, or release changes:
 
 1. Start from a fresh checkout on Python `3.11+`.
 2. Run `pip install -e ".[dev]"`.
-3. Confirm `aria models`, `aria doctor`, `aria setup`, and `aria web` work.
+3. Confirm `vyn models`, `vyn doctor`, `vyn setup`, and `vyn web` work.
 4. Run the web UI once with a new browser profile or cleared local storage.
 5. If Docker behavior changed, verify `docker compose --profile web up --build`.
 6. Confirm secrets stay write-only in API responses and UI state.

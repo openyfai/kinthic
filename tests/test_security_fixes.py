@@ -267,7 +267,7 @@ class TestDockerAsyncBlocking:
         mock_client.containers.run.return_value = mock_container
         tool.client = mock_client
 
-        with patch("aria.utils.config.terminal_execution_enabled", return_value=True):
+        with patch("aria.tools.system.terminal_execution_enabled", return_value=True):
             # Run the tool — if it blocks, this would freeze.
             # We add a timeout to prove it completes without blocking.
             result = await asyncio.wait_for(
