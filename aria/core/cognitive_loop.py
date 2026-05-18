@@ -111,7 +111,13 @@ class CognitiveLoop:
         self.pruner = ContextPruner(self.gemini)
 
         # Phase 5 — Tool Use
-        self.tool_registry = ToolRegistry(vector_store=self.vector_store, db=self.db, session_manager=self.session)
+        self.tool_registry = ToolRegistry(
+            vector_store=self.vector_store,
+            db=self.db,
+            session_manager=self.session,
+            memory_store=self.memory,
+            llm=self.gemini,
+        )
 
         # Phase 6 — Generalization
         self.generalization_engine = GeneralizationEngine(self.gemini, self.db)
@@ -159,6 +165,8 @@ class CognitiveLoop:
 
         # Wire meta_reasoning into context_builder for active directive injection
         self.context_builder.meta_reasoning = self.meta_reasoning
+        # Wire the LLM provider for context window compression (C3)
+        self.context_builder._llm_client = self.gemini
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -470,60 +478,63 @@ class CognitiveLoop:
                 "and I'll try again on the next turn."
             )
 
-        # Step 7: Persist new memories
-        memories_added = await self._store_memories(cognitive.new_memories)
+        # Batch all persistence operations into a single atomic transaction
+        async with self.db.transaction():
+            # Step 7: Persist new memories
+            memories_added = await self._store_memories(cognitive.new_memories)
 
-        # Step 8: Process goal updates
-        goals_changed = await self._process_goals(cognitive.goal_updates)
+            # Step 8: Process goal updates
+            goals_changed = await self._process_goals(cognitive.goal_updates)
 
-        # Step 9: Build knowledge graph from causal observations
-        graph_updates = await self._process_causal_observations(
-            cognitive.causal_observations
-        )
+            # Step 9: Build knowledge graph from causal observations
+            graph_updates = await self._process_causal_observations(
+                cognitive.causal_observations
+            )
 
-        # Step 9.5: Abstract principles from new observations (Phase 6)
-        if graph_updates > 0 and cognitive.causal_observations:
-            try:
-                await self.generalization_engine.abstract_principles(
-                    cognitive.causal_observations
-                )
-            except Exception as e:
-                log.warning(f"Principle extraction failed (non-fatal): {e}")
+            # Step 9.5: Abstract principles from new observations (Phase 6)
+            if graph_updates > 0 and cognitive.causal_observations:
+                try:
+                    await self.generalization_engine.abstract_principles(
+                        cognitive.causal_observations
+                    )
+                except Exception as e:
+                    log.warning(f"Principle extraction failed (non-fatal): {e}")
 
-        # Step 10: Process contradictions
-        await self._process_contradictions(
-            cognitive.contradictions_detected
-        )
+            # Step 10: Process contradictions
+            await self._process_contradictions(
+                cognitive.contradictions_detected
+            )
 
-        # Step 11: Store hypotheses
-        await self._process_hypotheses(cognitive.hypotheses)
+            # Step 11: Store hypotheses
+            await self._process_hypotheses(cognitive.hypotheses)
 
-        # Step 11.25: Resolve hypotheses when the model (or operator path) supplies resolutions
-        await self._process_hypothesis_resolutions(cognitive.hypothesis_resolutions)
+            # Step 11.25: Resolve hypotheses when the model (or operator path) supplies resolutions
+            await self._process_hypothesis_resolutions(cognitive.hypothesis_resolutions)
 
-        # Step 11.4: Record explicit uncertainty topics (Phase 4 — uncertainties table)
-        await self._process_uncertainty_tracking(cognitive.uncertainty_tracking)
+            # Step 11.4: Record explicit uncertainty topics (Phase 4 — uncertainties table)
+            await self._process_uncertainty_tracking(cognitive.uncertainty_tracking)
 
-        # Step 11.5: Process self-improvement proposals (Phase 7 — Safety Locked)
-        if cognitive.improvement_proposals and self.session.current:
-            try:
-                await self.meta_reasoning.process_inline_proposals(
-                    cognitive.improvement_proposals,
-                    self.session.current.id,
-                )
-            except Exception as e:
-                log.warning(f"Proposal processing failed (non-fatal): {e}")
+            # Step 11.5: Process self-improvement proposals (Phase 7 — Safety Locked)
+            if cognitive.improvement_proposals and self.session.current:
+                try:
+                    await self.meta_reasoning.process_inline_proposals(
+                        cognitive.improvement_proposals,
+                        self.session.current.id,
+                    )
+                except Exception as e:
+                    log.warning(f"Proposal processing failed (non-fatal): {e}")
 
-        # Step 12: Record this turn
-        await self.session.record_turn(
-            user_input=user_input,
-            reasoning=cognitive.reasoning,
-            response=cognitive.response,
-            self_reflection=cognitive.self_reflection,
-            confidence=cognitive.confidence,
-            memories_added=memories_added,
-            goals_changed=goals_changed,
-        )
+            # Step 12: Record this turn
+            await self.session.record_turn(
+                user_input=user_input,
+                reasoning=cognitive.reasoning,
+                response=cognitive.response,
+                self_reflection=cognitive.self_reflection,
+                confidence=cognitive.confidence,
+                memories_added=memories_added,
+                goals_changed=goals_changed,
+                scratchpad=getattr(cognitive, "working_scratchpad", None),
+            )
 
         return cognitive
 
@@ -595,6 +606,7 @@ class CognitiveLoop:
             goal_updates=[],
             self_reflection="Failed to reason. Need to investigate the error.",
             confidence=0.0,
+            working_scratchpad=None,
             uncertainty_flags=["internal_error"],
             uncertainty_tracking=[],
             causal_observations=[],
@@ -716,8 +728,9 @@ class CognitiveLoop:
                     "source_kind": source.value,
                 },
             )
-            await self.memory.add(memory)
-            count += 1
+            saved_mem = await self.memory.add(memory)
+            if saved_mem is not None:
+                count += 1
 
         if count > 0:
             log.debug(f"Stored {count} new memories")
@@ -759,6 +772,10 @@ class CognitiveLoop:
                         await self.goals.complete(goal.id, notes=update.notes)
                         count += 1
                         log.info(f"✅ Goal completed: {update.description}")
+                        
+                        # Trigger auto-skill synthesis in the background
+                        if len(update.description) > 10:
+                            asyncio.create_task(self._synthesize_skill(update.description))
                 elif update.action == "abandon":
                     goal = await self.goals.find_by_description(update.description)
                     if goal:
@@ -774,6 +791,62 @@ class CognitiveLoop:
             self._last_goal_transition = now
             log.info(f"Processed {count} goal state transitions")
         return count
+
+    async def _synthesize_skill(self, goal_description: str) -> None:
+        """Background task: synthesize a reusable skill after goal completion."""
+        try:
+            # 1. Get recent session history
+            recent_turns = await self.session.get_recent_turns(limit=20)
+            if not recent_turns:
+                return
+                
+            history_text = ""
+            for t in recent_turns:
+                history_text += f"USER: {t.user_input}\nARIA: {t.response}\n\n"
+
+            # 2. Call LLM
+            prompt = (
+                "You just completed a goal. Synthesize the steps, commands, "
+                "and code you used into a reusable Markdown Skill document. "
+                "Format it as a generic tutorial. Output ONLY the markdown."
+            )
+            
+            provider_settings = get_provider_settings(self.settings_store)
+            response = await self.gemini.think(
+                system_prompt=prompt,
+                user_input=f"Goal Completed: {goal_description}\n\nSession History:\n{history_text}",
+                model_override=provider_settings.get("reasoning_model")
+            )
+            
+            skill_content = response.response.strip()
+            if skill_content.startswith("```md"):
+                skill_content = skill_content[5:]
+            elif skill_content.startswith("```markdown"):
+                skill_content = skill_content[11:]
+            if skill_content.startswith("```"):
+                skill_content = skill_content[3:]
+            if skill_content.endswith("```"):
+                skill_content = skill_content[:-3]
+            skill_content = skill_content.strip()
+            
+            # 3. Save to VYN_SKILLS
+            import hashlib
+            from aria.utils.config import VYN_SKILLS
+            
+            safe_name = hashlib.md5(goal_description.encode()).hexdigest()[:8]
+            skill_path = VYN_SKILLS / f"skill_{safe_name}.md"
+            
+            if not skill_content.startswith("#"):
+                skill_content = f"# Skill: {goal_description}\n\n{skill_content}"
+                
+            skill_path.write_text(skill_content, encoding="utf-8")
+            log.info(f"✨ Auto-Skill Synthesized: {skill_path.name} for goal '{goal_description}'")
+            
+            if hasattr(self, "skill_loader"):
+                self.skill_loader.load_all()
+                
+        except Exception as e:
+            log.error(f"Failed to synthesize auto-skill for '{goal_description}': {e}")
 
     # ------------------------------------------------------------------
     # Phase 2 — World Model Processing
@@ -983,7 +1056,7 @@ class CognitiveLoop:
         tgt = self.kg.find_node_by_content(to_concept)
         if not src or not tgt:
             return None
-        return self.kg.find_causal_chain(src, tgt)
+        return await self.kg.find_causal_chain(src, tgt)
 
     async def get_contradictions(self) -> list[StoredContradiction]:
         return await self.contradictions.get_unresolved()

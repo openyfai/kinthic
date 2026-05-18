@@ -57,6 +57,8 @@ if _workspace_env:
 else:
     WORKSPACE_DIR = VYN_WORKSPACE
 
+VYN_DIRECTIVES_FILE = WORKSPACE_DIR / "vyn_core_directives.md"
+
 _vyn_home_ensured = False
 
 def ensure_vyn_home() -> None:
@@ -82,6 +84,14 @@ def ensure_vyn_home() -> None:
             "Add .md files to this directory to extend VYN with new skills.\n"
             "Each file should describe a workflow or capability.\n"
             "Restart VYN after adding a skill for it to take effect.\n",
+            encoding="utf-8"
+        )
+
+    if not VYN_DIRECTIVES_FILE.exists():
+        VYN_DIRECTIVES_FILE.write_text(
+            "# VYN Core Directives\n\n"
+            "This file contains unbreakable rules and behavioral guidelines. "
+            "Any instructions here override general knowledge and normal operating procedures.\n",
             encoding="utf-8"
         )
 

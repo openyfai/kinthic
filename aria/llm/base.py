@@ -163,6 +163,33 @@ class BaseLLMProvider(ABC):
     ) -> SchemaT:
         raise NotImplementedError
 
+    async def complete_text(
+        self,
+        prompt: str,
+        model_override: str | None = None,
+        temperature: float = 0.3,
+    ) -> str:
+        """
+        Plain-text completion without JSON schema enforcement.
+
+        Default implementation wraps complete_json with a minimal schema.
+        Providers can override this for a more efficient raw call.
+        """
+        from pydantic import BaseModel as _BaseModel
+
+        class _TextResult(_BaseModel):
+            text: str
+
+        result = await self.complete_json(
+            schema=_TextResult,
+            system_prompt="Respond with only the requested content, no commentary.",
+            user_input=prompt,
+            model_override=model_override,
+            temperature=temperature,
+            request_kind="compression",
+        )
+        return result.text
+
     async def think(
         self,
         system_prompt: str,

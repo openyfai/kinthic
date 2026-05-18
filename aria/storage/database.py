@@ -8,6 +8,7 @@ All operations are async via aiosqlite.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 
 import aiosqlite
 
@@ -15,6 +16,8 @@ from aria.utils.config import VYN_DB
 from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.storage")
+
+transaction_depth_var: ContextVar[int] = ContextVar("transaction_depth_var", default=0)
 
 # ---------------------------------------------------------------------------
 # Schema — this IS the database definition
@@ -33,6 +36,8 @@ CREATE TABLE IF NOT EXISTS memories (
     last_accessed TEXT NOT NULL,
     access_count INTEGER NOT NULL DEFAULT 0,
     tags TEXT NOT NULL DEFAULT '[]',
+    level INTEGER NOT NULL DEFAULT 1,
+    child_memory_ids TEXT NOT NULL DEFAULT '[]',
     provenance_json TEXT NOT NULL DEFAULT '{}',
     related_memories TEXT NOT NULL DEFAULT '[]',
     archived_at TEXT
@@ -77,6 +82,7 @@ CREATE TABLE IF NOT EXISTS turns (
     response TEXT NOT NULL,
     self_reflection TEXT NOT NULL,
     confidence REAL NOT NULL,
+    scratchpad TEXT,
     created_at TEXT NOT NULL,
     FOREIGN KEY (session_id) REFERENCES sessions(id)
 );
@@ -358,14 +364,25 @@ CREATE TABLE IF NOT EXISTS plan_steps (
 );
 
 CREATE INDEX IF NOT EXISTS idx_plan_steps_plan ON plan_steps(plan_id, step_number);
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,
+    message TEXT NOT NULL,
+    level TEXT NOT NULL DEFAULT 'info',
+    delivered INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
 """
 
 MIGRATIONS_SQL = [
     "ALTER TABLE memories ADD COLUMN memory_type TEXT NOT NULL DEFAULT 'semantic'",
     "ALTER TABLE memories ADD COLUMN confidence REAL NOT NULL DEFAULT 0.5",
+    "ALTER TABLE memories ADD COLUMN level INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE memories ADD COLUMN child_memory_ids TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE memories ADD COLUMN provenance_json TEXT NOT NULL DEFAULT '{}'",
     "ALTER TABLE memories ADD COLUMN archived_at TEXT",
     "ALTER TABLE action_logs ADD COLUMN risk_level TEXT NOT NULL DEFAULT 'read_only'",
+    "ALTER TABLE turns ADD COLUMN scratchpad TEXT",
     "ALTER TABLE knowledge_nodes ADD COLUMN verification_status TEXT NOT NULL DEFAULT 'unverified'",
     "CREATE TABLE IF NOT EXISTS ethical_decisions (id TEXT PRIMARY KEY, session_id TEXT, turn_number INTEGER NOT NULL DEFAULT 0, tool_name TEXT NOT NULL, principle TEXT NOT NULL, action TEXT NOT NULL, rationale TEXT NOT NULL, risk_level TEXT NOT NULL DEFAULT 'read_only', requires_consent BOOLEAN NOT NULL DEFAULT 0, uncertainty REAL NOT NULL DEFAULT 0.0, context TEXT NOT NULL DEFAULT 'interactive', created_at TEXT NOT NULL, FOREIGN KEY (session_id) REFERENCES sessions(id))",
     # Indexes on columns added by migrations must run after ALTERs (older DBs skip CREATE TABLE).
@@ -378,6 +395,7 @@ MIGRATIONS_SQL = [
     "CREATE TABLE IF NOT EXISTS llm_usage (id TEXT PRIMARY KEY, session_id TEXT, provider TEXT NOT NULL, model TEXT NOT NULL, request_kind TEXT NOT NULL, input_tokens INTEGER, output_tokens INTEGER, estimated_cost_usd REAL, duration_ms INTEGER NOT NULL DEFAULT 0, success BOOLEAN NOT NULL DEFAULT 1, error TEXT, created_at TEXT NOT NULL, FOREIGN KEY (session_id) REFERENCES sessions(id))",
     "CREATE INDEX IF NOT EXISTS idx_llm_usage_created ON llm_usage(created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_llm_usage_provider_model ON llm_usage(provider, model, created_at DESC)",
+    "CREATE TABLE IF NOT EXISTS notifications (id TEXT PRIMARY KEY, message TEXT NOT NULL, level TEXT NOT NULL DEFAULT 'info', delivered INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)",
 ]
 
 
@@ -434,32 +452,32 @@ class Database:
         return self._conn
 
     async def execute(self, sql: str, params: tuple = ()) -> aiosqlite.Cursor:
-        """Execute a single SQL statement with auto-commit."""
+        """Execute a single SQL statement. Auto-commits unless inside a transaction()."""
         cursor = await self.conn.execute(sql, params)
-        await self.conn.commit()
+        if transaction_depth_var.get() == 0:
+            await self.conn.commit()
         return cursor
-
-    async def execute_no_commit(self, sql: str, params: tuple = ()) -> aiosqlite.Cursor:
-        """Execute a single SQL statement WITHOUT committing (for use inside transactions)."""
-        return await self.conn.execute(sql, params)
 
     @asynccontextmanager
     async def transaction(self):
         """
         Atomic transaction context manager.
-
-        Usage:
-            async with db.transaction():
-                await db.execute_no_commit("INSERT ...", (...))
-                await db.execute_no_commit("INSERT ...", (...))
-            # auto-commit on success, auto-rollback on exception
+        Supports nested transactions via ContextVar.
+        Auto-commits when the outermost transaction completes successfully.
+        Auto-rollbacks if any exception bubbles up.
         """
+        depth = transaction_depth_var.get()
+        transaction_depth_var.set(depth + 1)
         try:
             yield
-            await self.conn.commit()
+            if transaction_depth_var.get() == 1:
+                await self.conn.commit()
         except Exception:
-            await self.conn.rollback()
+            if transaction_depth_var.get() == 1:
+                await self.conn.rollback()
             raise
+        finally:
+            transaction_depth_var.set(transaction_depth_var.get() - 1)
 
     async def fetch_one(self, sql: str, params: tuple = ()) -> dict | None:
         """Fetch a single row as a dict."""

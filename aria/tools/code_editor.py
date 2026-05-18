@@ -106,6 +106,8 @@ class CodeEditorTool(BaseTool):
                 current_code = f.read()
                 if target_content not in current_code:
                     return "ERROR: The target_content was not found exactly as written in the file."
+                if current_code.count(target_content) != 1:
+                    return "ERROR: The target_content is ambiguous. It appears multiple times in the file. Please provide a larger, unique block of code to replace."
 
         # Load existing pending edits
         pending_edits = []
@@ -152,7 +154,7 @@ class CodeEditorTool(BaseTool):
         if proposal["target_content"] and full_path.exists():
             with open(full_path, "r", encoding="utf-8") as f:
                 current_code = f.read()
-            new_code = current_code.replace(proposal["target_content"], proposal["replacement_content"])
+            new_code = current_code.replace(proposal["target_content"], proposal["replacement_content"], 1)
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(new_code)
         else:

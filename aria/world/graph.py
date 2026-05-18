@@ -8,6 +8,10 @@ Every piece of knowledge is a node. Relationships are typed edges
 The graph is loaded from SQLite on startup and saved on shutdown.
 All mutations go through SQLite first (source of truth), then update the
 in-memory graph.
+
+Note: NetworkX is kept as the in-memory data structure for node/edge management.
+Graph traversal algorithms (BFS path-finding, component counting) use
+SQLite recursive CTEs directly — faster and without loading the full graph into RAM.
 """
 
 from __future__ import annotations
@@ -240,18 +244,17 @@ class KnowledgeGraph:
         return node
 
     async def find_similar_node(self, content: str, threshold: float = 0.8) -> str | None:
-        """Find an existing node with very similar content using inverted index."""
+        """Find an existing node with very similar content using two-tier cache/DB strategy."""
         content_words = set(content.lower().strip().split())
         if not content_words:
             return None
 
-        # Use inverted index to find candidate nodes (only nodes sharing at least one word)
+        # TIER 1: In-Memory Check
         candidate_ids: set[str] = set()
         for word in content_words:
             if word in self._word_index:
                 candidate_ids.update(self._word_index[word])
 
-        # Score only candidates instead of scanning all nodes
         for node_id in candidate_ids:
             if node_id not in self.graph:
                 continue
@@ -262,6 +265,57 @@ class KnowledgeGraph:
             smaller = min(len(content_words), len(existing_words))
             if smaller > 0 and len(overlap) / smaller >= threshold:
                 return node_id
+
+        # TIER 2: Database Fallback Check
+        # Extract salient words (length > 4, max 5 words to keep query fast)
+        salient_words = sorted([w for w in content_words if len(w) > 4], key=len, reverse=True)[:5]
+        if not salient_words:
+            salient_words = sorted([w for w in content_words if len(w) > 3], key=len, reverse=True)[:3]
+            if not salient_words:
+                return None
+
+        conditions = " OR ".join(["content LIKE ?"] * len(salient_words))
+        params = [f"%{w}%" for w in salient_words]
+        
+        query_sql = f"""
+            SELECT id, content FROM knowledge_nodes
+            WHERE {conditions}
+            LIMIT 50
+        """
+        
+        db_candidates = await self.db.fetch_all(query_sql, tuple(params))
+        for row in db_candidates:
+            if row["id"] in self.graph:
+                continue  # Already checked in Tier 1
+                
+            existing_words = set(row["content"].lower().strip().split())
+            if not existing_words:
+                continue
+                
+            overlap = content_words & existing_words
+            smaller = min(len(content_words), len(existing_words))
+            
+            if smaller > 0 and len(overlap) / smaller >= threshold:
+                # Cache miss hit! Load this node into memory to repair fragmentation
+                full_row = await self.db.fetch_one("SELECT * FROM knowledge_nodes WHERE id = ?", (row["id"],))
+                if full_row:
+                    self.graph.add_node(
+                        full_row["id"],
+                        content=full_row["content"],
+                        node_type=full_row["node_type"],
+                        confidence=full_row["confidence"],
+                        source=full_row["source"],
+                        created_at=full_row["created_at"],
+                        last_validated=full_row["last_validated"],
+                        validation_count=full_row["validation_count"],
+                        contradiction_count=full_row["contradiction_count"],
+                        verification_status=full_row.get("verification_status", "unverified"),
+                        metadata=json.loads(full_row["metadata"]),
+                    )
+                    self._index_node(full_row["id"], full_row["content"])
+                    log.debug(f"Tier 2 cache miss resolved for node {row['id']}")
+                    
+                    return row["id"]
 
         return None
 
@@ -439,28 +493,55 @@ class KnowledgeGraph:
             "edges": edges,
         }
 
-    def find_causal_chain(self, source_id: str, target_id: str) -> list[dict] | None:
+    async def find_causal_chain(self, source_id: str, target_id: str) -> list[dict] | None:
         """
-        Find the shortest causal path between two nodes.
+        Find the shortest causal path between two nodes using a SQLite recursive CTE.
 
-        Returns a list of steps, or None if no path exists.
+        Replaces nx.shortest_path — runs directly in the DB without loading the full
+        graph into memory. Returns a list of steps, or None if no path exists.
         """
         if source_id not in self.graph or target_id not in self.graph:
             return None
 
-        try:
-            path = nx.shortest_path(self.graph, source_id, target_id)
-        except nx.NetworkXNoPath:
+        # Recursive CTE BFS: finds shortest path in causal_edges table.
+        # Returns all nodes on the shortest path from source to target.
+        cte_sql = """
+        WITH RECURSIVE path_search(node, path, depth) AS (
+            -- Base case: start at source node
+            SELECT ?, ?, 0
+            UNION ALL
+            -- Recursive case: follow outgoing edges
+            SELECT e.target_node,
+                   path_search.path || ',' || e.target_node,
+                   path_search.depth + 1
+            FROM causal_edges e
+            JOIN path_search ON e.source_node = path_search.node
+            WHERE path_search.depth < 8
+              AND path_search.path NOT LIKE '%' || e.target_node || '%'
+        )
+        SELECT path FROM path_search
+        WHERE node = ?
+        ORDER BY depth ASC
+        LIMIT 1
+        """
+        row = await self.db.fetch_one(cte_sql, (source_id, source_id, target_id))
+        if not row:
             return None
+
+        # Parse path string back into node id list
+        path = row["path"].split(",")
 
         steps = []
         for i in range(len(path) - 1):
-            edge_bundle = self.graph.get_edge_data(path[i], path[i + 1]) or {}
+            u, v = path[i], path[i + 1]
+            edge_bundle = self.graph.get_edge_data(u, v) or {}
             edge_data = next(iter(edge_bundle.values())) if edge_bundle else {}
+            u_content = self.graph.nodes[u]["content"] if u in self.graph else u
+            v_content = self.graph.nodes[v]["content"] if v in self.graph else v
             steps.append({
-                "from": self.graph.nodes[path[i]]["content"],
+                "from": u_content,
                 "relationship": edge_data.get("edge_type", "→"),
-                "to": self.graph.nodes[path[i + 1]]["content"],
+                "to": v_content,
                 "strength": edge_data.get("strength", 0.5),
             })
 
@@ -605,13 +686,18 @@ class KnowledgeGraph:
             nt = data.get("node_type", "unknown")
             node_types[nt] = node_types.get(nt, 0) + 1
 
+        # Approximate isolated nodes (no incoming or outgoing edges) as a proxy
+        # for "disconnected components" — avoids loading the full graph into
+        # NetworkX for nx.number_weakly_connected_components which is O(N+E).
+        isolated = sum(
+            1 for n in self.graph.nodes()
+            if self.graph.degree(n) == 0
+        )
+
         return {
             "total_nodes": self.graph.number_of_nodes(),
             "total_edges": self.graph.number_of_edges(),
             "node_types": node_types,
             "edge_types": edge_types,
-            "connected_components": (
-                nx.number_weakly_connected_components(self.graph)
-                if self.graph.number_of_nodes() > 0 else 0
-            ),
+            "isolated_nodes": isolated,
         }

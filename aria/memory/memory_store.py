@@ -14,6 +14,7 @@ Polish additions:
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timezone
 from math import exp
@@ -42,20 +43,20 @@ class MemoryStore:
     # CRUD
     # ------------------------------------------------------------------
 
-    async def add(self, memory: Memory) -> Memory:
+    async def add(self, memory: Memory) -> Memory | None:
         """Store a new memory (with duplicate detection)."""
         # Check for duplicates — skip if a very similar memory exists
         if await self._is_duplicate(memory.content):
             log.debug(f"Skipped duplicate memory: {memory.content[:40]}...")
-            return memory
+            return None
 
         await self.db.execute(
             """
             INSERT INTO memories (id, content, source, memory_type, importance,
                                   confidence, created_at, last_accessed,
-                                  access_count, tags, provenance_json,
+                                  access_count, tags, level, child_memory_ids, provenance_json,
                                   related_memories, archived_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 memory.id,
@@ -68,6 +69,8 @@ class MemoryStore:
                 memory.last_accessed,
                 memory.access_count,
                 json.dumps(memory.tags),
+                memory.level,
+                json.dumps(memory.child_memory_ids),
                 json.dumps(memory.provenance),
                 json.dumps(memory.related_memories),
                 memory.archived_at,
@@ -75,7 +78,7 @@ class MemoryStore:
         )
         if self.vs.is_active:
             type_val = memory.memory_type.value if isinstance(memory.memory_type, MemoryType) else memory.memory_type
-            self.vs.add_chunks([memory.content], [{"type": type_val}], ids=[memory.id])
+            await asyncio.to_thread(self.vs.add_chunks, [memory.content], [{"type": type_val, "timestamp": datetime.now(timezone.utc).timestamp()}], ids=[memory.id])
 
         log.debug(f"Stored memory: {memory.content[:60]}...")
         return memory
@@ -106,6 +109,10 @@ class MemoryStore:
         if row is None:
             return False
         await self.db.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+        
+        if self.vs.is_active:
+            await asyncio.to_thread(self.vs.delete_by_ids, [memory_id])
+            
         log.info(f"Deleted memory: {row['content'][:40]}...")
         return True
 
@@ -144,22 +151,24 @@ class MemoryStore:
         """Search memories by keyword (for the :search command)."""
         return await self._search_relevant(query, limit=50)
 
-    async def add_manual(self, content: str, importance: float = 0.5) -> Memory:
+    async def add_manual(self, content: str, importance: float = 0.5, level: int = 1, child_memory_ids: list[str] = None) -> Memory:
         """Add a memory manually from user command."""
         memory = Memory(
             content=content,
             source=MemorySource.USER,
             importance=importance,
             tags=["manual"],
+            level=level,
+            child_memory_ids=child_memory_ids or [],
         )
         # Bypass duplicate check for manual memories — user explicitly wants it
         await self.db.execute(
             """
             INSERT INTO memories (id, content, source, memory_type, importance,
                                   confidence, created_at, last_accessed,
-                                  access_count, tags, provenance_json,
+                                  access_count, tags, level, child_memory_ids, provenance_json,
                                   related_memories, archived_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 memory.id,
@@ -172,6 +181,8 @@ class MemoryStore:
                 memory.last_accessed,
                 memory.access_count,
                 json.dumps(memory.tags),
+                memory.level,
+                json.dumps(memory.child_memory_ids),
                 json.dumps(memory.provenance),
                 json.dumps(memory.related_memories),
                 memory.archived_at,
@@ -179,7 +190,7 @@ class MemoryStore:
         )
         if self.vs.is_active:
             type_val = memory.memory_type.value if isinstance(memory.memory_type, MemoryType) else memory.memory_type
-            self.vs.add_chunks([memory.content], [{"type": type_val}], ids=[memory.id])
+            await asyncio.to_thread(self.vs.add_chunks, [memory.content], [{"type": type_val, "timestamp": datetime.now(timezone.utc).timestamp()}], ids=[memory.id])
 
         log.info(f"Manual memory stored: {content[:40]}...")
         return memory
@@ -217,7 +228,7 @@ class MemoryStore:
 
         # Pool 4: Semantic (vector search)
         if query.strip() and self.vs.is_active:
-            semantic_results = self.vs.search(query, MAX_RELEVANT_MEMORIES)
+            semantic_results = await asyncio.to_thread(self.vs.search, query, MAX_RELEVANT_MEMORIES)
             semantic_ids = [res["id"] for res in semantic_results if res.get("id")]
             if semantic_ids:
                 placeholders = ",".join("?" * len(semantic_ids))
@@ -225,9 +236,19 @@ class MemoryStore:
                     f"SELECT * FROM memories WHERE id IN ({placeholders}) AND archived_at IS NULL",
                     tuple(semantic_ids)
                 )
+                import math
+                now_ts = datetime.now(timezone.utc).timestamp()
                 for row in rows:
-                    m = self._row_to_memory(row)
-                    candidates[m.id] = m
+                    res = next((r for r in semantic_results if r["id"] == row["id"]), None)
+                    if res:
+                        created_at = datetime.fromisoformat(row["created_at"])
+                        age_days = (now_ts - created_at.timestamp()) / 86400.0
+                        adjusted_score = (1.0 - res.get("distance", 1.0)) * math.exp(-age_days / 180.0)
+                        
+                        # Only keep memories that meet the decayed relevance threshold
+                        if adjusted_score > 0.1:
+                            m = self._row_to_memory(row)
+                            candidates[m.id] = m
 
         result = sorted(
             candidates.values(),
@@ -332,11 +353,10 @@ class MemoryStore:
         Falls back to word overlap if VectorStore is offline.
         """
         if self.vs.is_active:
-            results = self.vs.search(content, n_results=1)
+            results = await asyncio.to_thread(self.vs.search, content, 1)
             # Distance < 0.2 typically indicates semantic equivalence with MiniLM
             if results and results[0].get("distance", 1.0) < 0.2:
                 return True
-            return False
 
         content_lower = content.lower().strip()
         content_words = set(content_lower.split())
@@ -427,6 +447,8 @@ class MemoryStore:
             last_accessed=row["last_accessed"],
             access_count=row["access_count"],
             tags=json.loads(row["tags"]),
+            level=row.get("level", 1),
+            child_memory_ids=json.loads(row.get("child_memory_ids", "[]")),
             provenance=json.loads(row.get("provenance_json", "{}")),
             related_memories=json.loads(row["related_memories"]),
             archived_at=row.get("archived_at"),

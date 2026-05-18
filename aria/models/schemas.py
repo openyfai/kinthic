@@ -151,6 +151,8 @@ class Memory(BaseModel):
     access_count: int = Field(default=0)
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
     tags: list[str] = Field(default_factory=list)
+    level: int = Field(default=1)
+    child_memory_ids: list[str] = Field(default_factory=list)
     provenance: dict = Field(default_factory=dict)
     related_memories: list[str] = Field(
         default_factory=list,
@@ -185,6 +187,7 @@ class Turn(BaseModel):
     response: str
     self_reflection: str
     confidence: float = Field(ge=0.0, le=1.0)
+    scratchpad: str | None = Field(default=None)
     created_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
@@ -477,6 +480,14 @@ class CognitiveResponse(BaseModel):
             "what you rejected, what connections you made, what you're uncertain about."
         )
     )
+    working_scratchpad: str | None = Field(
+        default=None,
+        description=(
+            "A temporary workspace to jot down notes during long tasks (like line numbers, "
+            "intermediate thoughts, or variables). This acts as your short-term memory "
+            "between turns. Leave null if not needed."
+        )
+    )
     response: str = Field(
         description="The response shown to the user. Clear, direct, helpful."
     )
@@ -747,4 +758,9 @@ class BenchmarkResult(BaseModel):
     domains_tested: list[str] = Field(default_factory=list)
     question_count: int = Field(default=0)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class ExtractedFacts(BaseModel):
+    """List of permanent facts, user preferences, or causal observations."""
+    facts: list[str] = Field(description="List of permanent facts, user preferences, or causal observations to save before pruning turns.")
 

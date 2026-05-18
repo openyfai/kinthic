@@ -222,6 +222,50 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         except Exception:
             pass
 
+async def _poll_notifications(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Deliver any unread system notifications (e.g. watchdog alerts) to all paired Telegram users."""
+    from aria.storage.database import Database
+    from aria.utils.config import VYN_DB
+
+    try:
+        db = Database(str(VYN_DB))
+        await db.connect()
+
+        rows = await db.fetch_all(
+            "SELECT id, message FROM notifications WHERE delivered = 0 ORDER BY created_at ASC"
+        )
+        if not rows:
+            await db.close()
+            return
+
+        # Get all paired user IDs from settings
+        paired = settings_store.list_telegram_users()
+        chat_ids = [int(u["user_id"]) for u in paired if u.get("user_id")]
+
+        for row in rows:
+            sent_ok = False
+            for chat_id in chat_ids:
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text=row["message"])
+                    sent_ok = True
+                except Exception as send_err:
+                    log.warning(f"Could not deliver notification to {chat_id}: {send_err}")
+
+            # Only mark delivered if at least one user received it.
+            # If all sends failed (bot blocked, network), leave delivered=0 so it retries next poll.
+            if sent_ok or not chat_ids:
+                await db.execute(
+                    "UPDATE notifications SET delivered = 1 WHERE id = ?", (row["id"],)
+                )
+
+        await db.close()
+
+    except Exception as e:
+        log.error(f"Notification polling error: {e}")
+
+
+
+
 async def post_init(application: ApplicationBuilder) -> None:
     """Initialize ARIA's engine after the Telegram bot starts up."""
     global aria_loop
@@ -229,6 +273,11 @@ async def post_init(application: ApplicationBuilder) -> None:
     aria_loop = CognitiveLoop()
     await aria_loop.startup()
     log.info("ARIA is fully online and ready to receive Telegram messages.")
+
+    # Start the notification polling job (every 60 seconds)
+    application.job_queue.run_repeating(_poll_notifications, interval=60, first=10)
+    log.info("Watchdog notification polling started.")
+
 
 def main():
     load_dotenv()

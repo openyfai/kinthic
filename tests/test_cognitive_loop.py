@@ -111,6 +111,7 @@ async def test_store_memories_marks_normative_and_character_provenance():
 
     async def fake_add(memory):
         stored_memories.append(memory)
+        return memory
 
     async def fake_all():
         return stored_memories

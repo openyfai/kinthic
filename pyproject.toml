@@ -85,7 +85,16 @@ include-package-data = true
 py-modules = []
 
 [tool.setuptools.package-data]
-aria = ["web_dist/**/*"]
+# web_dist is populated by CI before the wheel is built (see .github/workflows/release.yml).
+# Patterns are explicit at every depth because setuptools **/* has known
+# recursion gaps on some versions when directory structures are deep.
+aria = [
+    "web_dist/*",
+    "web_dist/**/*",
+    "web_dist/**/**/*",
+    "web_dist/**/**/**/*",
+    "web_dist/**/**/**/**/*",
+]
 
 [tool.setuptools.packages.find]
 include = ["aria*", "scripts*"]

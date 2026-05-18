@@ -154,6 +154,10 @@ def run_cron_worker() -> None:
 class DaemonWatchdog:
     """The multi-process supervisor."""
 
+    # Heartbeat check is throttled to once every 60s to avoid
+    # thousands of unnecessary DB open/close cycles per day.
+    HEARTBEAT_CHECK_INTERVAL = 60.0
+
     def __init__(self):
         self.web_process: multiprocessing.Process | None = None
         self.telegram_process: multiprocessing.Process | None = None
@@ -161,6 +165,7 @@ class DaemonWatchdog:
         self.watcher_process: multiprocessing.Process | None = None
         self.cron_process: multiprocessing.Process | None = None
         self.running = False
+        self._last_heartbeat_check: float = 0.0  # epoch seconds
 
     def start_process(self, target, name: str) -> multiprocessing.Process:
         log.info(f"Watchdog starting {name}...")
@@ -207,7 +212,21 @@ class DaemonWatchdog:
                     if self.cognitive_process and self.cognitive_process.is_alive():
                         log.error("VYN cognitive worker was stuck and has been restarted.")
                         self.cognitive_process.kill()
+                        # Write alert so the Telegram bot can notify the user
+                        import uuid
+                        from datetime import datetime, timezone
+                        await db.execute(
+                            "INSERT INTO notifications (id, message, level, delivered, created_at) VALUES (?, ?, ?, 0, ?)",
+                            (
+                                str(uuid.uuid4()),
+                                "⚠️ [ALERT] VYN cognitive worker was frozen for >3 hours and has been force-restarted.",
+                                "alert",
+                                datetime.now(timezone.utc).isoformat(),
+                            ),
+                        )
+                        # db.execute() auto-commits — no explicit commit needed.
             await db.close()
+
             
         try:
             asyncio.run(_run())
@@ -258,7 +277,11 @@ class DaemonWatchdog:
                     log.warning("Cognitive worker died! Watchdog restarting it...")
                     self.cognitive_process = self.start_process(run_cognitive_worker, "CognitiveWorker")
                 else:
-                    self._check_heartbeats()
+                    # Throttle: only check heartbeats once per 60s, not every 2s loop tick
+                    now = time.time()
+                    if now - self._last_heartbeat_check >= self.HEARTBEAT_CHECK_INTERVAL:
+                        self._last_heartbeat_check = now
+                        self._check_heartbeats()
 
                 # 4. Check Watcher Worker
                 if self.watcher_process and not self.watcher_process.is_alive():

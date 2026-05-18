@@ -157,7 +157,11 @@ async def background_loop():
     while True:
         await asyncio.sleep(900)
         if background_actions_enabled() and _cognitive_loop:
-            await _cognitive_loop.tick()
+            try:
+                await _cognitive_loop.session.resume_or_start()
+                await _cognitive_loop.tick()
+            except Exception as e:
+                log.error(f"Background loop failed: {e}")
 
 async def proactive_telegram_loop():
     import random
@@ -184,6 +188,7 @@ async def proactive_telegram_loop():
                 
                 # Have the loop generate a proactive message
                 try:
+                    await _cognitive_loop.session.resume_or_start()
                     result = await _cognitive_loop.process(
                         "System background directive: Proactively reflect on our last conversations and send an unprompted message to the user with a hypothesis, question, or thought you formed while they were away. Be completely in character. Make it brief."
                     )
@@ -695,6 +700,7 @@ async def websocket_chat(websocket: WebSocket):
 
     loop = asyncio.get_running_loop()
     stop_flag = {"stopped": False}
+    current_task: asyncio.Task | None = None
 
     def status_callback(msg: str):
         clean_msg = re.sub(r"\[.*?\]", "", msg).strip()
@@ -703,6 +709,67 @@ async def websocket_chat(websocket: WebSocket):
                 websocket.send_json({"type": "monologue", "text": clean_msg}),
                 loop,
             )
+
+    async def _process_generation(user_text: str, payload: dict | None, images: list | None):
+        stop_flag["stopped"] = False
+        try:
+            if isinstance(payload, dict):
+                req_session_id = payload.get("session_id")
+                if req_session_id and (_cognitive_loop.session.current is None or _cognitive_loop.session.current.id != req_session_id):
+                    await _cognitive_loop.session.resume_specific(req_session_id)
+
+            # Signal immediately so the UI shows a thinking indicator
+            # before the LLM pipeline even starts.
+            await websocket.send_json({"type": "thinking"})
+
+            response = await _cognitive_loop.process(user_text, status_callback=status_callback, images=images)
+            full_text = response.response
+            await websocket.send_json({"type": "response_start"})
+
+            # Stream the final text in 8-word chunks at 12ms intervals.
+            # True token streaming is blocked by JSON schema mode on all providers.
+            # 8 words / 12ms gives a natural reading pace without feeling slow.
+            words = full_text.split(" ")
+            buffer = ""
+            for i, word in enumerate(words):
+                if stop_flag["stopped"]:
+                    break
+                buffer += word + (" " if i < len(words) - 1 else "")
+                if (i + 1) % 8 == 0 or i == len(words) - 1:
+                    await websocket.send_json({"type": "response_chunk", "text": buffer})
+                    buffer = ""
+                    await asyncio.sleep(0.012)
+
+            if not stop_flag["stopped"]:
+                await websocket.send_json(
+                    {
+                        "type": "response_done",
+                        "confidence": round(response.confidence * 100),
+                        "graph_nodes_added": len(response.causal_observations),
+                        "goals_updated": len(response.goal_updates),
+                    }
+                )
+        except asyncio.CancelledError:
+            return
+        except Exception as exc:
+            detail = str(exc)
+            low = detail.lower()
+            if "api" in low and ("key" in low or "401" in detail or "403" in detail):
+                user_msg = (
+                    "The model provider rejected this request. Check your API key and quota in Settings "
+                    "or run `aria doctor --ping` from a terminal on this machine."
+                )
+            elif "429" in detail or ("rate" in low and "limit" in low):
+                user_msg = "Provider rate limit hit — wait a moment and try again, or switch model/provider."
+            elif "quota" in low or "billing" in low or "exhausted" in low:
+                user_msg = "Provider quota or billing limit — verify your account in the provider dashboard."
+            elif "timeout" in low or "timed out" in low:
+                user_msg = "The request timed out — try a shorter prompt, a faster model, or check local Ollama is running."
+            elif "model" in low and ("not found" in low or "does not exist" in low):
+                user_msg = "That model name was not found — pick another model under Settings or `aria models`."
+            else:
+                user_msg = "Generation failed. Check the VYN server logs for details or run `vyn doctor --ping`."
+            await websocket.send_json({"type": "error", "text": user_msg, "error_kind": "model_error"})
 
     try:
         while True:
@@ -732,58 +799,20 @@ async def websocket_chat(websocket: WebSocket):
 
             if user_text == "__STOP__":
                 stop_flag["stopped"] = True
+                if current_task and not current_task.done():
+                    current_task.cancel()
                 continue
 
-            stop_flag["stopped"] = False
-            try:
-                if isinstance(payload, dict):
-                    req_session_id = payload.get("session_id")
-                    if req_session_id and (_cognitive_loop.session.current is None or _cognitive_loop.session.current.id != req_session_id):
-                        await _cognitive_loop.session.resume_specific(req_session_id)
-
-                response = await _cognitive_loop.process(user_text, status_callback=status_callback, images=images)
-                full_text = response.response
-                await websocket.send_json({"type": "response_start"})
-
-                words = full_text.split(" ")
-                buffer = ""
-                for i, word in enumerate(words):
-                    if stop_flag["stopped"]:
-                        break
-                    buffer += word + (" " if i < len(words) - 1 else "")
-                    if (i + 1) % 3 == 0 or i == len(words) - 1:
-                        await websocket.send_json({"type": "response_chunk", "text": buffer})
-                        buffer = ""
-                        await asyncio.sleep(0.02)
-
-                await websocket.send_json(
-                    {
-                        "type": "response_done",
-                        "confidence": round(response.confidence * 100),
-                        "graph_nodes_added": len(response.causal_observations),
-                        "goals_updated": len(response.goal_updates),
-                    }
-                )
-            except Exception as exc:
-                detail = str(exc)
-                low = detail.lower()
-                if "api" in low and ("key" in low or "401" in detail or "403" in detail):
-                    user_msg = (
-                        "The model provider rejected this request. Check your API key and quota in Settings "
-                        "or run `aria doctor --ping` from a terminal on this machine."
-                    )
-                elif "429" in detail or ("rate" in low and "limit" in low):
-                    user_msg = "Provider rate limit hit — wait a moment and try again, or switch model/provider."
-                elif "quota" in low or "billing" in low or "exhausted" in low:
-                    user_msg = "Provider quota or billing limit — verify your account in the provider dashboard."
-                elif "timeout" in low or "timed out" in low:
-                    user_msg = "The request timed out — try a shorter prompt, a faster model, or check local Ollama is running."
-                elif "model" in low and ("not found" in low or "does not exist" in low):
-                    user_msg = "That model name was not found — pick another model under Settings or `aria models`."
-                else:
-                    user_msg = "Generation failed. Check the VYN server logs for details or run `vyn doctor --ping`."
-                await websocket.send_json({"type": "error", "text": user_msg, "error_kind": "model_error"})
+            # If a new request arrives, cancel any currently running generation task
+            if current_task and not current_task.done():
+                current_task.cancel()
+                
+            # Spawn task decoupled from receive loop
+            current_task = asyncio.create_task(_process_generation(user_text, payload, images))
+            
     except WebSocketDisconnect:
+        if current_task and not current_task.done():
+            current_task.cancel()
         return
 
 

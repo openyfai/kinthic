@@ -17,7 +17,7 @@ except ImportError:
     docker = None
 
 from aria.tools.base import BaseTool
-from aria.utils.config import terminal_execution_enabled, WORKSPACE_DIR
+from aria.utils.config import terminal_execution_enabled, WORKSPACE_DIR, PROJECT_ROOT
 from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.tools.system")
@@ -93,8 +93,11 @@ class RunTerminalCommandTool(BaseTool):
     requires_approval = True
     description = (
         "Executes a bash command inside a safe, isolated Alpine Linux container. "
-        "The workspace is mapped to /workspace. "
-        "Allows running tests, installing packages (inside sandbox), or processing files safely."
+        "The actual project code is mapped read-only to /project. "
+        "The workspace is mapped read-write to /workspace. "
+        "Allows running tests, processing files safely, or installing packages. "
+        "Note: since it's Alpine Linux, use `apk add --no-cache <pkg>` to install OS dependencies, "
+        "or `apk add --no-cache python3 py3-pip && pip install <pkg> --break-system-packages` for Python packages."
     )
     schema = {
         "command": "string (The bash command to execute)"
@@ -133,7 +136,7 @@ class RunTerminalCommandTool(BaseTool):
             # Execute in container with dual-volume mapping for maximum safety:
             # 1. Project Root -> /project (READ-ONLY)
             # 2. Project Workspace -> /workspace (READ-WRITE)
-            cwd = str(WORKSPACE_ROOT)
+            project_dir = str(PROJECT_ROOT)
             WORKSPACE_ROOT.mkdir(parents=True, exist_ok=True)
             lab_dir = str(WORKSPACE_ROOT)
             
@@ -141,13 +144,13 @@ class RunTerminalCommandTool(BaseTool):
                 image="alpine:latest",
                 command=["sh", "-c", command],
                 volumes={
-                    cwd: {"bind": "/project", "mode": "ro"},
+                    project_dir: {"bind": "/project", "mode": "ro"},
                     lab_dir: {"bind": "/workspace", "mode": "rw"}
                 },
                 working_dir="/workspace",
                 detach=True,
                 remove=True,
-                network_disabled=True,
+                network_disabled=False,
                 mem_limit="256m",
                 pids_limit=128,
             )

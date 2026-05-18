@@ -19,6 +19,7 @@ from aria.tools.file_reader import FileReaderTool
 from aria.tools.code_editor import CodeEditorTool, ApplyEditTool
 from aria.tools.system import ListDirectoryTool, RunTerminalCommandTool
 from aria.tools.browser import BrowserTool
+from aria.tools.phantom import PhantomTool
 from aria.utils.logger import setup_logger
 from aria.utils.config import require_tool_approvals, code_apply_enabled
 
@@ -28,11 +29,13 @@ log = setup_logger("aria.tools.registry")
 class ToolRegistry:
     """Holds available tools and executes them based on ToolCalls."""
     
-    def __init__(self, vector_store=None, db=None, session_manager=None):
+    def __init__(self, vector_store=None, db=None, session_manager=None, memory_store=None, llm=None):
         self.tools: dict[str, BaseTool] = {}
         self.vector_store = vector_store
         self.db = db
         self.session_manager = session_manager
+        self.memory_store = memory_store
+        self.llm = llm
         self.ethics = EthicsEngine()
         self._register_defaults()
 
@@ -40,6 +43,7 @@ class ToolRegistry:
         """Register the default tools."""
         self.register(WebSearchTool())
         self.register(FileReaderTool())
+        self.register(PhantomTool())         # Phantom Simulator — dry-run before apply
         self.register(CodeEditorTool())
         self.register(ApplyEditTool())
         self.register(ListDirectoryTool())
@@ -48,6 +52,14 @@ class ToolRegistry:
         
         if self.vector_store and getattr(self.vector_store, "is_active", False):
             self.register(SemanticSearchTool(self.vector_store))
+
+        if getattr(self, "memory_store", None):
+            from aria.tools.memory import SearchMemoryTool
+            self.register(SearchMemoryTool(self.memory_store))
+
+        if getattr(self, "llm", None):
+            from aria.tools.directives import UpdateDirectivesTool
+            self.register(UpdateDirectivesTool(self.llm))
 
     def register(self, tool: BaseTool) -> None:
         """Register a new tool."""

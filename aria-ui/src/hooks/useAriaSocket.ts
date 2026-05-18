@@ -195,6 +195,15 @@ export function useAriaSocket(url: string, enabled = true) {
           break;
         }
 
+        case 'thinking': {
+          // Server confirmed receipt and started the cognitive pipeline.
+          // Ensures isThinking is active even if client state was lost (e.g. after reconnect).
+          setIsThinking(true);
+          setCurrentThought('Thinking...');
+          setBusyStartedAt((current) => current ?? Date.now());
+          break;
+        }
+
         case 'monologue': {
           const entry: MonologueEntry = {
             id: Date.now().toString() + Math.random(),
@@ -205,6 +214,7 @@ export function useAriaSocket(url: string, enabled = true) {
           setCurrentThought(data.text ?? '');
           break;
         }
+
 
         case 'response_start': {
           setIsThinking(false);

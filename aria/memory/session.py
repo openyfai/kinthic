@@ -7,6 +7,7 @@ Manages conversation sessions, turn history, and aggregate stats.
 from __future__ import annotations
 
 import json
+from contextvars import ContextVar
 from datetime import datetime, timezone
 
 from aria.models.schemas import Session, Turn
@@ -15,17 +16,18 @@ from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.session")
 
+current_session_var: ContextVar[Session | None] = ContextVar("current_session_var", default=None)
+
 
 class SessionManager:
     """Tracks conversation sessions and turn history."""
 
     def __init__(self, db: Database):
         self.db = db
-        self._current: Session | None = None
 
     @property
     def current(self) -> Session | None:
-        return self._current
+        return current_session_var.get()
 
     # ------------------------------------------------------------------
     # Session lifecycle
@@ -50,7 +52,7 @@ class SessionManager:
                 json.dumps(session.topics),
             ),
         )
-        self._current = session
+        current_session_var.set(session)
         log.info(f"Started session {session.id[:8]}...")
         return session
 
@@ -65,7 +67,7 @@ class SessionManager:
         )
         if row:
             session = self._row_to_session(row)
-            self._current = session
+            current_session_var.set(session)
             log.info(f"Resumed session {session.id[:8]}... ({session.turn_count} prior turns)")
             return session
         return await self.start_session()
@@ -86,22 +88,23 @@ class SessionManager:
                 "UPDATE sessions SET ended_at = NULL WHERE id = ?",
                 (session_id,)
             )
-            self._current = session
+            current_session_var.set(session)
             log.info(f"Reconnected to session {session.id[:8]}... ({session.turn_count} prior turns)")
             return session
         return None
 
     async def end_session(self) -> None:
         """End the current session."""
-        if self._current is None:
+        session = self.current
+        if session is None:
             return
         now = datetime.now(timezone.utc).isoformat()
         await self.db.execute(
             "UPDATE sessions SET ended_at = ? WHERE id = ?",
-            (now, self._current.id),
+            (now, session.id),
         )
-        log.info(f"Ended session {self._current.id[:8]}...")
-        self._current = None
+        log.info(f"Ended session {session.id[:8]}...")
+        current_session_var.set(None)
 
     # ------------------------------------------------------------------
     # Turn management
@@ -116,36 +119,39 @@ class SessionManager:
         confidence: float,
         memories_added: int = 0,
         goals_changed: int = 0,
+        scratchpad: str | None = None,
     ) -> Turn:
         """Record a conversation turn and update session stats."""
-        if self._current is None:
-            raise RuntimeError("No active session. Call start_session() first.")
+        session = self.current
+        if session is None:
+            raise RuntimeError("No active session. Call start_session() or ensure current_session_var is set first.")
 
-        self._current.turn_count += 1
-        self._current.memories_created += memories_added
-        self._current.goals_modified += goals_changed
+        session.turn_count += 1
+        session.memories_created += memories_added
+        session.goals_modified += goals_changed
 
         # Running average of confidence
-        n = self._current.turn_count
-        prev_avg = self._current.avg_confidence
-        self._current.avg_confidence = prev_avg + (confidence - prev_avg) / n
+        n = session.turn_count
+        prev_avg = session.avg_confidence
+        session.avg_confidence = prev_avg + (confidence - prev_avg) / n
 
         turn = Turn(
-            session_id=self._current.id,
-            turn_number=self._current.turn_count,
+            session_id=session.id,
+            turn_number=session.turn_count,
             user_input=user_input,
             reasoning=reasoning,
             response=response,
             self_reflection=self_reflection,
             confidence=confidence,
+            scratchpad=scratchpad,
         )
 
         # Store the turn
         await self.db.execute(
             """
             INSERT INTO turns (id, session_id, turn_number, user_input,
-                               reasoning, response, self_reflection, confidence, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               reasoning, response, self_reflection, confidence, scratchpad, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 turn.id,
@@ -156,6 +162,7 @@ class SessionManager:
                 turn.response,
                 turn.self_reflection,
                 turn.confidence,
+                turn.scratchpad,
                 turn.created_at,
             ),
         )
@@ -168,11 +175,11 @@ class SessionManager:
             WHERE id = ?
             """,
             (
-                self._current.turn_count,
-                self._current.memories_created,
-                self._current.goals_modified,
-                self._current.avg_confidence,
-                self._current.id,
+                session.turn_count,
+                session.memories_created,
+                session.goals_modified,
+                session.avg_confidence,
+                session.id,
             ),
         )
 
@@ -180,7 +187,8 @@ class SessionManager:
 
     async def get_recent_turns(self, limit: int = 10) -> list[Turn]:
         """Get the most recent turns from the current session."""
-        if self._current is None:
+        session = self.current
+        if session is None:
             return []
 
         rows = await self.db.fetch_all(
@@ -190,16 +198,43 @@ class SessionManager:
             ORDER BY turn_number DESC
             LIMIT ?
             """,
-            (self._current.id, limit),
+            (session.id, limit),
         )
 
         turns = [self._row_to_turn(r) for r in rows]
         turns.reverse()  # Chronological order
         return turns
 
+    async def compress_turns(self, session_id: str, old_turn_ids: list[str], new_virtual_turn: Turn) -> None:
+        """Replace old raw turns with a compressed virtual turn."""
+        async with self.db.transaction():
+            for turn_id in old_turn_ids:
+                await self.db.execute("DELETE FROM turns WHERE id = ?", (turn_id,))
+            
+            await self.db.execute(
+                """
+                INSERT INTO turns (id, session_id, turn_number, user_input,
+                                   reasoning, response, self_reflection, confidence, scratchpad, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    new_virtual_turn.id,
+                    new_virtual_turn.session_id,
+                    new_virtual_turn.turn_number,
+                    new_virtual_turn.user_input,
+                    new_virtual_turn.reasoning,
+                    new_virtual_turn.response,
+                    new_virtual_turn.self_reflection,
+                    new_virtual_turn.confidence,
+                    new_virtual_turn.scratchpad,
+                    new_virtual_turn.created_at,
+                ),
+            )
+
     async def get_last_reflection(self) -> str | None:
         """Get the self_reflection from the most recent turn in the current session."""
-        if self._current is None:
+        session = self.current
+        if session is None:
             return None
         row = await self.db.fetch_one(
             """
@@ -208,7 +243,7 @@ class SessionManager:
             ORDER BY turn_number DESC
             LIMIT 1
             """,
-            (self._current.id,),
+            (session.id,),
         )
         if row and row["self_reflection"]:
             return row["self_reflection"]
@@ -216,7 +251,8 @@ class SessionManager:
 
     async def get_recent_failures(self, limit: int = 3) -> list[dict]:
         """Fetch the most recent failures from the current session."""
-        if self._current is None:
+        session = self.current
+        if session is None:
             return []
         rows = await self.db.fetch_all(
             """
@@ -225,7 +261,7 @@ class SessionManager:
             ORDER BY created_at DESC
             LIMIT ?
             """,
-            (self._current.id, limit),
+            (session.id, limit),
         )
         return [dict(r) for r in rows]
 
@@ -272,6 +308,7 @@ class SessionManager:
             response=row["response"],
             self_reflection=row["self_reflection"],
             confidence=row["confidence"],
+            scratchpad=row.get("scratchpad"),
             created_at=row["created_at"],
         )
 
