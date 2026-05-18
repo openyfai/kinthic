@@ -15,6 +15,15 @@ from rich.logging import RichHandler
 
 def setup_logger(name: str = "aria", level: str = "INFO") -> logging.Logger:
     """Create a Rich-formatted logger."""
+    import sys
+    
+    # Fix Windows charmap encode errors when printing emojis (e.g. ❌)
+    if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
     logger = logging.getLogger(name)
 
     if not logger.handlers:
