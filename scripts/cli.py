@@ -406,8 +406,30 @@ def main() -> None:
     elif args.command == "proposals":
         run_proposals(getattr(args, "proposals_command", "list"), getattr(args, "proposal_id", None))
     elif args.command == "daemon":
-        from scripts.daemon import main as daemon_main
-        daemon_main()
+        import json
+        import os
+        from pathlib import Path
+        lock_path = Path("data/daemon.lock")
+        if lock_path.exists():
+            try:
+                lock_data = json.loads(lock_path.read_text(encoding="utf-8").strip())
+                pid = lock_data.get("pid")
+                if pid:
+                    os.kill(pid, 0)
+                    print(f"ARIA daemon is already running (PID {pid}).")
+                    return
+            except OSError:
+                lock_path.unlink(missing_ok=True)
+            except Exception:
+                lock_path.unlink(missing_ok=True)
+                
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path.write_text(json.dumps({"pid": os.getpid()}), encoding="utf-8")
+        try:
+            from scripts.daemon import main as daemon_main
+            daemon_main()
+        finally:
+            lock_path.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

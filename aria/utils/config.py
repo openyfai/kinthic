@@ -23,9 +23,16 @@ DATA_DIR = PROJECT_ROOT / "data"
 DB_PATH = DATA_DIR / "aria.db"
 TRACES_DIR = DATA_DIR / "traces"
 
-# Ensure runtime directories exist
 DATA_DIR.mkdir(exist_ok=True)
 TRACES_DIR.mkdir(exist_ok=True)
+
+# Issue 9: Safe ARIA_WORKSPACE Fallback
+_workspace_env = os.getenv("ARIA_WORKSPACE")
+if _workspace_env:
+    WORKSPACE_DIR = Path(_workspace_env).resolve()
+else:
+    WORKSPACE_DIR = Path.cwd()
+    print(f"\n[WARNING] ARIA_WORKSPACE is not set. Defaulting safely to current working directory: {WORKSPACE_DIR}\n")
 
 
 # ---------------------------------------------------------------------------

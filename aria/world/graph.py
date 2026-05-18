@@ -94,6 +94,84 @@ class KnowledgeGraph:
         # Build the inverted index from loaded nodes
         self._rebuild_word_index()
 
+    async def load_relevant(self, query: str | None, max_nodes: int = 200) -> None:
+        """Phase A Bridge: Load only a relevant subgraph based on query to prevent 15s cold starts."""
+        if not query:
+            return await self.load()
+            
+        words = [w.lower() for w in query.split() if len(w) > 3]
+        if not words:
+            return await self.load()
+            
+        conditions = " OR ".join(["LOWER(content) LIKE ?"] * len(words))
+        params = [f"%{w}%" for w in words]
+        
+        query_sql = f"""
+            SELECT * FROM knowledge_nodes 
+            WHERE {conditions}
+            ORDER BY confidence DESC, validation_count DESC
+            LIMIT ?
+        """
+        params.append(max_nodes)
+        
+        node_rows = await self.db.fetch_all(query_sql, tuple(params))
+        
+        # Ensure we have at least a baseline of high-confidence nodes if query was too narrow
+        if len(node_rows) < 20:
+            extra = await self.db.fetch_all(
+                "SELECT * FROM knowledge_nodes ORDER BY confidence DESC, validation_count DESC LIMIT ?",
+                (50,)
+            )
+            seen = {r["id"] for r in node_rows}
+            for r in extra:
+                if r["id"] not in seen:
+                    node_rows.append(r)
+        
+        loaded_node_ids = set()
+        for row in node_rows:
+            self.graph.add_node(
+                row["id"],
+                content=row["content"],
+                node_type=row["node_type"],
+                confidence=row["confidence"],
+                source=row["source"],
+                created_at=row["created_at"],
+                last_validated=row["last_validated"],
+                validation_count=row["validation_count"],
+                contradiction_count=row["contradiction_count"],
+                verification_status=row.get("verification_status", "unverified"),
+                metadata=json.loads(row["metadata"]),
+            )
+            loaded_node_ids.add(row["id"])
+            
+        if loaded_node_ids:
+            placeholders = ",".join(["?"] * len(loaded_node_ids))
+            edge_query = f"""
+                SELECT * FROM causal_edges 
+                WHERE source_node IN ({placeholders}) AND target_node IN ({placeholders})
+            """
+            edge_params = tuple(list(loaded_node_ids) + list(loaded_node_ids))
+            
+            edge_rows = await self.db.fetch_all(edge_query, edge_params)
+            for row in edge_rows:
+                self.graph.add_edge(
+                    row["source_node"],
+                    row["target_node"],
+                    key=row["edge_type"],
+                    id=row["id"],
+                    edge_type=row["edge_type"],
+                    strength=row["strength"],
+                    evidence=row["evidence"],
+                    created_at=row["created_at"],
+                )
+                
+        log.info(
+            f"Knowledge subgraph loaded (Pragmatic Bridge): {self.graph.number_of_nodes()} nodes, "
+            f"{self.graph.number_of_edges()} edges."
+        )
+        
+        self._rebuild_word_index()
+
     def _rebuild_word_index(self) -> None:
         """Build the inverted keyword index from all in-memory nodes."""
         self._word_index.clear()

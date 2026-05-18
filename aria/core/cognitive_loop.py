@@ -166,15 +166,15 @@ class CognitiveLoop:
     # Lifecycle
     # ------------------------------------------------------------------
 
-    async def startup(self) -> None:
+    async def startup(self, target_query: str | None = None) -> None:
         """Initialize all systems."""
         log.info("ARIA cognitive systems initializing...")
         self._acquire_process_lock()
         await self.db.connect()
         self.gemini.connect()
 
-        # Phase 2: Load knowledge graph into memory
-        await self.kg.load()
+        # Phase 2: Load knowledge graph subgraph into memory
+        await self.kg.load_relevant(target_query, max_nodes=200)
 
         # Phase B: Milestone 2 — Start background indexing (only when Chroma is available)
         if self.vector_store.is_active:
