@@ -395,11 +395,13 @@ class Database:
     async def connect(self) -> None:
         """Open the database connection and ensure schema exists."""
         log.info(f"Connecting to database: {self.db_path}")
-        self._conn = await aiosqlite.connect(self.db_path, timeout=10.0)
+        self._conn = await aiosqlite.connect(self.db_path, timeout=15.0)
         self._conn.row_factory = aiosqlite.Row
 
-        # Enable WAL mode for better concurrent read performance
+        # Enable WAL mode + settings for robust multi-process concurrency
         await self._conn.execute("PRAGMA journal_mode=WAL")
+        await self._conn.execute("PRAGMA synchronous=NORMAL")
+        await self._conn.execute("PRAGMA busy_timeout=15000")
         await self._conn.execute("PRAGMA foreign_keys=ON")
 
         # Create tables if they don't exist
