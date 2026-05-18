@@ -343,9 +343,9 @@ def autonomy_policy_snapshot() -> dict:
 # ---------------------------------------------------------------------------
 
 # Memory retrieval budget per turn
-MAX_RECENT_MEMORIES = 20
-MAX_IMPORTANT_MEMORIES = 20
-MAX_RELEVANT_MEMORIES = 10
+MAX_RECENT_MEMORIES = 5
+MAX_IMPORTANT_MEMORIES = 5
+MAX_RELEVANT_MEMORIES = 5
 
 # Conversation context
 MAX_HISTORY_TURNS = 10

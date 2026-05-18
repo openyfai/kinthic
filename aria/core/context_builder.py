@@ -58,6 +58,7 @@ class ContextBuilder:
         semantic_parser=None,
         pruner=None,
         creativity_stack=None,
+        planner=None,
     ):
         self.memory = memory_store
         self.goals = goal_tracker
@@ -72,6 +73,7 @@ class ContextBuilder:
         self.semantic_parser = semantic_parser
         self.pruner = pruner
         self.creativity_stack = creativity_stack
+        self.planner = planner
         self.meta_reasoning = None  # Injected by CognitiveLoop after init
         self._llm_client = None    # Injected by CognitiveLoop after init (for compression)
 
@@ -152,6 +154,43 @@ class ContextBuilder:
         # Section 6: Goals
         goals = await self.goals.get_active()
         sections.append(self._format_goals(goals))
+
+        # Section 6.5: Active Plan (Phase 7 - Fix Plan Amnesia)
+        if self.planner and self.session.current:
+            try:
+                active_plan_info = await self.planner.get_active_plan(self.session.current.id)
+                if active_plan_info:
+                    plan = active_plan_info["plan"]
+                    steps = active_plan_info["steps"]
+                    
+                    steps_text = ""
+                    for step in steps:
+                        status_marker = "[ ]"
+                        if step["status"] == "completed":
+                            status_marker = "[x]"
+                        elif step["status"] == "blocked":
+                            status_marker = "[!]"
+                        elif step["status"] == "active":
+                            status_marker = "[*]"
+                        steps_text += f"{status_marker} Step {step['step_number']}: {step['description']}\n"
+                        if step["result"]:
+                            steps_text += f"    Result: {step['result']}\n"
+                    
+                    sections.append(
+                        "═══════════════════════════════════════════════════════════\n"
+                        "ACTIVE PLAN (Durable Task Tracker)\n"
+                        "═══════════════════════════════════════════════════════════\n"
+                        "You have an active multi-step plan for this session. "
+                        "You MUST carefully follow the active step (indicated by [*]) and reconcile tool outcomes "
+                        "to move the task forward.\n\n"
+                        f"<active_plan>\n"
+                        f"Title: {plan['title']}\n"
+                        f"Success Criteria: {plan['success_criteria']}\n\n"
+                        f"Steps:\n{steps_text}"
+                        f"</active_plan>\n"
+                    )
+            except Exception as e:
+                log.error(f"Failed to format active plan context: {e}")
 
         # Section 7: Recent conversation history
         recent_turns = await self.session.get_recent_turns(limit=MAX_HISTORY_TURNS)

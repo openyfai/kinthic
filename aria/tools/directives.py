@@ -5,7 +5,6 @@ Allows VYN to update its own core behavior rules transparently.
 
 from __future__ import annotations
 
-import os
 from aria.tools.base import BaseTool
 from aria.utils.config import VYN_DIRECTIVES_FILE
 from aria.utils.logger import setup_logger

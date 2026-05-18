@@ -293,6 +293,33 @@ class SessionManager:
         row = await self.db.fetch_one("SELECT COUNT(*) as cnt FROM turns")
         return row["cnt"] if row else 0
 
+    async def get_time_since_last_user_message(self) -> float:
+        """Calculate and return the elapsed time in seconds since the last real user message."""
+        from datetime import datetime, timezone
+        row = await self.db.fetch_one(
+            """
+            SELECT created_at FROM turns
+            WHERE user_input NOT LIKE '[SYSTEM:%'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        )
+        if not row:
+            session = self.current
+            if session:
+                try:
+                    started_at = datetime.fromisoformat(session.started_at.replace("Z", "+00:00"))
+                except ValueError:
+                    started_at = datetime.now(timezone.utc)
+                return (datetime.now(timezone.utc) - started_at).total_seconds()
+            return 0.0
+
+        try:
+            last_time = datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
+        except ValueError:
+            return 0.0
+        return (datetime.now(timezone.utc) - last_time).total_seconds()
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------

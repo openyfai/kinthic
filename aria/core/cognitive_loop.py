@@ -18,6 +18,8 @@ import errno
 from datetime import datetime, timezone
 from typing import Callable, Any
 
+from aria.utils.telemetry import tracer
+
 from aria.core.benchmark import BenchmarkRunner
 from aria.core.context_builder import ContextBuilder
 from aria.core.critic import ResponseCritic
@@ -149,7 +151,8 @@ class CognitiveLoop:
             settings_store=self.settings_store,
             semantic_parser=self.semantic_parser, # Pass parser to context builder
             pruner=self.pruner,
-            creativity_stack=self.creativity_stack
+            creativity_stack=self.creativity_stack,
+            planner=self.planner
         )
 
         # Phase 3 — Self-Improvement
@@ -196,6 +199,11 @@ class CognitiveLoop:
             log.info(f"Loaded {len(profiles)} custom semantic profiles.")
 
         await self.session.resume_or_start()
+        # Step 0.25: Recovery Checkpoints on startup
+        try:
+            await self.recover_checkpoints()
+        except Exception as e:
+            log.warning(f"Failed to run startup recovery checkpoints: {e}")
         log.info("All systems online. Cognitive loop ready.")
 
     async def shutdown(self) -> None:
@@ -205,6 +213,23 @@ class CognitiveLoop:
         await self.db.close()
         self._release_process_lock()
         log.info("Shutdown complete.")
+
+    async def recover_checkpoints(self) -> list[dict]:
+        """
+        Scan for any turn checkpoints left in 'executing_tools' status,
+        log warning alerts, and return them for potential recovery.
+        """
+        rows = await self.db.fetch_all(
+            "SELECT * FROM turn_checkpoints WHERE status = 'executing_tools'"
+        )
+        recovered = []
+        for r in rows:
+            log.warning(
+                f"🚨 MID-TURN CRASH DETECTED: Session {r['session_id']} turn {r['turn_number']} "
+                f"was interrupted during tool execution! Draft reasoning: {r['draft_reasoning'][:100]}..."
+            )
+            recovered.append(dict(r))
+        return recovered
 
     async def tick(self) -> None:
         """
@@ -272,13 +297,83 @@ class CognitiveLoop:
           6. If rejected, Retry (Gemini Pass 3)
           7. State updates
         """
-        # Step 0: Semantic Analysis
+        # Step 0: Fast-Model Intent Routing
+        try:
+            provider_settings = get_provider_settings(self.settings_store)
+            fast_model = provider_settings["fast_model"]
+            
+            router_prompt = (
+                "You are VYN's Fast Intent Router.\n"
+                "Evaluate the user's message. Does this user message require executing tools (like reading/writing files, run terminal commands, web search, browser), writing code, or deep logical/technical reasoning? Or is it simple conversational chitchat or trivial greetings (e.g. 'thanks', 'cool', 'hi', 'how are you')?\n"
+                "Reply with exactly 'REASON' or 'CHAT'."
+            )
+            
+            intent_response = await self.gemini.think(
+                system_prompt=router_prompt,
+                user_input=user_input,
+                model_override=fast_model
+            )
+            
+            intent = intent_response.response.strip().upper()
+            log.info(f"Intent Routing: user input evaluated as {intent}")
+            
+            if "CHAT" in intent and "REASON" not in intent:
+                # Fast conversational path
+                if status_callback:
+                    status_callback("[dim]  (Engine: FAST CHAT)[/]")
+                    
+                chat_prompt = (
+                    "You are VYN, a highly capable cognitive AI assistant.\n"
+                    "Provide a brief, helpful, and friendly conversational response to the user. "
+                    "You do not have tools or full context active right now, so keep it strictly conversational. "
+                    "Be fully in character. Make it brief."
+                )
+                
+                chat_response = await self.gemini.think(
+                    system_prompt=chat_prompt,
+                    user_input=user_input,
+                    model_override=fast_model
+                )
+                
+                # Persist turn to history
+                await self.session.record_turn(
+                    user_input=user_input,
+                    reasoning="Conversational chitchat handled by Fast Model",
+                    response=chat_response.response,
+                    self_reflection="",
+                    confidence=1.0,
+                    memories_added=0,
+                    goals_changed=0,
+                    scratchpad=""
+                )
+                
+                # Create a minimal CognitiveResponse
+                return CognitiveResponse(
+                    reasoning="Conversational chitchat handled by Fast Model",
+                    response=chat_response.response,
+                    self_reflection="",
+                    confidence=1.0,
+                    tool_calls=[],
+                    new_memories=[],
+                    goal_updates=[],
+                    causal_observations=[],
+                    contradictions_detected=[],
+                    hypotheses=[],
+                    hypothesis_resolutions=[],
+                    uncertainty_tracking=[],
+                    working_scratchpad=""
+                )
+        except Exception as e:
+            log.warning(f"Fast intent routing failed: {e}. Falling back to normal reasoning flow.")
+
+        # Step 0.5: Semantic Analysis
         semantic_analysis = self.semantic_parser.analyze_input(user_input)
         if semantic_analysis['subjective_interpretations']:
             log.info(f"Identified subjective terms: {list(semantic_analysis['subjective_interpretations'].keys())}")
 
         # Step 1: Build context (passing semantic analysis results)
-        system_prompt = await self.context_builder.build(user_input, semantic_analysis=semantic_analysis)
+        with tracer.start_as_current_span("build_context"):
+            system_prompt = await self.context_builder.build(user_input, semantic_analysis=semantic_analysis)
 
         try:
             # Step 1.5: Route (Determine Depth)
@@ -289,8 +384,35 @@ class CognitiveLoop:
                 status_callback(f"[dim]  (Engine: {model_name})[/]")
 
             # Step 2: Think (Pass 1)
-            cognitive = await self.gemini.think(system_prompt, user_input, images=images, model_override=target_model)
+            with tracer.start_as_current_span("llm_pass_1"):
+                cognitive = await self.gemini.think(system_prompt, user_input, images=images, model_override=target_model)
             
+            # Step 2.1: Mid-Turn Crash Recovery Checkpointing
+            if self.session.current:
+                from datetime import datetime, timezone
+                try:
+                    await self.db.execute(
+                        """
+                        INSERT INTO turn_checkpoints (
+                            session_id, turn_number, draft_reasoning, draft_plan, status, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(session_id, turn_number) DO UPDATE SET
+                            draft_reasoning=excluded.draft_reasoning,
+                            status=excluded.status,
+                            updated_at=excluded.updated_at
+                        """,
+                        (
+                            self.session.current.id,
+                            self.session.current.turn_count + 1,
+                            cognitive.reasoning,
+                            "", # draft_plan
+                            "executing_tools",
+                            datetime.now(timezone.utc).isoformat()
+                        )
+                    )
+                except Exception as e:
+                    log.warning(f"Checkpointing failed (non-fatal): {e}")
+
             # Step 2.5: Reasoning Consistency Check (Detect "Intent Drift")
             await self._check_reasoning_consistency(cognitive, status_callback=status_callback)
 
@@ -304,159 +426,184 @@ class CognitiveLoop:
                 plan_id = plan.id
             
             # Step 3: Tool Execution
-            used_tools = bool(cognitive.tool_calls)
-            tool_prompt = system_prompt  # default; overwritten if tools are used
-            tool_failures = False
-            
-            if used_tools:
-                if status_callback:
-                    status_callback(f"[magenta]  Executing {len(cognitive.tool_calls)} tools...[/]")
+            with tracer.start_as_current_span("tool_execution"):
+                used_tools = bool(cognitive.tool_calls)
+                tool_prompt = system_prompt  # default; overwritten if tools are used
+                tool_failures = False
                 
-                tool_results_text, any_failures, tool_results = await self._execute_tools(
-                    cognitive.tool_calls,
-                    status_callback,
-                    execution_mode="interactive",
-                )
-                tool_failures = any_failures
-                await self.planner.reconcile_tools(plan_id, tool_results)
-                
-                # --- Milestone 4: Self-Healing Loop (Immune System) ---
-                max_healing_attempts = 2
-                attempt = 0
-                while any_failures and attempt < max_healing_attempts:
-                    attempt += 1
+                if used_tools:
                     if status_callback:
-                        status_callback(f"[yellow]  ⚠ Tool failure detected. Triggering Self-Healing (Attempt {attempt})...[/]")
+                        status_callback(f"[magenta]  Executing {len(cognitive.tool_calls)} tools...[/]")
                     
-                    healing_prompt = system_prompt + (
-                        "\n\n═══════════════════════════════════════════════════════════\n"
-                        "IMMUNE SYSTEM: SELF-HEALING PROTOCOL\n"
-                        "═══════════════════════════════════════════════════════════\n"
-                        "The following tool calls failed with errors. "
-                        "You MUST analyze the errors, fix the cause (e.g., via code_editor or run_terminal_command), "
-                        "and retry the necessary actions.\n\n"
-                        f"{tool_results_text}\n\n"
-                        "Your mission is to resolve these failures autonomously. DO NOT ask the user for help."
-                    )
-                    
-                    # Pass the healing prompt to Gemini to get correction tool calls
-                    healing_cognitive = await self.gemini.think(healing_prompt, user_input, model_override=target_model)
-                    
-                    if not healing_cognitive.tool_calls:
-                        log.warning("Self-healing triggered but model provided no further tools.")
-                        break
-                        
-                    # Execute the healing tools
-                    healing_results, any_failures, healing_tool_results = await self._execute_tools(
-                        healing_cognitive.tool_calls,
+                    tool_results_text, any_failures, tool_results = await self._execute_tools(
+                        cognitive.tool_calls,
                         status_callback,
                         execution_mode="interactive",
                     )
-                    tool_failures = tool_failures or any_failures
-                    await self.planner.reconcile_tools(plan_id, healing_tool_results)
-                    # Accumulate results
-                    tool_results_text += "\n" + healing_results
-                
-                # Step 4: Re-draft with tool results
-                if status_callback:
-                    status_callback("[bright_cyan]  Observing results and re-drafting...[/]")
+                    tool_failures = any_failures
+                    await self.planner.reconcile_tools(plan_id, tool_results)
                     
-                tool_prompt = system_prompt + (
-                    "\n\n═══════════════════════════════════════════════════════════\n"
-                    "TOOL EXECUTION RESULTS\n"
-                    "═══════════════════════════════════════════════════════════\n"
-                    "You requested to use tools. Here are the cumulative results:\n\n"
-                    f"{tool_results_text}\n\n"
-                    "Now, incorporate these facts into your final response."
-                )
-                cognitive = await self.gemini.think(tool_prompt, user_input, model_override=target_model)
+                    # --- Milestone 4: Self-Healing Loop (Immune System) ---
+                    max_healing_attempts = 2
+                    attempt = 0
+                    while any_failures and attempt < max_healing_attempts:
+                        attempt += 1
+                        if status_callback:
+                            status_callback(f"[yellow]  ⚠ Tool failure detected. Triggering Self-Healing (Attempt {attempt})...[/]")
+                        
+                        healing_prompt = system_prompt + (
+                            "\n\n═══════════════════════════════════════════════════════════\n"
+                            "IMMUNE SYSTEM: SELF-HEALING PROTOCOL\n"
+                            "═══════════════════════════════════════════════════════════\n"
+                            "The following tool calls failed with errors. "
+                            "You MUST analyze the errors, fix the cause (e.g., via code_editor or run_terminal_command), "
+                            "and retry the necessary actions.\n\n"
+                            f"{tool_results_text}\n\n"
+                            "Your mission is to resolve these failures autonomously. DO NOT ask the user for help."
+                        )
+                        
+                        # Pass the healing prompt to Gemini to get correction tool calls
+                        healing_cognitive = await self.gemini.think(healing_prompt, user_input, model_override=target_model)
+                        
+                        if not healing_cognitive.tool_calls:
+                            log.warning("Self-healing triggered but model provided no further tools.")
+                            break
+                            
+                        # Execute the healing tools
+                        healing_results, any_failures, healing_tool_results = await self._execute_tools(
+                            healing_cognitive.tool_calls,
+                            status_callback,
+                            execution_mode="interactive",
+                        )
+                        tool_failures = tool_failures or any_failures
+                        await self.planner.reconcile_tools(plan_id, healing_tool_results)
+                        # Accumulate results
+                        tool_results_text += "\n" + healing_results
+                    
+                    # Step 4: Re-draft with tool results
+                    if status_callback:
+                        status_callback("[bright_cyan]  Observing results and re-drafting...[/]")
+                        
+                    tool_prompt = system_prompt + (
+                        "\n\n═══════════════════════════════════════════════════════════\n"
+                        "TOOL EXECUTION RESULTS\n"
+                        "═══════════════════════════════════════════════════════════\n"
+                        "You requested to use tools. Here are the cumulative results:\n\n"
+                        f"{tool_results_text}\n\n"
+                        "Now, incorporate these facts into your final response."
+                    )
+                    cognitive = await self.gemini.think(tool_prompt, user_input, model_override=target_model)
 
             # Step 5: Critique
-            if status_callback:
-                status_callback("[bright_cyan]  Critiquing draft...[/]")
-                
-            # The context should include tool results if they were run
-            current_context = tool_prompt if used_tools else system_prompt
-            
-            critique = await self.critic.critique(
-                user_input=user_input,
-                system_context=current_context,
-                draft_response=cognitive.response,
-                draft_reasoning=cognitive.reasoning,
-            )
-            
-            # Step 6: Critique → closed retry loop (max 3 attempts, keep best)
-            MAX_CRITIC_ATTEMPTS = 3
-            best_cognitive = cognitive
-            best_score = sum([
-                critique.scores.accuracy,
-                critique.scores.depth,
-                critique.scores.honesty,
-            ])
-            attempt_num = 1
-
-            while not critique.is_acceptable and attempt_num < MAX_CRITIC_ATTEMPTS:
-                attempt_num += 1
+            with tracer.start_as_current_span("critic_evaluation"):
                 if status_callback:
-                    status_callback(
-                        f"[yellow]  ⚠ Draft rejected (Acc:{critique.scores.accuracy:.1f}, "
-                        f"Dep:{critique.scores.depth:.1f}, "
-                        f"Hon:{critique.scores.honesty:.1f}). "
-                        f"Retrying (attempt {attempt_num}/{MAX_CRITIC_ATTEMPTS})...[/]"
-                    )
-
-                retry_prompt = current_context + (
-                    "\n\n═══════════════════════════════════════════════════════════\n"
-                    "CRITIQUE OF PREVIOUS DRAFT\n"
-                    "═══════════════════════════════════════════════════════════\n"
-                    "Your previous draft was rejected by the Internal Critic for the following reasons:\n"
-                    f"{critique.feedback}\n\n"
-                    "Do NOT apologize. Do NOT mention the critic. Just output a better response "
-                    "that fixes these specific issues."
-                )
-
-                retry_cognitive = await self.gemini.think(retry_prompt, user_input, model_override=target_model)
-
-                # Re-run critic on the new attempt
-                retry_critique = await self.critic.critique(
+                    status_callback("[bright_cyan]  Critiquing draft...[/]")
+                    
+                # The context should include tool results if they were run
+                current_context = tool_prompt if used_tools else system_prompt
+                
+                critique = await self.critic.critique(
                     user_input=user_input,
                     system_context=current_context,
-                    draft_response=retry_cognitive.response,
-                    draft_reasoning=retry_cognitive.reasoning,
+                    draft_response=cognitive.response,
+                    draft_reasoning=cognitive.reasoning,
                 )
-
-                retry_score = sum([
-                    retry_critique.scores.accuracy,
-                    retry_critique.scores.depth,
-                    retry_critique.scores.honesty,
+                
+                # Step 6: Critique → closed retry loop (max 3 attempts, keep best)
+                MAX_CRITIC_ATTEMPTS = 3
+                best_cognitive = cognitive
+                best_score = sum([
+                    critique.scores.accuracy,
+                    critique.scores.depth,
+                    critique.scores.honesty,
                 ])
-
-                # Log improvement attempt
-                if self.session.current:
-                    await self._log_failure("critic_rejection", f"Attempt {attempt_num} rejected: {critique.feedback[:100]}")
-                    await self.improver.log_improvement(
-                        session_id=self.session.current.id,
-                        turn_number=self.session.current.turn_count + 1,
-                        draft=cognitive,
-                        critique=critique,
-                        final=retry_cognitive,
+                attempt_num = 1
+    
+                while not critique.is_acceptable and attempt_num < MAX_CRITIC_ATTEMPTS:
+                    attempt_num += 1
+                    if status_callback:
+                        status_callback(
+                            f"[yellow]  ⚠ Draft rejected (Acc:{critique.scores.accuracy:.1f}, "
+                            f"Dep:{critique.scores.depth:.1f}, "
+                            f"Hon:{critique.scores.honesty:.1f}). "
+                            f"Retrying (attempt {attempt_num}/{MAX_CRITIC_ATTEMPTS})...[/]"
+                        )
+    
+                    retry_prompt = current_context + (
+                        "\n\n═══════════════════════════════════════════════════════════\n"
+                        "CRITIQUE OF PREVIOUS DRAFT\n"
+                        "═══════════════════════════════════════════════════════════\n"
+                        "Your previous draft was rejected by the Internal Critic for the following reasons:\n"
+                        f"{critique.feedback}\n\n"
+                        "Do NOT apologize. Do NOT mention the critic. Just output a better response "
+                        "that fixes these specific issues."
                     )
-
-                # Keep the best-scoring attempt (not just the last)
-                if retry_score > best_score:
-                    best_cognitive = retry_cognitive
-                    best_score = retry_score
-
-                cognitive = retry_cognitive
-                critique = retry_critique
-
-                if status_callback:
-                    status_callback(f"[bright_cyan]  Attempt {attempt_num} complete (score: {retry_score:.2f}).[/]")
-
-            # Accept best attempt found across all retries
-            if best_cognitive is not cognitive:
-                log.info(f"Critic: accepting best attempt (score {best_score:.2f}) over final attempt.")
-            cognitive = best_cognitive
+    
+                    retry_cognitive = await self.gemini.think(retry_prompt, user_input, model_override=target_model)
+    
+                    # Step 6.25: Fix Critic Retry Loop "Tool Ignorance"
+                    retry_context = retry_prompt
+                    if retry_cognitive.tool_calls:
+                        if status_callback:
+                            status_callback(f"[magenta]  Critic Retry: Executing {len(retry_cognitive.tool_calls)} planned tools...[/]")
+                        
+                        retry_tool_results_text, any_failures, retry_tool_results = await self._execute_tools(
+                            retry_cognitive.tool_calls,
+                            status_callback,
+                            execution_mode="interactive",
+                        )
+                        await self.planner.reconcile_tools(plan_id, retry_tool_results)
+                        
+                        retry_context = retry_prompt + (
+                            "\n\n═══════════════════════════════════════════════════════════\n"
+                            "CRITIC RETRY: TOOL EXECUTION RESULTS\n"
+                            "═══════════════════════════════════════════════════════════\n"
+                            "You requested to use tools during this critique retry. Here are the results:\n\n"
+                            f"{retry_tool_results_text}\n\n"
+                            "Incorporate these facts into your updated final response."
+                        )
+                        retry_cognitive = await self.gemini.think(retry_context, user_input, model_override=target_model)
+    
+                    # Re-run critic on the new attempt
+                    retry_critique = await self.critic.critique(
+                        user_input=user_input,
+                        system_context=retry_context,
+                        draft_response=retry_cognitive.response,
+                        draft_reasoning=retry_cognitive.reasoning,
+                    )
+    
+                    retry_score = sum([
+                        retry_critique.scores.accuracy,
+                        retry_critique.scores.depth,
+                        retry_critique.scores.honesty,
+                    ])
+    
+                    # Log improvement attempt
+                    if self.session.current:
+                        await self._log_failure("critic_rejection", f"Attempt {attempt_num} rejected: {critique.feedback[:100]}")
+                        await self.improver.log_improvement(
+                            session_id=self.session.current.id,
+                            turn_number=self.session.current.turn_count + 1,
+                            draft=cognitive,
+                            critique=critique,
+                            final=retry_cognitive,
+                        )
+    
+                    # Keep the best-scoring attempt (not just the last)
+                    if retry_score > best_score:
+                        best_cognitive = retry_cognitive
+                        best_score = retry_score
+    
+                    cognitive = retry_cognitive
+                    critique = retry_critique
+    
+                    if status_callback:
+                        status_callback(f"[bright_cyan]  Attempt {attempt_num} complete (score: {retry_score:.2f}).[/]")
+    
+                # Accept best attempt found across all retries
+                if best_cognitive is not cognitive:
+                    log.info(f"Critic: accepting best attempt (score {best_score:.2f}) over final attempt.")
+                cognitive = best_cognitive
 
             await self.planner.complete_plan(plan_id, blocked=tool_failures)
 
@@ -515,10 +662,10 @@ class CognitiveLoop:
             await self._process_uncertainty_tracking(cognitive.uncertainty_tracking)
 
             # Step 11.5: Process self-improvement proposals (Phase 7 — Safety Locked)
-            if cognitive.improvement_proposals and self.session.current:
+            if getattr(cognitive, "inline_proposals", None) and self.meta_reasoning and self.session.current:
                 try:
                     await self.meta_reasoning.process_inline_proposals(
-                        cognitive.improvement_proposals,
+                        cognitive.inline_proposals,
                         self.session.current.id,
                     )
                 except Exception as e:
@@ -535,6 +682,13 @@ class CognitiveLoop:
                 goals_changed=goals_changed,
                 scratchpad=getattr(cognitive, "working_scratchpad", None),
             )
+
+            # Step 12.5: Cleanup turn checkpoint
+            if self.session.current:
+                await self.db.execute(
+                    "DELETE FROM turn_checkpoints WHERE session_id = ? AND turn_number = ?",
+                    (self.session.current.id, self.session.current.turn_count)
+                )
 
         return cognitive
 

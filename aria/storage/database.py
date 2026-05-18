@@ -372,6 +372,16 @@ CREATE TABLE IF NOT EXISTS notifications (
     delivered INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS turn_checkpoints (
+    session_id TEXT NOT NULL,
+    turn_number INTEGER NOT NULL,
+    draft_reasoning TEXT NOT NULL,
+    draft_plan TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'executing_tools',
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, turn_number)
+);
 """
 
 MIGRATIONS_SQL = [
@@ -396,6 +406,7 @@ MIGRATIONS_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_llm_usage_created ON llm_usage(created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_llm_usage_provider_model ON llm_usage(provider, model, created_at DESC)",
     "CREATE TABLE IF NOT EXISTS notifications (id TEXT PRIMARY KEY, message TEXT NOT NULL, level TEXT NOT NULL DEFAULT 'info', delivered INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS turn_checkpoints (session_id TEXT NOT NULL, turn_number INTEGER NOT NULL, draft_reasoning TEXT NOT NULL, draft_plan TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'executing_tools', updated_at TEXT NOT NULL, PRIMARY KEY (session_id, turn_number))",
 ]
 
 

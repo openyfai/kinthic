@@ -28,6 +28,25 @@ class Planner:
     def __init__(self, db: Database):
         self.db = db
 
+    async def get_active_plan(self, session_id: str) -> dict | None:
+        """Query for an active plan and its associated steps."""
+        plan_row = await self.db.fetch_one(
+            "SELECT * FROM plans WHERE session_id = ? AND status = 'active' LIMIT 1",
+            (session_id,)
+        )
+        if not plan_row:
+            return None
+        
+        step_rows = await self.db.fetch_all(
+            "SELECT * FROM plan_steps WHERE plan_id = ? ORDER BY step_number ASC",
+            (plan_row["id"],)
+        )
+        
+        return {
+            "plan": dict(plan_row),
+            "steps": [dict(r) for r in step_rows]
+        }
+
     def should_plan(self, user_input: str, tool_count: int = 0) -> bool:
         words = {w.strip(".,!?;:").lower() for w in user_input.split()}
         return tool_count > 0 or len(user_input) > 220 or bool(words & self.COMPLEX_TRIGGERS)

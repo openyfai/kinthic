@@ -155,6 +155,16 @@ def _decode_images(payload: dict) -> list[dict] | None:
 
 async def background_loop():
     while True:
+        if _cognitive_loop:
+            try:
+                idle_time = await _cognitive_loop.session.get_time_since_last_user_message()
+                if idle_time > 7200:
+                    log.debug(f"Circuit Breaker active: Idle for {idle_time:.0f}s. Sleeping background task.")
+                    await asyncio.sleep(300)
+                    continue
+            except Exception as e:
+                log.error(f"Circuit Breaker check failed: {e}")
+
         await asyncio.sleep(900)
         if background_actions_enabled() and _cognitive_loop:
             try:
@@ -169,6 +179,16 @@ async def proactive_telegram_loop():
     store = RuntimeSettingsStore()
     
     while True:
+        if _cognitive_loop:
+            try:
+                idle_time = await _cognitive_loop.session.get_time_since_last_user_message()
+                if idle_time > 7200:
+                    log.debug(f"Telegram Circuit Breaker active: Idle for {idle_time:.0f}s. Sleeping proactive Telegram task.")
+                    await asyncio.sleep(300)
+                    continue
+            except Exception as e:
+                log.error(f"Telegram Circuit Breaker check failed: {e}")
+
         # Check every 2-6 hours randomly to simulate organic thought pattern
         delay = random.randint(7200, 21600)
         await asyncio.sleep(delay)

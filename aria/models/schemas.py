@@ -464,6 +464,13 @@ class EthicalDecision(BaseModel):
     )
 
 
+class InlineProposal(BaseModel):
+    """An actionable, structured self-improvement proposal."""
+    target_system: str = Field(description="The system module targeted for change (e.g., system_prompt, tool_registry, cognitive_loop, memory_store)")
+    change_description: str = Field(description="The precise and actionable change to apply")
+    success_metric: str = Field(description="How to measure whether the change worked")
+
+
 class CognitiveResponse(BaseModel):
     """
     The complete structured output from Gemini for each cognitive turn.
@@ -598,6 +605,10 @@ class CognitiveResponse(BaseModel):
             "CHANGE: [exact change] | METRIC: [how to measure if it worked]'. "
             "Only propose changes for REAL, REPEATED failures — not one-off mistakes."
         )
+    )
+    inline_proposals: list[InlineProposal] = Field(
+        default_factory=list,
+        description="Actionable, structured self-improvement proposals targeting core modules."
     )
 
 # ==============================================================================
