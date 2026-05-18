@@ -302,7 +302,7 @@ def run_web() -> None:
     import webbrowser
     import json
     import aria
-    from aria.utils.config import VYN_HOME, VYN_DAEMON_LOCK
+    from aria.utils.config import VYN_DAEMON_LOCK
 
     package_dir = Path(aria.__file__).parent
     web_dist = package_dir / "web_dist" / "index.html"
@@ -448,7 +448,6 @@ def main() -> None:
 
         def setup_daemon_logging():
             from aria.utils.config import VYN_DAEMON_LOG
-            import sys
             import os
             if VYN_DAEMON_LOG.exists() and VYN_DAEMON_LOG.stat().st_size > 10 * 1024 * 1024:
                 for i in range(2, 0, -1):

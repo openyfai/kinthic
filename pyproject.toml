@@ -1,6 +1,6 @@
 [project]
 name = "openyfai-vyn"
-version = "1.2.0"
+version = "1.2.1"
 description = "VYN — local-first AI operator powered by the ARIA memory engine (OpenYF AI)."
 readme = "README.md"
 license = "Apache-2.0"

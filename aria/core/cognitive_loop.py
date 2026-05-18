@@ -63,7 +63,7 @@ from aria.storage.database import Database
 from aria.tools.registry import ToolRegistry
 from aria.runtime.settings import RuntimeSettingsStore
 from aria.runtime.usage import UsageTracker
-from aria.utils.config import VYN_PROCESS_LOCK, VYN_ONTOLOGY, VYN_EXPORTS, WORKSPACE_DIR, PROJECT_ROOT, autonomy_policy_snapshot
+from aria.utils.config import VYN_PROCESS_LOCK, VYN_ONTOLOGY, VYN_EXPORTS, VYN_HOME, WORKSPACE_DIR, autonomy_policy_snapshot
 from aria.utils.config import allow_multi_writer, get_process_role, get_provider_settings, get_settings_store
 from aria.utils.config import max_tool_calls_per_turn
 from aria.utils.config import telegram_public_mode_enabled

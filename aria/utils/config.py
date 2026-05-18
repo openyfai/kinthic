@@ -11,6 +11,10 @@ import os
 import shutil
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from aria.runtime.settings import RuntimeSettingsStore
 
 from dotenv import load_dotenv
 

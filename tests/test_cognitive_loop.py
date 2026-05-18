@@ -77,7 +77,7 @@ def test_acquire_process_lock_raises_when_pid_is_alive(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_cognitive_loop_happy_path_with_mocked_llm(tmp_path):
-    with patch("aria.memory.vector_store.DATA_DIR", str(tmp_path)):
+    with patch("aria.utils.config.VYN_VECTOR_DB", tmp_path / "vector_db"):
         loop = CognitiveLoop()
         loop.db.db_path = str(tmp_path / "vyn.db")
         loop.gemini = FakeGemini()
@@ -99,58 +99,66 @@ async def test_cognitive_loop_happy_path_with_mocked_llm(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_store_memories_marks_normative_and_character_provenance(tmp_path):
-    with patch("aria.memory.vector_store.DATA_DIR", str(tmp_path)):
-        loop = CognitiveLoop()
-        loop.db.db_path = str(tmp_path / "vyn.db")
+async def test_store_memories_marks_normative_and_character_provenance():
+    """Verify _store_memories correctly sets provenance metadata.
 
-        await loop.db.connect()
-        await loop.session.start_session()
+    This test mocks the MemoryStore directly — it is testing the provenance
+    logic inside _store_memories, NOT ChromaDB integration.
+    """
+    loop = CognitiveLoop.__new__(CognitiveLoop)
 
-    try:
-        count = await loop._store_memories([
-            NewMemory(
-                content="ARIA must seek consent before high-impact actions.",
-                source="system",
-                memory_type="normative",
-                importance="core",
-                tags=["constitution"],
-                confidence=0.9,
-            ),
-            NewMemory(
-                content="ARIA chose honesty over convenience in a difficult turn.",
-                source="reflection",
-                memory_type="character",
-                importance="core",
-                tags=["formative"],
-                confidence=0.75,
-            ),
-        ])
+    stored_memories: list = []
 
-        stored = await loop.memory.all_memories()
+    async def fake_add(memory):
+        stored_memories.append(memory)
 
-        assert count == 2
-        assert len(stored) == 2
+    async def fake_all():
+        return stored_memories
 
-        normative = next(memory for memory in stored if memory.memory_type == MemoryType.NORMATIVE)
-        character = next(memory for memory in stored if memory.memory_type == MemoryType.CHARACTER)
+    loop.memory = SimpleNamespace(add=fake_add, all_memories=fake_all)
+    loop.session = SimpleNamespace(current=SimpleNamespace(id="test-session", turn_count=0))
 
-        assert normative.provenance["identity_relevant"] is True
-        assert normative.provenance["requires_review"] is True
-        assert normative.provenance["memory_type"] == "normative"
+    count = await loop._store_memories([
+        NewMemory(
+            content="ARIA must seek consent before high-impact actions.",
+            source="system",
+            memory_type="normative",
+            importance="core",
+            tags=["constitution"],
+            confidence=0.9,
+        ),
+        NewMemory(
+            content="ARIA chose honesty over convenience in a difficult turn.",
+            source="reflection",
+            memory_type="character",
+            importance="core",
+            tags=["formative"],
+            confidence=0.75,
+        ),
+    ])
 
-        assert character.provenance["identity_relevant"] is True
-        assert character.provenance["requires_review"] is False
-        assert character.provenance["memory_type"] == "character"
-    finally:
-        await loop.shutdown()
+    stored = await loop.memory.all_memories()
+
+    assert count == 2
+    assert len(stored) == 2
+
+    normative = next(m for m in stored if m.memory_type == MemoryType.NORMATIVE)
+    character = next(m for m in stored if m.memory_type == MemoryType.CHARACTER)
+
+    assert normative.provenance["identity_relevant"] is True
+    assert normative.provenance["requires_review"] is True
+    assert normative.provenance["memory_type"] == "normative"
+
+    assert character.provenance["identity_relevant"] is True
+    assert character.provenance["requires_review"] is False
+    assert character.provenance["memory_type"] == "character"
 
 
 @pytest.mark.asyncio
 async def test_resolve_hypothesis_manual_confirm(tmp_path):
     from aria.models.schemas import Hypothesis as HypothesisOut
 
-    with patch("aria.memory.vector_store.DATA_DIR", str(tmp_path)):
+    with patch("aria.utils.config.VYN_VECTOR_DB", tmp_path / "vector_db"):
         loop = CognitiveLoop()
         loop.db.db_path = str(tmp_path / "vyn.db")
 

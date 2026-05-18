@@ -7,6 +7,19 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.2.1] - 2026-05-18
+
+### Fixed
+
+- **Centralized runtime path to `~/.vyn/`** — All data (database, vector store, secrets, logs, workspace) now lives under `~/.vyn/` instead of being scattered across the project directory and Python site-packages. Includes idempotent migration from legacy `data/` on first run.
+- **`vyn stop` was completely broken** — The stop command pointed at the non-existent `data/aria.pid` file. It now reads `~/.vyn/daemon.lock`, which the daemon writes on startup.
+- **File reader sandbox bypass** — `file_reader.py` was reading `ARIA_WORKSPACE` directly from the environment at module level, ignoring `config.py`. It now uses the centralized `WORKSPACE_DIR` constant.
+- **Code editor sandbox bypass** — `code_editor.py` fell back to `Path.cwd()` (the repo root) when `ARIA_WORKSPACE` was unset, allowing writes anywhere in the repository. Fixed to use `WORKSPACE_DIR` from config.
+- **`_saved_security_flag()` NoneType crash** — The function referenced `_settings_store` directly before the lazy store was initialized, causing `AttributeError: 'NoneType' object has no attribute 'load_settings'`. Fixed to use `get_settings_store()`.
+- **Lint errors breaking CI** — Fixed 7 ruff errors: 5 unused imports (F401), 1 undefined `VYN_HOME` (F821), 1 undefined `RuntimeSettingsStore` forward reference (F821). CI (`ruff check .`) now passes clean.
+- **Daemon log rotation** — `~/.vyn/logs/daemon.log` now rotates at 10 MB with 3 historical files retained.
+- **Doctor warning text** — Updated stale `data/secrets.json` reference to `~/.vyn/secrets.json`.
+
 ## [1.2.0] - 2026-05-18
 
 ### Changed

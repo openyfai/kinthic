@@ -7,7 +7,6 @@ Dotfiles and sensitive paths are blocked to prevent credential leaks.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import aiofiles
 from aria.tools.base import BaseTool
