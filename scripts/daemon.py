@@ -36,14 +36,46 @@ def run_telegram_worker() -> None:
         sys.exit(1)
 
 
+import asyncio
+
+async def _worker_loop():
+    from aria.storage.database import Database
+    from aria.utils.config import DB_PATH
+    from aria.core.cognitive_loop import CognitiveLoop
+
+    db = Database(str(DB_PATH))
+    await db.connect()
+
+    goal_row = None
+    log.info("Cognitive worker spawned. Polling for pending goals...")
+    while True:
+        goal_row = await db.fetch_one("SELECT * FROM goals WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1")
+        if goal_row:
+            break
+        await asyncio.sleep(5.0)
+
+    log.info(f"Picked up pending goal: {goal_row['id']}")
+    
+    # Claim the goal to prevent other instances from grabbing it
+    await db.execute("UPDATE goals SET status = 'active' WHERE id = ?", (goal_row['id'],))
+    await db.close() # Close lightweight connection
+
+    # Spin up the Heavy Cognitive Brain
+    loop = CognitiveLoop()
+    await loop.startup()
+    try:
+        # Inject the goal as a system command
+        await loop.process_turn(f"[SYSTEM TASK - EXECUTE GOAL]: {goal_row['description']}")
+    finally:
+        await loop.shutdown()
+        
+    log.info("Task completed. Ephemeral Cognitive Worker is committing seppuku to free RAM.")
+    sys.exit(0)
+
 def run_cognitive_worker() -> None:
     """Entry point for the Ephemeral Cognitive Worker."""
-    # Placeholder for Phase 3 (The Worker Pool Logic)
-    # For now, it just sleeps to simulate the worker.
     try:
-        log.info("Cognitive worker spawned. Listening for goals in SQLite queue...")
-        while True:
-            time.sleep(10)
+        asyncio.run(_worker_loop())
     except KeyboardInterrupt:
         pass
     except Exception as e:
