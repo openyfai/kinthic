@@ -7,6 +7,14 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.2.0] - 2026-05-18
+
+### Changed
+
+- **Rebranding:** Renamed the primary agent persona from ARIA to VYN. ARIA is now maintained specifically as the underlying Causal Memory Engine powering VYN.
+- **World Model Upgrade:** Advanced the causal graph generation and node mapping for improved associative reasoning.
+- **Daemon Integration:** Added robust daemonizing features for 24/7 background cognitive processing.
+
 ## [1.1.6] - 2026-05-15
 
 ### Fixed
