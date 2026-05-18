@@ -13,7 +13,6 @@ and why it changed its mind.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 
 from aria.models.schemas import (

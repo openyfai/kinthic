@@ -109,4 +109,4 @@ class FileReaderTool(BaseTool):
             return f"Error: File {path.name} appears to be binary or has an unsupported encoding."
         except Exception as e:
             log.error(f"Failed to read file {path}: {e}")
-            return f"Error reading file: could not read the file."
+            return "Error reading file: could not read the file."

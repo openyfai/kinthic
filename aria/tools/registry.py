@@ -172,7 +172,7 @@ class ToolRegistry:
             log.error(f"Tool {call.tool_name} crashed: {e}")
             return ToolResult(
                 tool_name=call.tool_name,
-                actual_outcome=f"Error executing tool: internal error occurred.",
+                actual_outcome="Error executing tool: internal error occurred.",
                 success=False,
                 error="Internal tool execution error",
                 ethical_decision=ethical_decision,

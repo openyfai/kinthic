@@ -32,6 +32,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import aria
 from aria.core.cognitive_loop import CognitiveLoop
+from aria.utils.logger import setup_logger
 from aria.utils.dashboard_static import resolve_dashboard_dir
 from aria.utils.config import (
     background_actions_enabled,
@@ -41,6 +42,7 @@ from aria.utils.config import (
     get_web_port,
 )
 
+log = setup_logger("vyn.web_server")
 _cognitive_loop: CognitiveLoop | None = None
 _db = None
 _kg = None

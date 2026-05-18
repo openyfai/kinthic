@@ -13,11 +13,9 @@ from __future__ import annotations
 import json
 import uuid
 import os
-import signal
 import asyncio
 import errno
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Callable, Any
 
 from aria.core.benchmark import BenchmarkRunner
@@ -65,7 +63,7 @@ from aria.storage.database import Database
 from aria.tools.registry import ToolRegistry
 from aria.runtime.settings import RuntimeSettingsStore
 from aria.runtime.usage import UsageTracker
-from aria.utils.config import TRACES_DIR, DATA_DIR, PROJECT_ROOT, autonomy_policy_snapshot
+from aria.utils.config import DATA_DIR, PROJECT_ROOT, autonomy_policy_snapshot
 from aria.utils.config import allow_multi_writer, get_process_role, get_provider_settings, get_settings_store
 from aria.utils.config import max_tool_calls_per_turn
 from aria.utils.config import telegram_public_mode_enabled
@@ -493,12 +491,12 @@ class CognitiveLoop:
                 log.warning(f"Principle extraction failed (non-fatal): {e}")
 
         # Step 10: Process contradictions
-        contradictions_found = await self._process_contradictions(
+        await self._process_contradictions(
             cognitive.contradictions_detected
         )
 
         # Step 11: Store hypotheses
-        hypotheses_stored = await self._process_hypotheses(cognitive.hypotheses)
+        await self._process_hypotheses(cognitive.hypotheses)
 
         # Step 11.25: Resolve hypotheses when the model (or operator path) supplies resolutions
         await self._process_hypothesis_resolutions(cognitive.hypothesis_resolutions)

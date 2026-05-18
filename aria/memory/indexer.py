@@ -7,7 +7,7 @@ Supports smart chunking for code and markdown to maintain semantic integrity.
 import os
 import json
 import hashlib
-from typing import List, Dict, Any
+from typing import List
 
 from aria.memory.vector_store import VectorStore
 from aria.utils.config import DATA_DIR, PROJECT_ROOT

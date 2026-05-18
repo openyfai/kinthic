@@ -5,15 +5,13 @@ Uses Playwright for stealthy, headless browsing and html2text for markdown extra
 Supports navigation, scraping, clicking, typing, and 1080p screenshots.
 """
 
-import asyncio
 import json
-import logging
-import os
 import ipaddress
 import socket
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional
 from urllib.parse import urlparse
+import re
 
 try:
     from playwright.async_api import async_playwright, Page, Browser, BrowserContext
@@ -127,7 +125,8 @@ class BrowserTool(BaseTool):
         try:
             if action == "navigate":
                 url = kwargs.get("url")
-                if not url: return "Error: Missing 'url' for navigate action."
+                if not url:
+                    return "Error: Missing 'url' for navigate action."
                 _validate_public_url(url)
                 await self.page.goto(url, wait_until="domcontentloaded", timeout=30000)
                 return await self._observation("navigate", f"Successfully navigated to {url}")
@@ -151,14 +150,16 @@ class BrowserTool(BaseTool):
 
             elif action == "click":
                 selector = kwargs.get("selector")
-                if not selector: return "Error: Missing 'selector' for click action."
+                if not selector:
+                    return "Error: Missing 'selector' for click action."
                 await self.page.click(selector, timeout=5000)
                 return await self._observation("click", f"Clicked element: {selector}")
 
             elif action == "type":
                 selector = kwargs.get("selector")
                 text = kwargs.get("text")
-                if not selector or text is None: return "Error: Missing 'selector' or 'text' for type action."
+                if not selector or text is None:
+                    return "Error: Missing 'selector' or 'text' for type action."
                 await self.page.fill(selector, text, timeout=5000)
                 return await self._observation("type", f"Typed text into: {selector}")
 

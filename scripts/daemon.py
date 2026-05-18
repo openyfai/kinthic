@@ -5,7 +5,7 @@ import os
 import signal
 import sys
 import time
-from pathlib import Path
+import asyncio
 
 from aria.utils.logger import setup_logger
 
@@ -38,9 +38,6 @@ def run_telegram_worker() -> None:
             sys.exit(0) # Exit with code 0 so the Watchdog knows NOT to restart it
         log.error(f"Telegram worker crashed: {e}")
         sys.exit(1)
-
-
-import asyncio
 
 async def _worker_loop():
     from aria.storage.database import Database
@@ -117,7 +114,7 @@ def run_watcher_worker() -> None:
         asyncio.run(_run())
     except KeyboardInterrupt:
         pass
-    except Exception as e:
+    except Exception:
         sys.exit(1)
 
 

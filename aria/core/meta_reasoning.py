@@ -8,7 +8,6 @@ human approval before implementation — this is a hard safety constraint.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from typing import Callable, Any
 

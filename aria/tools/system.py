@@ -8,10 +8,8 @@ Phase B Milestone 3: Terminal execution is now sandboxed using Docker for safety
 from __future__ import annotations
 
 import os
-import logging
 import asyncio
 from pathlib import Path
-from typing import Optional
 
 try:
     import docker

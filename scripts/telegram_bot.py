@@ -1,6 +1,5 @@
 import os
 import sys
-import asyncio
 from dotenv import load_dotenv
 
 from telegram import Update

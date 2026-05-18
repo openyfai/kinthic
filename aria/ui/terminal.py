@@ -20,7 +20,6 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 from rich.theme import Theme
-from rich.columns import Columns
 from rich import box
 
 from aria.models.schemas import CognitiveResponse, Goal, Memory, Session
@@ -553,7 +552,7 @@ def show_causal_chain(chain: list[dict], from_concept: str, to_concept: str) -> 
         console.print(
             f"    │ [dim]{step['relationship']}[/] [dim]{strength_bar}[/]"
         )
-        console.print(f"    ▼")
+        console.print("    ▼")
         console.print(f"  [bright_white]{step['to']}[/]")
 
     console.print()

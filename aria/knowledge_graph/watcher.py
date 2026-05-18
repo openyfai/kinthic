@@ -136,7 +136,6 @@ class DebouncedWatcher:
 
     async def _initial_scan(self):
         """Issue 8: Full workspace scan on startup to catch offline changes."""
-        from aria.knowledge_graph.mapper import SkeletonMapper
         target_dir = Path(WORKSPACE_DIR)
         log.info(f"Starting initial FS scan on {target_dir}...")
         

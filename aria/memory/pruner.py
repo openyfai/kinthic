@@ -5,8 +5,7 @@ Summarizes old conversation history into Knowledge Graph nodes
 to keep the active context window lean, fast, and cost-effective.
 """
 
-import logging
-from typing import List, Dict, Any
+from typing import List
 
 from aria.llm.base import SupportsLLM
 from aria.models.schemas import Turn, ConsolidationResult

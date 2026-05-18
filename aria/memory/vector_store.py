@@ -8,7 +8,6 @@ providing "Infinite Recall" beyond the active context window.
 
 import os
 import uuid
-import logging
 from typing import List, Dict, Any, Optional
 
 try:
@@ -53,7 +52,8 @@ class VectorStore:
 
     def add_chunks(self, texts: List[str], metadatas: List[Dict[str, Any]], ids: Optional[List[str]] = None):
         """Adds a list of text chunks to the vector store."""
-        if not self.client: return
+        if not self.client:
+            return
         
         if ids is None:
             ids = [str(uuid.uuid4()) for _ in texts]
@@ -67,7 +67,8 @@ class VectorStore:
 
     def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """Performs a semantic search for the given query."""
-        if not self.client: return []
+        if not self.client:
+            return []
 
         results = self.collection.query(
             query_texts=[query],
@@ -88,19 +89,22 @@ class VectorStore:
 
     def delete_by_path(self, file_path: str):
         """Removes all chunks associated with a specific file path."""
-        if not self.client: return
+        if not self.client:
+            return
         self.collection.delete(where={"path": file_path})
         log.debug(f"Deleted vector entries for path: {file_path}")
 
     def delete_by_ids(self, ids: List[str]):
         """Removes chunks by their exact IDs."""
-        if not self.client: return
+        if not self.client:
+            return
         self.collection.delete(ids=ids)
         log.debug(f"Deleted vector entries for ids: {ids}")
 
     def clear(self):
         """Wipes the entire collection."""
-        if not self.client: return
+        if not self.client:
+            return
         self.client.delete_collection(self.collection.name)
         self.collection = self.client.create_collection(
             name=self.collection.name,

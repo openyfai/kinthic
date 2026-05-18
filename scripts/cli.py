@@ -10,12 +10,10 @@ import uvicorn
 from aria.llm.catalog import get_provider_defaults, list_providers
 from aria.runtime.settings import RuntimeSettingsStore
 from aria.utils.config import (
-    allow_multi_writer,
     browser_actions_enabled,
     code_apply_enabled,
     get_web_host,
     get_web_port,
-    telegram_public_mode_enabled,
     terminal_execution_enabled,
 )
 
@@ -230,7 +228,7 @@ async def run_interactive_setup() -> None:
         import shutil
         import sys
         if not shutil.which("aria"):
-            scripts_path = Path(sys.executable).parent / "Scripts"
+            Path(sys.executable).parent / "Scripts"
             from rich.panel import Panel
             ui.console.print(Panel(
                 Text(f"⚠️  'aria' is not on your PATH.\nFallback: {sys.executable} -m scripts.cli web", justify="center"),
@@ -301,8 +299,6 @@ def run_models() -> None:
 
 
 def run_web() -> None:
-    import subprocess
-    import shutil
     import webbrowser
     import json
     import aria
@@ -389,7 +385,8 @@ def run_proposals(command: str, proposal_id: str | None = None) -> None:
         engine = MetaReasoningEngine(None, db) # type: ignore
         if command == "list":
             proposals = await engine.get_pending_proposals()
-            for p in proposals: print(f"{p.id[:8]} {p.target_system} {p.description}")
+            for p in proposals:
+                print(f"{p.id[:8]} {p.target_system} {p.description}")
         elif command in {"approve", "reject"}:
             await engine.update_status(proposal_id, command + "d") # type: ignore
     asyncio.run(_run())

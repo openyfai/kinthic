@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import os
-from typing import Any
 
 from rich.align import Align
-from rich.console import Console, RenderableType
+from rich.console import Console, RenderableType, Group
 from rich.layout import Layout
 from rich.panel import Panel
 from rich.text import Text
@@ -66,6 +64,3 @@ class OnboardingUI:
         """A minimalist prompt styled to match the slab aesthetic."""
         prompt_text = Text(f"  > {text}: ", style="bold white")
         return self.console.input(prompt_text, password=password).strip() or default
-
-
-from rich.console import Group

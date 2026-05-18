@@ -12,9 +12,7 @@ Phase 2: Added world model commands (:graph, :why, :contradictions, :hypotheses)
 from __future__ import annotations
 
 import asyncio
-import json
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 # Ensure the project root is on the path
@@ -29,7 +27,6 @@ from aria.ui.terminal import (
     show_error,
     show_warning,
     show_success,
-    show_info,
     show_goals,
     show_help,
     show_memories,

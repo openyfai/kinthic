@@ -13,7 +13,6 @@ Each test proves a specific vulnerability is closed:
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 import signal
 from io import StringIO
@@ -207,7 +206,6 @@ class TestTelegramExceptionLogging:
     @pytest.mark.asyncio
     async def test_proactive_message_error_produces_log_output(self, caplog):
         """Simulate a Telegram send failure and verify it appears in logs."""
-        import scripts.web_server as ws
 
         # Mock the cognitive loop to raise when process() is called
         mock_loop = MagicMock()

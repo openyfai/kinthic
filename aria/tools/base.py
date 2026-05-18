@@ -4,8 +4,6 @@ Base Tool Interface.
 
 from __future__ import annotations
 
-import inspect
-from pydantic import BaseModel
 
 class BaseTool:
     """Abstract base class for all ARIA tools."""
