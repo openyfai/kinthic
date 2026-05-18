@@ -5,6 +5,7 @@ import { apiUrl, getAuthHeaders } from "@/lib/api";
 
 type Health = {
   database_path: string;
+  data_dir: string;
   project_root: string;
   vector_store_active: boolean;
   docker_available: boolean;
@@ -139,7 +140,8 @@ export default function OperatorPanel() {
               <Status label="Browser tool" value={health.browser_registered} />
               <Status label="Session" value={health.current_session || "none"} />
             </div>
-            <div className="text-xs text-muted-foreground break-all">Project: {health.project_root}</div>
+            <div className="text-xs text-muted-foreground break-all">Data home: {health.data_dir}</div>
+            <div className="text-xs text-muted-foreground break-all">Workspace: {health.project_root}</div>
             <div className="text-xs text-muted-foreground break-all">DB: {health.database_path}</div>
           </section>
         )}

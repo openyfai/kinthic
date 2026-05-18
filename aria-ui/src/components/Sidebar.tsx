@@ -5,10 +5,15 @@ import {
   Add01Icon as Plus,
   Shield01Icon as Shield,
   Settings02Icon as Settings,
+  Brain01Icon as Brain,
+  DistributeHorizontalCenterIcon as Split,
+  AlertDiamondIcon as AlertDiamond,
+  HelpCircleIcon as HelpCircle,
+  BarChartIcon as BarChart,
 } from 'hugeicons-react';
 import { SessionMeta } from '@/hooks/useAriaSocket';
 
-export type ViewType = 'chat' | 'goals' | 'graph' | 'operator' | 'settings';
+export type ViewType = 'chat' | 'goals' | 'graph' | 'operator' | 'settings' | 'memories' | 'hypotheses' | 'contradictions' | 'uncertainties' | 'benchmark';
 
 interface Props {
   isOpen: boolean;
@@ -22,11 +27,16 @@ interface Props {
 
 export default function Sidebar({ isOpen, sessions, activeSessionId, currentView, onViewChange, onSelectSession, onNewChat }: Props) {
   const navItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
-    { id: 'chat',  label: 'Chat',            icon: <MessageSquare size={15} /> },
-    { id: 'goals', label: 'Active Goals',    icon: <Target size={15} /> },
-    { id: 'graph', label: 'Knowledge Graph', icon: <Network size={15} /> },
-    { id: 'operator', label: 'Operator', icon: <Shield size={15} /> },
-    { id: 'settings', label: 'Settings', icon: <Settings size={15} /> },
+    { id: 'chat',            label: 'Chat',            icon: <MessageSquare size={15} /> },
+    { id: 'goals',           label: 'Goals',           icon: <Target size={15} /> },
+    { id: 'memories',        label: 'Memories',        icon: <Brain size={15} /> },
+    { id: 'graph',           label: 'Knowledge Graph', icon: <Network size={15} /> },
+    { id: 'hypotheses',      label: 'Hypotheses',      icon: <HelpCircle size={15} /> },
+    { id: 'contradictions',  label: 'Contradictions',  icon: <Split size={15} /> },
+    { id: 'uncertainties',   label: 'Uncertainties',   icon: <AlertDiamond size={15} /> },
+    { id: 'benchmark',       label: 'Benchmark',       icon: <BarChart size={15} /> },
+    { id: 'operator',        label: 'Operator',        icon: <Shield size={15} /> },
+    { id: 'settings',        label: 'Settings',        icon: <Settings size={15} /> },
   ];
 
   if (!isOpen) return null;

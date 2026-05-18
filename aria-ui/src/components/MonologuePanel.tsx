@@ -47,8 +47,8 @@ function sessionLabel(sessionId: string | null) {
 function leadText(telemetry: AriaTelemetry) {
   if (telemetry.lastError) return telemetry.lastError;
   if (telemetry.liveThought) return telemetry.liveThought;
-  if (telemetry.phase === 'responding') return 'ARIA is composing the outward response for the current run.';
-  if (telemetry.phase === 'thinking') return 'ARIA is analyzing context, memory, and tool options before answering.';
+  if (telemetry.phase === 'responding') return 'VYN is composing the outward response for the current run.';
+  if (telemetry.phase === 'thinking') return 'VYN is analyzing context, memory, and tool options before answering.';
   if (telemetry.phase === 'offline') return 'The live link is down. The panel will refresh as soon as the socket reconnects.';
   return 'Waiting for cognitive activity. New traces, metrics, and session events will appear here.';
 }
@@ -126,7 +126,7 @@ export default function MonologuePanel({
           </div>
 
           <div className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-semibold uppercase tracking-[0.35em] text-black/30">
-            ARIA
+            VYN
           </div>
         </div>
 
@@ -190,7 +190,7 @@ export default function MonologuePanel({
               <StatCard
                 label="Turns"
                 value={`${telemetry.userTurns}/${telemetry.ariaResponses}`}
-                hint="User / ARIA replies"
+                hint="User / VYN replies"
               />
             </div>
 

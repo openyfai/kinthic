@@ -131,7 +131,7 @@ export default function SettingsView({ providers, settings, onSaved, onOpenOnboa
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Settings</h1>
           <p className="mt-2 max-w-2xl text-sm text-white/60">
             Switch providers and models, rotate secrets, set local cost guardrails, and tune
-            ARIA&apos;s autonomy policy without editing the codebase.
+            VYN&apos;s autonomy policy without editing the codebase.
           </p>
           {onOpenOnboarding && (
             <div className="mt-5 flex flex-wrap items-center gap-3">

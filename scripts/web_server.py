@@ -410,7 +410,34 @@ async def get_goals(request: Request, authorization: str | None = Header(default
     if not _cognitive_loop:
         raise HTTPException(status_code=503, detail="System booting")
     goals = await _cognitive_loop.goals.get_active()
-    return [{"id": g.id, "description": g.description, "priority": g.priority.value, "created_at": g.created_at} for g in goals]
+    return [
+        {
+            "id": g.id,
+            "description": g.description,
+            "priority": g.priority.value if hasattr(g.priority, "value") else str(g.priority),
+            "status": g.status.value if hasattr(g.status, "value") else str(g.status),
+            "created_at": g.created_at,
+        }
+        for g in goals
+    ]
+
+
+@app.get("/api/goals/all")
+async def get_all_goals(request: Request, authorization: str | None = Header(default=None)):
+    _check_auth(authorization, rate_key=f"goals-all:{_request_key(request)}")
+    if not _cognitive_loop:
+        raise HTTPException(status_code=503, detail="System booting")
+    goals = await _cognitive_loop.get_all_goals()
+    return [
+        {
+            "id": g.id,
+            "description": g.description,
+            "priority": g.priority.value if hasattr(g.priority, "value") else str(g.priority),
+            "status": g.status.value if hasattr(g.status, "value") else str(g.status),
+            "created_at": g.created_at,
+        }
+        for g in goals
+    ]
 
 
 @app.get("/api/health")
@@ -438,6 +465,206 @@ async def resolve_tool_approval(approval_id: str, decision: str, request: Reques
         raise HTTPException(status_code=503, detail="System booting")
     ok = await _cognitive_loop.tool_registry.resolve_approval(approval_id, decision)
     return {"ok": ok}
+
+
+# ── Improvement Proposals ────────────────────────────────────────────────────
+
+@app.get("/api/improvement-proposals")
+async def get_improvement_proposals(request: Request, authorization: str | None = Header(default=None)):
+    _check_auth(authorization, rate_key=f"proposals:{_request_key(request)}")
+    if not _cognitive_loop:
+        raise HTTPException(status_code=503, detail="System booting")
+    proposals = await _cognitive_loop.get_all_proposals()
+    return [
+        {
+            "id": p.id,
+            "target_system": p.target_system,
+            "description": p.description,
+            "rationale": p.rationale,
+            "success_metric": p.success_metric,
+            "status": p.status,
+            "created_at": p.created_at,
+            "resolved_at": getattr(p, "resolved_at", None),
+        }
+        for p in proposals
+    ]
+
+
+@app.post("/api/improvement-proposals/{proposal_id}/{decision}")
+async def resolve_improvement_proposal(
+    proposal_id: str,
+    decision: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+):
+    _check_auth(authorization, rate_key=f"proposal-resolve:{_request_key(request)}")
+    if decision not in {"approved", "rejected", "implemented"}:
+        raise HTTPException(status_code=400, detail="Decision must be approved, rejected, or implemented.")
+    if not _cognitive_loop:
+        raise HTTPException(status_code=503, detail="System booting")
+    ok = await _cognitive_loop.resolve_improvement_proposal(proposal_id, decision)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Proposal not found or already resolved.")
+    return {"ok": ok}
+
+
+# ── Hypotheses ────────────────────────────────────────────────────────────────
+
+@app.get("/api/hypotheses")
+async def get_hypotheses(request: Request, authorization: str | None = Header(default=None)):
+    _check_auth(authorization, rate_key=f"hypotheses:{_request_key(request)}")
+    if not _cognitive_loop:
+        raise HTTPException(status_code=503, detail="System booting")
+    hypotheses = await _cognitive_loop.get_all_hypotheses()
+    return [
+        {
+            "id": h.id,
+            "claim": h.claim,
+            "reasoning": h.reasoning,
+            "status": h.status,
+            "created_at": h.created_at,
+        }
+        for h in hypotheses
+    ]
+
+
+@app.post("/api/hypotheses/{hypothesis_id}/{action}")
+async def resolve_hypothesis(
+    hypothesis_id: str,
+    action: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+):
+    _check_auth(authorization, rate_key=f"hypothesis-resolve:{_request_key(request)}")
+    if action not in {"confirm", "deny"}:
+        raise HTTPException(status_code=400, detail="Action must be confirm or deny.")
+    if not _cognitive_loop:
+        raise HTTPException(status_code=503, detail="System booting")
+    ok = await _cognitive_loop.resolve_hypothesis(hypothesis_id, action)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Hypothesis not found or not pending.")
+    return {"ok": ok}
+
+
+# ── Contradictions ────────────────────────────────────────────────────────────
+
+@app.get("/api/contradictions")
+async def get_contradictions(request: Request, authorization: str | None = Header(default=None)):
+    _check_auth(authorization, rate_key=f"contradictions:{_request_key(request)}")
+    if not _cognitive_loop:
+        raise HTTPException(status_code=503, detail="System booting")
+    contradictions = await _cognitive_loop.get_all_contradictions()
+    return [
+        {
+            "id": c.id,
+            "belief_a": c.belief_a,
+            "belief_b": c.belief_b,
+            "resolution": c.resolution,
+            "status": c.status,
+            "created_at": c.created_at,
+        }
+        for c in contradictions
+    ]
+
+
+# ── Uncertainties ─────────────────────────────────────────────────────────────
+
+@app.get("/api/uncertainties")
+async def get_uncertainties(request: Request, authorization: str | None = Header(default=None)):
+    _check_auth(authorization, rate_key=f"uncertainties:{_request_key(request)}")
+    if not _cognitive_loop:
+        raise HTTPException(status_code=503, detail="System booting")
+    uncertainties = await _cognitive_loop.get_uncertainties()
+    return [
+        {
+            "id": u.id if hasattr(u, "id") else str(i),
+            "topic": u.topic,
+            "why_uncertain": u.why_uncertain,
+            "status": u.status,
+            "created_at": u.created_at,
+        }
+        for i, u in enumerate(uncertainties)
+    ]
+
+
+# ── Memories ──────────────────────────────────────────────────────────────────
+
+@app.get("/api/memories")
+async def get_memories(request: Request, authorization: str | None = Header(default=None)):
+    _check_auth(authorization, rate_key=f"memories:{_request_key(request)}")
+    if not _cognitive_loop:
+        raise HTTPException(status_code=503, detail="System booting")
+    memories = await _cognitive_loop.get_all_memories()
+    return [
+        {
+            "id": m.id,
+            "content": m.content,
+            "memory_type": m.memory_type.value if hasattr(m.memory_type, "value") else str(m.memory_type),
+            "source": m.source.value if hasattr(m.source, "value") else str(m.source),
+            "importance": m.importance.value if hasattr(m.importance, "value") else str(m.importance),
+            "confidence": m.confidence,
+            "tags": m.tags,
+            "created_at": m.created_at,
+        }
+        for m in memories
+    ]
+
+
+@app.get("/api/memories/search")
+async def search_memories(
+    q: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+):
+    _check_auth(authorization, rate_key=f"memories-search:{_request_key(request)}")
+    if not _cognitive_loop:
+        raise HTTPException(status_code=503, detail="System booting")
+    memories = await _cognitive_loop.search_memories(q)
+    return [
+        {
+            "id": m.id,
+            "content": m.content,
+            "memory_type": m.memory_type.value if hasattr(m.memory_type, "value") else str(m.memory_type),
+            "source": m.source.value if hasattr(m.source, "value") else str(m.source),
+            "importance": m.importance.value if hasattr(m.importance, "value") else str(m.importance),
+            "confidence": m.confidence,
+            "tags": m.tags,
+            "created_at": m.created_at,
+        }
+        for m in memories
+    ]
+
+
+@app.delete("/api/memories/{memory_id}")
+async def forget_memory_by_id(
+    memory_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+):
+    _check_auth(authorization, rate_key=f"memory-delete:{_request_key(request)}")
+    if not _cognitive_loop:
+        raise HTTPException(status_code=503, detail="System booting")
+    ok = await _cognitive_loop.memory.archive(memory_id)
+    return {"ok": ok}
+
+
+# ── Benchmark ─────────────────────────────────────────────────────────────────
+
+@app.get("/api/benchmark/history")
+async def get_benchmark_history(request: Request, authorization: str | None = Header(default=None)):
+    _check_auth(authorization, rate_key=f"benchmark:{_request_key(request)}")
+    if not _cognitive_loop:
+        raise HTTPException(status_code=503, detail="System booting")
+    return await _cognitive_loop.get_benchmark_history()
+
+
+@app.post("/api/benchmark/run")
+async def run_benchmark(request: Request, authorization: str | None = Header(default=None)):
+    _check_auth(authorization, rate_key=f"benchmark-run:{_request_key(request)}")
+    if not _cognitive_loop:
+        raise HTTPException(status_code=503, detail="System booting")
+    result = await _cognitive_loop.run_benchmark()
+    return result
 
 
 @app.websocket("/ws/chat")

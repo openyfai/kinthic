@@ -12,6 +12,11 @@ import GraphView from "@/components/GraphView";
 import OperatorPanel from "@/components/OperatorPanel";
 import SettingsView from "@/components/SettingsView";
 import SetupWizard from "@/components/SetupWizard";
+import MemoriesView from "@/components/MemoriesView";
+import HypothesesView from "@/components/HypothesesView";
+import ContradictionsView from "@/components/ContradictionsView";
+import UncertaintiesView from "@/components/UncertaintiesView";
+import BenchmarkView from "@/components/BenchmarkView";
 import { useAriaSocket } from "@/hooks/useAriaSocket";
 import { apiUrl, clearApiKey, getAuthHeaders, getApiKey, setApiKey, wsUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -145,7 +150,7 @@ export default function Home() {
         const response = await fetch(apiUrl("/api/settings"), { headers: getAuthHeaders() });
         if (response.status === 401) {
           setAuthNeeded(true);
-          setAuthError("Enter the ARIA web API key for this instance to continue.");
+          setAuthError("Enter the VYN web API key for this instance to continue.");
           setRuntimeLoading(false);
           return;
         }
@@ -163,7 +168,7 @@ export default function Home() {
         if (!cancelled) {
           setRuntimeError(
             error instanceof TypeError
-              ? "Cannot reach the ARIA server yet. Start `aria web` or `docker compose --profile web up --build`."
+              ? "Cannot reach the VYN server yet. Start `vyn web` or `docker compose --profile web up --build`."
               : error instanceof Error
                 ? error.message
                 : "Failed to load runtime settings."
@@ -185,7 +190,7 @@ export default function Home() {
   async function unlockWithApiKey() {
     const candidate = authInput.trim();
     if (!candidate) {
-      setAuthError("Enter the ARIA web API key to continue.");
+      setAuthError("Enter the VYN web API key to continue.");
       return;
     }
     setApiKey(candidate);
@@ -219,7 +224,7 @@ export default function Home() {
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/78 px-6 py-10 backdrop-blur-md">
           <div className="w-full max-w-xl rounded-[30px] border border-white/10 bg-[#050505] p-8 shadow-[0_30px_120px_rgba(0,0,0,0.65)]">
             <div className="text-[11px] uppercase tracking-[0.32em] text-white/42">Secure instance</div>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Enter the ARIA web API key.</h1>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Enter the VYN web API key.</h1>
             <p className="mt-3 text-sm leading-6 text-white/62">
               This instance is bound beyond localhost or has API protection enabled. Enter the local web key first,
               then the onboarding flow will continue normally.
@@ -228,14 +233,14 @@ export default function Home() {
               <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
                 {bootstrapData.setup.setup_completed
                   ? `Current runtime: ${bootstrapData.setup.provider ?? "configured provider"} / ${bootstrapData.setup.model ?? "configured model"}.`
-                  : "Setup has not been completed yet. After unlocking, ARIA will open the first-run setup flow."}
+                  : "Setup has not been completed yet. After unlocking, VYN will open the first-run setup flow."}
               </div>
             )}
             <div className="mt-6 grid gap-3">
               <input
                 value={authInput}
                 onChange={(event) => setAuthInput(event.target.value)}
-                placeholder="ARIA_WEB_API_KEY"
+                placeholder="VYN_WEB_API_KEY"
                 className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/28 focus:border-white/25"
               />
               <button
@@ -350,7 +355,7 @@ export default function Home() {
             <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
               {!isConnected && (
                 <div className="absolute top-0 left-0 right-0 bg-amber-950 border-b border-amber-800 text-amber-400 text-xs text-center py-1.5 z-30 font-medium">
-                  {runtimeLoading ? "Loading ARIA runtime..." : "Reconnecting to ARIA..."}
+                  {runtimeLoading ? "Loading VYN runtime..." : "Reconnecting to VYN..."}
                 </div>
               )}
 
@@ -364,7 +369,7 @@ export default function Home() {
                         Next steps
                       </div>
                       <p className="mt-2 text-sm font-medium text-foreground">
-                        ARIA is ready. Try a prompt below, or explore:
+                        VYN is ready. Try a prompt below, or explore:
                       </p>
                     </div>
                     <button
@@ -481,7 +486,7 @@ export default function Home() {
                           ))}
                         </div>
                         <div className="text-center text-[11px] text-muted-foreground -mt-1">
-                          ARIA can make mistakes. Consider verifying critical information.
+                          VYN can make mistakes. Consider verifying critical information.
                         </div>
                       </div>
                     </div>
@@ -494,7 +499,7 @@ export default function Home() {
                           isDisabled={isThinking || isStreaming}
                         />
                         <div className="text-center mt-3 text-[11px] text-muted-foreground">
-                          ARIA can make mistakes. Consider verifying critical information.
+                          VYN can make mistakes. Consider verifying critical information.
                         </div>
                       </div>
                     </div>
@@ -502,9 +507,14 @@ export default function Home() {
                 </>
               )}
 
-              {currentView === "goals" && <GoalsView />}
-              {currentView === "graph" && <GraphView />}
-              {currentView === "operator" && <OperatorPanel />}
+              {currentView === "goals"           && <GoalsView />}
+              {currentView === "graph"           && <GraphView />}
+              {currentView === "memories"        && <MemoriesView />}
+              {currentView === "hypotheses"      && <HypothesesView />}
+              {currentView === "contradictions"  && <ContradictionsView />}
+              {currentView === "uncertainties"   && <UncertaintiesView />}
+              {currentView === "benchmark"       && <BenchmarkView />}
+              {currentView === "operator"        && <OperatorPanel />}
               {currentView === "settings" && runtimeData && (
                 <SettingsView
                   providers={runtimeData.providers ?? []}
