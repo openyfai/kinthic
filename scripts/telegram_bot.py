@@ -69,7 +69,7 @@ async def pair_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     user = update.effective_user
     paired = settings_store.consume_pair_code(code, user.id, user.username)
     if paired:
-        await update.message.reply_text("Pairing successful. You can now use this ARIA bot from Telegram.")
+        await update.message.reply_text("Pairing successful. You can now use this VYN bot from Telegram.")
     else:
         await update.message.reply_text("That pairing code is invalid or expired.")
 
@@ -79,10 +79,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if context.args:
         code = context.args[0].strip().upper()
         if settings_store.consume_pair_code(code, user_id, update.effective_user.username):
-            await update.message.reply_text("Pairing successful. ARIA is now linked to your Telegram account.")
+            await update.message.reply_text("Pairing successful. VYN is now linked to your Telegram account.")
             return
     await update.message.reply_text(
-        "👋 Hello! I am ARIA — a local-first cognitive agent.\n\n"
+        "👋 Hello! I am VYN — a local-first cognitive agent.\n\n"
         "My engine is online. I have access (within policy) to your tools, memory, "
         "and knowledge graph. How can I help you today?\n\n"
         f"Your Telegram ID: `{user_id}`\n"
@@ -101,7 +101,7 @@ async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def logout_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     settings_store.revoke_telegram_user(update.effective_user.id)
-    await update.message.reply_text("This Telegram account has been unpaired from ARIA.")
+    await update.message.reply_text("This Telegram account has been unpaired from VYN.")
 
 
 async def approvals_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -117,7 +117,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
     health = await aria_loop.get_health_status()
     await update.message.reply_text(
-        "ARIA status:\n"
+        "VYN status:\n"
         f"- Provider: {health.get('provider')}\n"
         f"- Model: {health.get('model')}\n"
         f"- Session: {health.get('current_session') or 'none'}\n"
@@ -176,7 +176,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         potential_code = user_text.strip().upper()
         if potential_code.startswith("PAIR-"):
             if settings_store.consume_pair_code(potential_code, user_id, update.effective_user.username):
-                await update.message.reply_text("Pairing successful. Connection secured.\n\nHi, I'm ARIA. What are we working on today?")
+                await update.message.reply_text("Pairing successful. Connection secured.\n\nHi, I'm VYN. What are we working on today?")
                 return
             
         log.warning(f"Unauthorized access attempt from User ID: {user_id}")
@@ -244,7 +244,7 @@ def main():
         print("4. Run this script again\n")
         sys.exit(1)
 
-    print("\n🚀 Starting ARIA Telegram Adapter...")
+    print("\n🚀 Starting VYN Telegram Adapter...")
     
     # Security status
     allowed = os.getenv("ALLOWED_TELEGRAM_USERS", "")
@@ -253,7 +253,7 @@ def main():
     if allowed:
         print(f"🔒 Whitelist active: {allowed}")
     elif public:
-        print("⚠️  PUBLIC MODE: Any Telegram user can interact with ARIA!")
+        print("⚠️  PUBLIC MODE: Any Telegram user can interact with VYN!")
     elif paired_users:
         print(f"🔒 Pairing active: {len(paired_users)} Telegram user(s) authorized.")
     else:

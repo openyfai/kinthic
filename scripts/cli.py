@@ -21,7 +21,7 @@ from aria.utils.config import (
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="aria", description="ARIA local operator CLI")
+    parser = argparse.ArgumentParser(prog="vyn", description="VYN local operator CLI")
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("setup", help="Run interactive local setup")
@@ -32,15 +32,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run a tiny live API call to verify configured provider credentials",
     )
     subparsers.add_parser("models", help="List supported providers and models")
-    subparsers.add_parser("web", help="Run the ARIA web server")
+    subparsers.add_parser("web", help="Run the VYN web server")
 
     telegram_parser = subparsers.add_parser("telegram", help="Telegram utilities")
     telegram_sub = telegram_parser.add_subparsers(dest="telegram_command")
     telegram_sub.add_parser("run", help="Run the Telegram bot")
     telegram_sub.add_parser("pair", help="Generate a Telegram pairing code")
 
-    subparsers.add_parser("start", help="Start ARIA daemon in the background")
-    subparsers.add_parser("stop", help="Stop the ARIA background daemon")
+    subparsers.add_parser("start", help="Start VYN daemon in the background")
+    subparsers.add_parser("stop", help="Stop the VYN daemon")
     subparsers.add_parser("daemon", help="Run the V3 Watchdog Supervisor (Foreground)")
 
     proposals_parser = subparsers.add_parser("proposals", help="Manage self-improvement proposals")
@@ -165,7 +165,7 @@ async def run_interactive_setup() -> None:
     # 4. Telegram Pairing (The Magic Handshake)
     ui.render_step(
         "Telegram Link", 
-        Text("Would you like to link ARIA to your Telegram account?", justify="center"),
+        Text("Would you like to link VYN to your Telegram account?", justify="center"),
         subtitle="Recommended for remote access"
     )
     wants_telegram = ui.prompt("Link Telegram? (y/n)", default="n").lower() == "y"
@@ -221,7 +221,7 @@ async def run_interactive_setup() -> None:
     
     ui.render_step(
         "Activation Complete", 
-        Text("ARIA cognitive core is now active.", justify="center"),
+        Text("VYN cognitive core is now active.", justify="center"),
         subtitle="You can now run 'aria web' or 'aria telegram run'"
     )
     
@@ -254,7 +254,7 @@ def run_doctor(*, ping: bool = False) -> None:
     if status['provider'] == 'custom':
         provider_label = f"Custom ({settings.get('custom_label', 'Unknown')})"
 
-    print("\nARIA doctor\n")
+    print("\nVYN doctor\n")
     print(f"Setup complete: {status['setup_completed']}")
     print(f"Provider: {provider_label}")
     print(f"Model: {status['model']}")
@@ -291,7 +291,7 @@ def run_doctor(*, ping: bool = False) -> None:
             print(f"  [{'ok' if result.get('ok') else 'fail'}] {result.get('message')}")
 
 def run_models() -> None:
-    print("\nARIA supported providers\n")
+    print("\nVYN supported providers\n")
     for provider in list_providers():
         print(f"{provider['label']} ({provider['id']})")
         for model in provider["models"]:
@@ -321,7 +321,7 @@ def run_web() -> None:
             pid = lock_data.get("pid")
             if pid:
                 os.kill(pid, 0)
-                print(f"\n⚡ ARIA is already running (PID {pid}). Opening dashboard...")
+                print(f"\n⚡ VYN is already running (PID {pid}). Opening dashboard...")
                 webbrowser.open(f"http://{get_web_host()}:{get_web_port()}")
                 return
         except OSError:

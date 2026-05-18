@@ -228,7 +228,7 @@ class DaemonWatchdog:
         signal.signal(signal.SIGINT, handle_sigterm)
         signal.signal(signal.SIGTERM, handle_sigterm)
 
-        log.info("--- ARIA V3 Watchdog Started ---")
+        log.info("--- VYN V3 Watchdog Started ---")
         
         # Issue 2: Recover orphaned jobs before workers can grab them
         self._recover_stale_jobs()

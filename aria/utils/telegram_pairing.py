@@ -78,7 +78,7 @@ class TelegramPairingSession:
                 f"{self.base_url}/sendMessage",
                 json={
                     "chat_id": chat_id,
-                    "text": "🛡️ **ARIA IDENTITY VERIFIED**\n\nYour cognitive link is now active. I am ready to assist you.",
+                    "text": "🛡️ **VYN IDENTITY VERIFIED**\n\nYour cognitive link is now active. I am ready to assist you.",
                     "parse_mode": "Markdown",
                 },
             )

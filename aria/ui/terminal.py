@@ -98,10 +98,10 @@ def show_startup_summary(memory_count: int, goal_count: int, session_count: int,
     if memory_count == 0 and session_count <= 1:
         # First time
         console.print(
-            "  [bright_cyan]◆[/] [dim]First session. ARIA has no memories yet.[/]"
+            "  [bright_cyan]◆[/] [dim]First session. VYN has no memories yet.[/]"
         )
         console.print(
-            "  [dim]  Talk to ARIA to start building knowledge. Type[/] "
+            "  [dim]  Talk to VYN to start building knowledge. Type[/] "
             "[aria.command]:help[/] [dim]for commands.[/]\n"
         )
     else:
@@ -140,7 +140,7 @@ def show_response(cognitive: CognitiveResponse) -> None:
     # Chat Response Panel
     chat_panel = Panel(
         Markdown(cognitive.response),
-        title="[bold white]💬 ARIA[/]",
+        title="[bold white]💬 VYN[/]",
         border_style="white",
         box=box.ROUNDED,
         padding=(1, 2),
@@ -202,7 +202,7 @@ def show_memories(memories: list[Memory]) -> None:
         return
 
     table = Table(
-        title=f"🧠 ARIA's Memories ({len(memories)} total)",
+        title=f"🧠 VYN's Memories ({len(memories)} total)",
         box=box.ROUNDED,
         border_style="bright_cyan",
         show_lines=True,
@@ -271,7 +271,7 @@ def show_goals(goals: list[Goal]) -> None:
         return
 
     table = Table(
-        title=f"🎯 ARIA's Goals ({len(goals)} total)",
+        title=f"🎯 VYN's Goals ({len(goals)} total)",
         box=box.ROUNDED,
         border_style="yellow",
         show_lines=True,
@@ -378,7 +378,7 @@ def show_sessions(sessions: list[Session]) -> None:
 def show_help() -> None:
     """Display available commands with categories."""
     help_text = """[bold bright_white]💭 Conversation[/]
-  Just type your message to talk to ARIA.
+  Just type your message to talk to VYN.
 
 [bold bright_white]🧠 Memory[/]
   [aria.command]:memories[/]          Show all stored memories
@@ -426,7 +426,7 @@ def show_help() -> None:
   [aria.command]:clear[/]             Clear the screen
   [aria.command]:export[/]            Export session to JSON
   [aria.command]:help[/]              Show this help message
-  [aria.command]:quit[/]              Exit ARIA (memories are saved)"""
+  [aria.command]:quit[/]              Exit VYN (memories are saved)"""
 
     console.print()
     console.print(
@@ -821,7 +821,7 @@ def show_meta_proposal(proposal) -> None:
         return
 
     panel = Panel(
-        f"[bold bright_red]⚠  ARIA HAS PROPOSED A CHANGE TO HERSELF  ⚠[/]\n\n"
+        f"[bold bright_red]⚠  VYN HAS PROPOSED A CHANGE TO HERSELF  ⚠[/]\n\n"
         f"[bold white]Target System:[/] {proposal.target_system}\n"
         f"[bold white]Proposed Change:[/] {proposal.description}\n"
         f"[bold white]Rationale:[/] {proposal.rationale}\n"

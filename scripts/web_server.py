@@ -214,7 +214,7 @@ async def lifespan(app: FastAPI):
     global _cognitive_loop, _db, _kg
     if not _is_loopback_host(_WEB_HOST) and not _current_api_key():
         raise RuntimeError(
-            "ARIA_WEB_API_KEY must be set before binding the web server beyond loopback."
+            "VYN_WEB_API_KEY must be set before binding the web server beyond loopback."
         )
     _cognitive_loop = CognitiveLoop()
     await _cognitive_loop.startup()
@@ -233,7 +233,7 @@ async def lifespan(app: FastAPI):
         await _cognitive_loop.shutdown()
 
 
-app = FastAPI(title="ARIA Web UI", lifespan=lifespan)
+app = FastAPI(title="VYN Web UI", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -552,7 +552,7 @@ async def websocket_chat(websocket: WebSocket):
                 elif "model" in low and ("not found" in low or "does not exist" in low):
                     user_msg = "That model name was not found — pick another model under Settings or `aria models`."
                 else:
-                    user_msg = "Generation failed. Check the ARIA server logs for details or run `aria doctor --ping`."
+                    user_msg = "Generation failed. Check the VYN server logs for details or run `vyn doctor --ping`."
                 await websocket.send_json({"type": "error", "text": user_msg, "error_kind": "model_error"})
     except WebSocketDisconnect:
         return
@@ -590,9 +590,9 @@ async def get_graph_data(request: Request, authorization: str | None = Header(de
 
 
 _MISSING_UI_HTML = """<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"/><title>ARIA — Dashboard assets missing</title></head>
+<html lang="en"><head><meta charset="utf-8"/><title>VYN — Dashboard assets missing</title></head>
 <body style="font-family:system-ui,sans-serif;max-width:42rem;margin:2rem auto;line-height:1.5;">
-<h1>ARIA API is running</h1>
+<h1>VYN API is running</h1>
 <p>Official <code>pip install openyfai-aria</code> wheels should include the dashboard. If you installed from PyPI and see this page, try upgrading the package or file an issue.</p>
 <p><strong>Developers</strong> (git clone): build the Next.js app so <code>aria-ui/out/index.html</code> exists, then restart <code>aria web</code>:</p>
 <pre style="background:#f4f4f5;padding:1rem;">cd aria-ui &amp;&amp; npm install &amp;&amp; npm run build</pre>
@@ -618,7 +618,7 @@ else:
 if __name__ == "__main__":
     host = get_web_host()
     port = get_web_port()
-    print(f"Starting ARIA Knowledge Graph Visualizer on http://{host}:{port}")
+    print(f"Starting VYN on http://{host}:{port}")
     if not _current_api_key():
-        print("No ARIA web API key configured. This is only allowed on loopback binds.")
+        print("No VYN web API key configured. This is only allowed on loopback binds.")
     uvicorn.run(app, host=host, port=port, ws_max_size=_MAX_WS_MESSAGE_CHARS)

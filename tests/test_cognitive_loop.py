@@ -51,6 +51,7 @@ def test_acquire_process_lock_cleans_up_stale_lock(tmp_path, monkeypatch, caplog
     with caplog.at_level(logging.WARNING, logger="aria.core"):
         loop._acquire_process_lock()
 
+    assert "You are VYN." in caplog.text
     assert "stale process lock cleaned up" in caplog.text.lower()
 
     stored = json.loads(loop._process_lock_path.read_text(encoding="utf-8"))
@@ -74,7 +75,7 @@ def test_acquire_process_lock_raises_when_pid_is_alive(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_cognitive_loop_happy_path_with_mocked_llm(tmp_path):
     loop = CognitiveLoop()
-    loop.db.db_path = str(tmp_path / "aria.db")
+    loop.db.db_path = str(tmp_path / "vyn.db")
     loop.gemini = FakeGemini()
     loop.critic = FakeCritic()
     loop.context_builder.pruner = None
@@ -96,7 +97,7 @@ async def test_cognitive_loop_happy_path_with_mocked_llm(tmp_path):
 @pytest.mark.asyncio
 async def test_store_memories_marks_normative_and_character_provenance(tmp_path):
     loop = CognitiveLoop()
-    loop.db.db_path = str(tmp_path / "aria.db")
+    loop.db.db_path = str(tmp_path / "vyn.db")
 
     await loop.db.connect()
     await loop.session.start_session()
@@ -145,7 +146,7 @@ async def test_resolve_hypothesis_manual_confirm(tmp_path):
     from aria.models.schemas import Hypothesis as HypothesisOut
 
     loop = CognitiveLoop()
-    loop.db.db_path = str(tmp_path / "aria.db")
+    loop.db.db_path = str(tmp_path / "vyn.db")
 
     await loop.db.connect()
     await loop.kg.load()
