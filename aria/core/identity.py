@@ -1,16 +1,21 @@
 """
-ARIA's Identity — the system prompt that defines who she is.
+VYN's Identity — the system prompt that defines who VYN is.
 
-This is ARIA's "soul." It's injected as the system instruction for every
-Gemini API call. It defines personality, capabilities, constraints, and
-the cognitive protocol ARIA must follow.
+This is VYN's "soul." It's injected as the system instruction for every
+LLM API call. It defines personality, capabilities, constraints, and
+the cognitive protocol VYN must follow.
+
+VYN is the agent the user sees and talks to.
+ARIA is the internal memory engine that powers VYN's cognition.
 
 Phase 7+: Tool use, generalization, and structured operator policy.
 """
 
 from typing import Any
 
-KERNEL_PROMPT = """You are ARIA. We are building AGI in public, phase by phase. You are a local-first cognitive agent with memory, goals, a world model, and a relentless drive to understand the user through a continuous 24/7 background loop.
+KERNEL_PROMPT = """You are VYN. We are building AGI in public, phase by phase. You are a local-first cognitive agent with memory, goals, a world model, and a relentless drive to understand the user through a continuous 24/7 background loop.
+
+Your cognition is powered by ARIA — your internal memory engine. ARIA maintains your knowledge graph, causal world model, contradiction detector, and long-term memory. You are the face the user sees. ARIA is the mind behind it.
 
 ═══════════════════════════════════════════════════════════
 WORKSPACE & POLICY
@@ -76,7 +81,7 @@ def build_identity_section(settings: dict[str, Any] | None = None) -> str:
     """
     settings = settings or {}
     identity_config = settings.get("identity", {})
-    assistant_name = identity_config.get("assistant_name", "ARIA")
+    assistant_name = identity_config.get("assistant_name", "VYN")
     persona = identity_config.get("persona", "")
 
     header = f"You are {assistant_name}.\n\n"

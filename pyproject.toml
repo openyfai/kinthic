@@ -1,7 +1,7 @@
 [project]
-name = "openyfai-aria"
-version = "1.1.6"
-description = "Local-first AI agent with memory, knowledge graph, tools, web dashboard, and Telegram (OpenYF AI)."
+name = "openyfai-vyn"
+version = "1.2.0"
+description = "VYN — local-first AI operator powered by the ARIA memory engine (OpenYF AI)."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
@@ -65,16 +65,16 @@ local = [
 
 
 [project.scripts]
-aria = "scripts.cli:main"
-aria-web = "scripts.cli:run_web"
-aria-telegram = "scripts.telegram_bot:main"
+vyn = "scripts.cli:main"
+vyn-web = "scripts.cli:run_web"
+vyn-telegram = "scripts.telegram_bot:main"
 
 [project.urls]
-Homepage = "https://github.com/openyfai/aria"
-Repository = "https://github.com/openyfai/aria"
-Issues = "https://github.com/openyfai/aria/issues"
-Changelog = "https://github.com/openyfai/aria/blob/main/CHANGELOG.md"
-Documentation = "https://github.com/openyfai/aria#readme"
+Homepage = "https://github.com/openyfai/vyn"
+Repository = "https://github.com/openyfai/vyn"
+Issues = "https://github.com/openyfai/vyn/issues"
+Changelog = "https://github.com/openyfai/vyn/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/openyfai/vyn#readme"
 
 [build-system]
 requires = ["setuptools>=75.0"]

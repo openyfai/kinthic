@@ -8,11 +8,12 @@ from pathlib import Path
 from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
+VYN_HOME = Path.home() / ".vyn"
+DATA_DIR = VYN_HOME
 DATA_DIR.mkdir(exist_ok=True)
 
-SETTINGS_PATH = DATA_DIR / "settings.json"
-SECRETS_PATH = DATA_DIR / "secrets.json"
+SETTINGS_PATH = VYN_HOME / "settings.json"
+SECRETS_PATH = VYN_HOME / "secrets.json"
 
 
 def _now() -> str:
@@ -89,7 +90,7 @@ def default_settings() -> dict[str, Any]:
             "disable_expensive_models": False,
         },
         "identity": {
-            "assistant_name": "ARIA",
+            "assistant_name": "VYN",
             "persona": "",
         },
         "updated_at": _now(),

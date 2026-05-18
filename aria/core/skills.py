@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from aria.utils.logger import setup_logger
+from aria.utils.config import VYN_SKILLS
 
 log = setup_logger("aria.skills")
 
@@ -10,13 +11,12 @@ _SKIP_SKILL_NAMES = frozenset({"readme"})
 
 class SkillLoader:
     """
-    Dynamically loads Markdown (.md) files from the /skills directory.
-    This allows the community to extend ARIA's capabilities without writing Python code.
+    Dynamically loads Markdown (.md) files from ~/.vyn/skills.
+    This allows users to extend VYN's capabilities without writing Python code.
     """
 
-    def __init__(self, skills_dir: str = "skills"):
-        # Resolve the absolute path from the project root
-        self.skills_dir = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))) / skills_dir
+    def __init__(self):
+        self.skills_dir = VYN_SKILLS
         self.skills: dict[str, str] = {}
 
     def load_all(self) -> int:

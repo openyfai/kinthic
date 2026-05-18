@@ -408,15 +408,15 @@ def main() -> None:
     elif args.command == "daemon":
         import json
         import os
-        from pathlib import Path
-        lock_path = Path("data/daemon.lock")
+        from aria.utils.config import VYN_DAEMON_LOCK
+        lock_path = VYN_DAEMON_LOCK
         if lock_path.exists():
             try:
                 lock_data = json.loads(lock_path.read_text(encoding="utf-8").strip())
                 pid = lock_data.get("pid")
                 if pid:
                     os.kill(pid, 0)
-                    print(f"ARIA daemon is already running (PID {pid}).")
+                    print(f"VYN daemon is already running (PID {pid}).")
                     return
             except OSError:
                 lock_path.unlink(missing_ok=True)

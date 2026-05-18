@@ -1,8 +1,9 @@
 """
-Configuration loader for ARIA.
+Configuration loader for VYN.
 
 Reads from .env file and provides typed access to all settings.
 PROJECT_ROOT is defined once in aria.runtime.settings and re-exported here.
+All runtime data lives under ~/.vyn/
 """
 
 from __future__ import annotations
@@ -12,27 +13,54 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from aria.runtime.settings import RuntimeSettingsStore, PROJECT_ROOT
+from aria.runtime.settings import RuntimeSettingsStore, PROJECT_ROOT, VYN_HOME
 
 
 # ---------------------------------------------------------------------------
-# Paths (derived from the canonical PROJECT_ROOT in settings.py)
+# VYN Home paths — single source of truth for all runtime data
 # ---------------------------------------------------------------------------
 
-DATA_DIR = PROJECT_ROOT / "data"
-DB_PATH = DATA_DIR / "aria.db"
-TRACES_DIR = DATA_DIR / "traces"
+VYN_DB           = VYN_HOME / "vyn.db"
+VYN_CONFIG       = VYN_HOME / "settings.json"
+VYN_SECRETS      = VYN_HOME / "secrets.json"
+VYN_WORKSPACE    = VYN_HOME / "workspace"
+VYN_VECTOR_DB    = VYN_HOME / "memory" / "vector_db"
+VYN_SKILLS       = VYN_HOME / "skills"
+VYN_LOGS         = VYN_HOME / "logs"
+VYN_DAEMON_LOG   = VYN_HOME / "logs" / "daemon.log"
+VYN_PHANTOM      = VYN_HOME / ".phantom"
+VYN_DAEMON_LOCK  = VYN_HOME / "daemon.lock"
 
-DATA_DIR.mkdir(exist_ok=True)
+# Legacy aliases kept so existing imports don't break
+DATA_DIR   = VYN_HOME
+DB_PATH    = VYN_DB
+TRACES_DIR = VYN_HOME / "traces"
+
+# Ensure runtime directories exist
+VYN_HOME.mkdir(exist_ok=True)
+VYN_WORKSPACE.mkdir(exist_ok=True)
+(VYN_HOME / "memory" / "vector_db").mkdir(parents=True, exist_ok=True)
+VYN_SKILLS.mkdir(exist_ok=True)
+VYN_LOGS.mkdir(exist_ok=True)
 TRACES_DIR.mkdir(exist_ok=True)
 
-# Issue 9: Safe ARIA_WORKSPACE Fallback
-_workspace_env = os.getenv("ARIA_WORKSPACE")
+# Skills README
+_skills_readme = VYN_SKILLS / "README.md"
+if not _skills_readme.exists():
+    _skills_readme.write_text(
+        "# VYN Skills\n\n"
+        "Add .md files to this directory to extend VYN with new skills.\n"
+        "Each file should describe a workflow or capability.\n"
+        "Restart VYN after adding a skill for it to take effect.\n",
+        encoding="utf-8",
+    )
+
+# WORKSPACE: VYN_WORKSPACE env > ARIA_WORKSPACE env (backwards compat) > ~/.vyn/workspace
+_workspace_env = os.getenv("VYN_WORKSPACE") or os.getenv("ARIA_WORKSPACE")
 if _workspace_env:
     WORKSPACE_DIR = Path(_workspace_env).resolve()
 else:
-    WORKSPACE_DIR = Path.cwd()
-    print(f"\n[WARNING] ARIA_WORKSPACE is not set. Defaulting safely to current working directory: {WORKSPACE_DIR}\n")
+    WORKSPACE_DIR = VYN_WORKSPACE
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +131,7 @@ def get_api_key() -> str:
         return key
     raise EnvironmentError(
         f"{provider} API key is not set.\n"
-        "Run `aria setup`, use the web onboarding flow, or configure the matching env var."
+        "Run `vyn setup`, use the web onboarding flow, or configure the matching env var."
     )
 
 

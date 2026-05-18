@@ -14,7 +14,7 @@ import subprocess
 from pathlib import Path
 
 from aria.utils.logger import setup_logger
-from aria.utils.config import WORKSPACE_DIR
+from aria.utils.config import WORKSPACE_DIR, VYN_PHANTOM
 
 log = setup_logger("aria.world_model.simulator")
 
@@ -23,7 +23,7 @@ class PhantomSimulator:
     """Safely dry-runs file modifications before committing them to the workspace."""
 
     def __init__(self):
-        self.phantom_dir = WORKSPACE_DIR / ".aria" / "phantom"
+        self.phantom_dir = VYN_PHANTOM
         
     def _setup_phantom_dir(self):
         """Ensure the phantom directory is clean before starting."""
