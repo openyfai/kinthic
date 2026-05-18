@@ -17,6 +17,7 @@ from pathlib import Path
 
 from aria.tools.base import BaseTool
 from aria.utils.logger import setup_logger
+from aria.utils.config import VYN_PENDING_EDITS
 
 log = setup_logger("aria.tools.code_editor")
 
@@ -24,12 +25,11 @@ log = setup_logger("aria.tools.code_editor")
 # Security — sandbox boundary (matches file_reader.py)
 # ---------------------------------------------------------------------------
 
-# Use ARIA_WORKSPACE env var, or fall back to <cwd>.
+# Sandbox root: resolved from config.py (VYN_WORKSPACE or env override).
 # This ensures pip-installed copies don't accidentally write to site-packages.
-_workspace_env = os.environ.get("ARIA_WORKSPACE")
-_WORKSPACE_ROOT = Path(_workspace_env).resolve() if _workspace_env else Path.cwd()
+from aria.utils.config import WORKSPACE_DIR as _WORKSPACE_ROOT  # noqa: E402
 
-PENDING_EDITS_FILE = Path(".aria_pending_edits.json")
+PENDING_EDITS_FILE = VYN_PENDING_EDITS
 BLOCKED_FILE_PREFIXES = (".env",)
 BLOCKED_PATH_PARTS = {".git", "node_modules", ".venv", "venv", "__pycache__"}
 

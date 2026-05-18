@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 
 import aiosqlite
 
-from aria.utils.config import DB_PATH
+from aria.utils.config import VYN_DB
 from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.storage")
@@ -389,7 +389,7 @@ class Database:
     """Async SQLite database wrapper for ARIA."""
 
     def __init__(self, db_path: str | None = None):
-        self.db_path = db_path or str(DB_PATH)
+        self.db_path = db_path or str(VYN_DB)
         self._conn: aiosqlite.Connection | None = None
 
     async def connect(self) -> None:

@@ -10,7 +10,7 @@ import hashlib
 from typing import List
 
 from aria.memory.vector_store import VectorStore
-from aria.utils.config import DATA_DIR, PROJECT_ROOT
+from aria.utils.config import VYN_MANIFEST, WORKSPACE_DIR
 from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.memory.indexer")
@@ -30,7 +30,7 @@ IGNORE_EXTS = {
     ".log", ".lock",
 }
 MAX_INDEX_FILE_BYTES = 1_000_000
-MANIFEST_PATH = DATA_DIR / "workspace_index_manifest.json"
+MANIFEST_PATH = VYN_MANIFEST
 
 class WorkspaceIndexer:
     """
@@ -162,5 +162,5 @@ class WorkspaceIndexer:
 if __name__ == "__main__":
     # Test execution
     vs = VectorStore()
-    indexer = WorkspaceIndexer(vs, str(PROJECT_ROOT))
+    indexer = WorkspaceIndexer(vs, str(WORKSPACE_DIR))
     indexer.run()

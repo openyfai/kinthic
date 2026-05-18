@@ -12,6 +12,7 @@ from pathlib import Path
 import aiofiles
 from aria.tools.base import BaseTool
 from aria.utils.logger import setup_logger
+from aria.utils.config import WORKSPACE_DIR
 
 log = setup_logger("aria.tools.file_reader")
 
@@ -19,10 +20,9 @@ log = setup_logger("aria.tools.file_reader")
 # Security — define the sandbox boundary
 # ---------------------------------------------------------------------------
 
-# Sandbox root: use ARIA_WORKSPACE env var, or fall back to <cwd>/workspace.
+# Sandbox root: resolved from config.py (VYN_WORKSPACE or VYN_WORKSPACE env override).
 # This ensures pip-installed copies don't accidentally expose site-packages.
-_workspace_env = os.environ.get("ARIA_WORKSPACE")
-_PROJECT_ROOT = Path(_workspace_env).resolve() if _workspace_env else Path.cwd()
+_PROJECT_ROOT = WORKSPACE_DIR
 
 # Patterns that are ALWAYS blocked, even inside the project root
 _BLOCKED_NAMES = {

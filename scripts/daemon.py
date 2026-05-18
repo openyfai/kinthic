@@ -41,10 +41,10 @@ def run_telegram_worker() -> None:
 
 async def _worker_loop():
     from aria.storage.database import Database
-    from aria.utils.config import DB_PATH
+    from aria.utils.config import VYN_DB
     from aria.core.cognitive_loop import CognitiveLoop
 
-    db = Database(str(DB_PATH))
+    db = Database(str(VYN_DB))
     await db.connect()
 
     goal_row = None
@@ -102,11 +102,11 @@ def run_watcher_worker() -> None:
     """Entry point for the Debounced FS Watcher."""
     try:
         from aria.storage.database import Database
-        from aria.utils.config import DB_PATH
+        from aria.utils.config import VYN_DB
         from aria.knowledge_graph.watcher import DebouncedWatcher
         
         async def _run():
-            db = Database(str(DB_PATH))
+            db = Database(str(VYN_DB))
             await db.connect()
             watcher = DebouncedWatcher(db)
             await watcher.run_loop()
@@ -123,10 +123,10 @@ def run_cron_worker() -> None:
     try:
         import asyncio
         from aria.storage.database import Database
-        from aria.utils.config import DB_PATH
+        from aria.utils.config import VYN_DB
         
         async def _run():
-            db = Database(str(DB_PATH))
+            db = Database(str(VYN_DB))
             await db.connect()
             while True:
                 try:
@@ -172,10 +172,10 @@ class DaemonWatchdog:
         """Resets active jobs back to pending to recover from an unclean shutdown."""
         import asyncio
         from aria.storage.database import Database
-        from aria.utils.config import DB_PATH
+        from aria.utils.config import VYN_DB
         
         async def _run():
-            db = Database(str(DB_PATH))
+            db = Database(str(VYN_DB))
             await db.connect()
             stale_jobs = await db.fetch_all("SELECT id, description FROM goals WHERE status = 'active'")
             for job in stale_jobs:
@@ -194,10 +194,10 @@ class DaemonWatchdog:
         """Issue 6: Checks if the Cognitive Worker has frozen for > 3 hours."""
         import asyncio
         from aria.storage.database import Database
-        from aria.utils.config import DB_PATH
+        from aria.utils.config import VYN_DB
         
         async def _run():
-            db = Database(str(DB_PATH))
+            db = Database(str(VYN_DB))
             await db.connect()
             await db.execute("CREATE TABLE IF NOT EXISTS heartbeats (process TEXT PRIMARY KEY, last_seen TEXT)")
             hb_row = await db.fetch_one("SELECT last_seen FROM heartbeats WHERE process = 'cognitive_worker'")

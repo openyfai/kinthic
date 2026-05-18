@@ -266,7 +266,7 @@ def run_doctor(*, ping: bool = False) -> None:
     
     warnings = []
     if os.name == "nt":
-        warnings.append("Windows detected: data/secrets.json has no OS-level file permission protection. (Prefer Env Vars)")
+        warnings.append("Windows detected: ~/.vyn/secrets.json has no OS-level file permission protection. (Prefer Env Vars)")
 
     if warnings:
         print("\nWarnings:")
@@ -302,7 +302,7 @@ def run_web() -> None:
     import webbrowser
     import json
     import aria
-    from aria.utils.config import VYN_HOME
+    from aria.utils.config import VYN_HOME, VYN_DAEMON_LOCK
 
     package_dir = Path(aria.__file__).parent
     web_dist = package_dir / "web_dist" / "index.html"
@@ -311,7 +311,7 @@ def run_web() -> None:
         return
 
     # Duplicate Process Check
-    lock_path = VYN_HOME / "web.lock"
+    lock_path = VYN_DAEMON_LOCK
     if lock_path.exists():
         try:
             lock_data = json.loads(lock_path.read_text(encoding="utf-8").strip())
@@ -349,38 +349,43 @@ def run_start() -> None:
 
 
 def run_stop() -> None:
+    import json
     import signal
-    pid_file = Path("data/aria.pid")
-    if pid_file.exists():
-        try:
-            pid = int(pid_file.read_text().strip())
-        except ValueError:
-            print("Corrupted PID file.")
-            return
+    from aria.utils.config import VYN_DAEMON_LOCK
+    lock_path = VYN_DAEMON_LOCK
+    if not lock_path.exists():
+        print("VYN is not running (no daemon.lock found).")
+        return
+    try:
+        lock_data = json.loads(lock_path.read_text(encoding="utf-8").strip())
+        pid = lock_data.get("pid")
+    except Exception:
+        print("Corrupted daemon.lock. Removing.")
+        lock_path.unlink(missing_ok=True)
+        return
 
-        try:
-            # existence check
-            os.kill(pid, 0)
-        except OSError:
-            print("No running process. Cleaning up stale PID file.")
-            pid_file.unlink()
-            return
+    try:
+        os.kill(pid, 0)  # existence check
+    except OSError:
+        print("No running process. Cleaning up stale daemon.lock.")
+        lock_path.unlink(missing_ok=True)
+        return
 
-        try:
-            os.kill(pid, signal.SIGTERM)
-            print(f"Stopped VYN (PID {pid}).")
-        except OSError as e:
-            print(f"Failed to stop VYN: {e}")
-        pid_file.unlink()
+    try:
+        os.kill(pid, signal.SIGTERM)
+        print(f"Stopped VYN (PID {pid}).")
+    except OSError as e:
+        print(f"Failed to stop VYN: {e}")
+    lock_path.unlink(missing_ok=True)
 
 
 def run_proposals(command: str, proposal_id: str | None = None) -> None:
     from aria.storage.database import Database
     from aria.core.meta_reasoning import MetaReasoningEngine
-    from aria.utils.config import DB_PATH
+    from aria.utils.config import VYN_DB
 
     async def _run():
-        db = Database(str(DB_PATH))
+        db = Database(str(VYN_DB))
         await db.connect()
         engine = MetaReasoningEngine(None, db) # type: ignore
         if command == "list":
@@ -440,6 +445,32 @@ def main() -> None:
                 
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         lock_path.write_text(json.dumps({"pid": os.getpid()}), encoding="utf-8")
+
+        def setup_daemon_logging():
+            from aria.utils.config import VYN_DAEMON_LOG
+            import sys
+            import os
+            if VYN_DAEMON_LOG.exists() and VYN_DAEMON_LOG.stat().st_size > 10 * 1024 * 1024:
+                for i in range(2, 0, -1):
+                    old = VYN_DAEMON_LOG.with_name(f"daemon.log.{i}")
+                    new = VYN_DAEMON_LOG.with_name(f"daemon.log.{i+1}")
+                    if old.exists():
+                        try:
+                            old.replace(new)
+                        except OSError:
+                            pass
+                try:
+                    VYN_DAEMON_LOG.replace(VYN_DAEMON_LOG.with_name("daemon.log.1"))
+                except OSError:
+                    pass
+            log_file = open(VYN_DAEMON_LOG, "a", buffering=1, encoding="utf-8")
+            try:
+                os.dup2(log_file.fileno(), 1)
+                os.dup2(log_file.fileno(), 2)
+            except Exception:
+                pass
+        
+        setup_daemon_logging()
         try:
             from scripts.daemon import main as daemon_main
             daemon_main()

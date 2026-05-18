@@ -63,7 +63,7 @@ from aria.storage.database import Database
 from aria.tools.registry import ToolRegistry
 from aria.runtime.settings import RuntimeSettingsStore
 from aria.runtime.usage import UsageTracker
-from aria.utils.config import DATA_DIR, PROJECT_ROOT, autonomy_policy_snapshot
+from aria.utils.config import VYN_PROCESS_LOCK, VYN_ONTOLOGY, VYN_EXPORTS, WORKSPACE_DIR, PROJECT_ROOT, autonomy_policy_snapshot
 from aria.utils.config import allow_multi_writer, get_process_role, get_provider_settings, get_settings_store
 from aria.utils.config import max_tool_calls_per_turn
 from aria.utils.config import telegram_public_mode_enabled
@@ -99,7 +99,7 @@ class CognitiveLoop:
             fast_model=provider_settings["fast_model"],
             reasoning_model=provider_settings["reasoning_model"],
         )
-        self._process_lock_path = DATA_DIR / ".aria-process.lock"
+        self._process_lock_path = VYN_PROCESS_LOCK
 
         # Phase 2 — World Model
         self.kg = KnowledgeGraph(self.db)
@@ -123,7 +123,7 @@ class CognitiveLoop:
 
         # Phase 7: Semantic Disambiguation
         self.ontology = Ontology()
-        _ontology_overlay = DATA_DIR / "ontology.json"
+        _ontology_overlay = VYN_ONTOLOGY
         if _ontology_overlay.is_file():
             try:
                 self.ontology.merge_from_json_file(_ontology_overlay)
@@ -178,7 +178,7 @@ class CognitiveLoop:
         if self.vector_store.is_active:
             from aria.memory.indexer import WorkspaceIndexer
 
-            indexer = WorkspaceIndexer(self.vector_store, str(PROJECT_ROOT))
+            indexer = WorkspaceIndexer(self.vector_store, str(WORKSPACE_DIR))
             asyncio.create_task(asyncio.to_thread(indexer.run))
 
         # Phase 7: Load semantic profiles
@@ -1120,7 +1120,7 @@ class CognitiveLoop:
             ],
         }
 
-        export_dir = DATA_DIR / "exports"
+        export_dir = VYN_EXPORTS
         export_dir.mkdir(exist_ok=True)
 
         filename = f"aria_session_{session.id[:8]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -1153,8 +1153,8 @@ class CognitiveLoop:
         provider_settings = get_provider_settings(self.settings_store)
         return {
             "database_path": str(self.db.db_path),
-            "data_dir": str(DATA_DIR),
-            "project_root": str(PROJECT_ROOT),
+            "data_dir": str(VYN_HOME),
+            "project_root": str(WORKSPACE_DIR),
             "vector_store_active": bool(getattr(self.vector_store, "client", None)),
             "docker_available": bool(getattr(self.tool_registry.tools.get("run_terminal_command"), "client", None)),
             "browser_registered": "browser" in self.tool_registry.tools,

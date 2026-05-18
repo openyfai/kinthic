@@ -80,9 +80,9 @@ class PhantomSimulator:
         import sqlite3
         import uuid
         from datetime import datetime, timezone
-        from aria.utils.config import DB_PATH
+        from aria.utils.config import VYN_DB
         try:
-            conn = sqlite3.connect(DB_PATH)
+            conn = sqlite3.connect(VYN_DB)
             cur = conn.cursor()
             goal_id = f"goal_{uuid.uuid4().hex[:8]}"
             now = datetime.now(timezone.utc).isoformat()

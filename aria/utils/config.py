@@ -2,26 +2,27 @@
 Configuration loader for VYN.
 
 Reads from .env file and provides typed access to all settings.
-PROJECT_ROOT is defined once in aria.runtime.settings and re-exported here.
 All runtime data lives under ~/.vyn/
 """
 
 from __future__ import annotations
 
 import os
+import shutil
+import logging
 from pathlib import Path
 
 from dotenv import load_dotenv
-
-from aria.runtime.settings import RuntimeSettingsStore, PROJECT_ROOT, VYN_HOME
-
 
 # ---------------------------------------------------------------------------
 # VYN Home paths — single source of truth for all runtime data
 # ---------------------------------------------------------------------------
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+VYN_HOME = Path.home() / ".vyn"
+
 VYN_DB           = VYN_HOME / "vyn.db"
-VYN_CONFIG       = VYN_HOME / "settings.json"
+VYN_CONFIG       = VYN_HOME / "config.json"
 VYN_SECRETS      = VYN_HOME / "secrets.json"
 VYN_WORKSPACE    = VYN_HOME / "workspace"
 VYN_VECTOR_DB    = VYN_HOME / "memory" / "vector_db"
@@ -30,38 +31,111 @@ VYN_LOGS         = VYN_HOME / "logs"
 VYN_DAEMON_LOG   = VYN_HOME / "logs" / "daemon.log"
 VYN_PHANTOM      = VYN_HOME / ".phantom"
 VYN_DAEMON_LOCK  = VYN_HOME / "daemon.lock"
+VYN_MANIFEST     = VYN_HOME / "workspace_index_manifest.json"
+VYN_PROCESS_LOCK = VYN_HOME / ".aria-process.lock"
+VYN_ONTOLOGY     = VYN_HOME / "ontology.json"
+VYN_EXPORTS      = VYN_HOME / "exports"
+VYN_TRACES       = VYN_HOME / "traces"
+VYN_PENDING_EDITS = VYN_HOME / "pending_edits.json"
+
 
 # Legacy aliases kept so existing imports don't break
 DATA_DIR   = VYN_HOME
 DB_PATH    = VYN_DB
-TRACES_DIR = VYN_HOME / "traces"
 
-# Ensure runtime directories exist
-VYN_HOME.mkdir(exist_ok=True)
-VYN_WORKSPACE.mkdir(exist_ok=True)
-(VYN_HOME / "memory" / "vector_db").mkdir(parents=True, exist_ok=True)
-VYN_SKILLS.mkdir(exist_ok=True)
-VYN_LOGS.mkdir(exist_ok=True)
-TRACES_DIR.mkdir(exist_ok=True)
-
-# Skills README
-_skills_readme = VYN_SKILLS / "README.md"
-if not _skills_readme.exists():
-    _skills_readme.write_text(
-        "# VYN Skills\n\n"
-        "Add .md files to this directory to extend VYN with new skills.\n"
-        "Each file should describe a workflow or capability.\n"
-        "Restart VYN after adding a skill for it to take effect.\n",
-        encoding="utf-8",
-    )
 
 # WORKSPACE: VYN_WORKSPACE env > ARIA_WORKSPACE env (backwards compat) > ~/.vyn/workspace
 _workspace_env = os.getenv("VYN_WORKSPACE") or os.getenv("ARIA_WORKSPACE")
 if _workspace_env:
     WORKSPACE_DIR = Path(_workspace_env).resolve()
+    if not str(WORKSPACE_DIR).startswith(str(VYN_WORKSPACE)):
+        logging.getLogger("vyn.init").warning(f"SECURITY WARNING: Workspace directory resolved to {WORKSPACE_DIR} outside {VYN_WORKSPACE}")
 else:
     WORKSPACE_DIR = VYN_WORKSPACE
 
+_vyn_home_ensured = False
+
+def ensure_vyn_home() -> None:
+    global _vyn_home_ensured
+    if _vyn_home_ensured:
+        return
+    _vyn_home_ensured = True
+
+    # 1. Create directories
+    VYN_HOME.mkdir(exist_ok=True)
+    VYN_WORKSPACE.mkdir(exist_ok=True)
+    VYN_VECTOR_DB.mkdir(parents=True, exist_ok=True)
+    VYN_SKILLS.mkdir(exist_ok=True)
+    VYN_LOGS.mkdir(exist_ok=True)
+    VYN_TRACES.mkdir(exist_ok=True)
+
+    log = logging.getLogger("vyn.init")
+
+    # 2. Skills README
+    readme_path = VYN_SKILLS / "README.md"
+    if not any(VYN_SKILLS.iterdir()) or not readme_path.exists():
+        readme_path.write_text(
+            "Add .md files to this directory to extend VYN with new skills.\n"
+            "Each file should describe a workflow or capability.\n"
+            "Restart VYN after adding a skill for it to take effect.\n",
+            encoding="utf-8"
+        )
+
+    # 3. Phantom Cleanup
+    if VYN_PHANTOM.exists():
+        try:
+            shutil.rmtree(VYN_PHANTOM)
+            log.info("Cleaned up leftover phantom directory from previous crash")
+        except Exception as e:
+            log.error(f"Failed to clean up phantom directory: {e}")
+
+    # 4. Migrate old data
+    old_data_dir = PROJECT_ROOT / "data"
+    old_db = old_data_dir / "aria.db"
+    
+    if old_db.exists() and not VYN_DB.exists():
+        shutil.copy2(old_db, VYN_DB)
+        log.info("Migrated existing database to ~/.vyn/vyn.db")
+    elif old_db.exists() and VYN_DB.exists():
+        log.warning("WARNING: Both old database (data/aria.db) and new database (~/.vyn/vyn.db) exist. Using new database.")
+
+    old_vector_db1 = old_data_dir / "vector_db"
+    old_vector_db2 = VYN_HOME / "vector_db"
+    for old_v in [old_vector_db1, old_vector_db2]:
+        if old_v.exists() and old_v.is_dir():
+            if not any(VYN_VECTOR_DB.iterdir()):
+                shutil.copytree(old_v, VYN_VECTOR_DB, dirs_exist_ok=True)
+                log.info(f"Migrated existing ChromaDB from {old_v} to {VYN_VECTOR_DB}")
+            break
+
+    # Migrate settings/secrets
+    old_settings = [old_data_dir / "settings.json", VYN_HOME / "settings.json"]
+    for osg in old_settings:
+        if osg.exists() and not VYN_CONFIG.exists():
+            shutil.copy2(osg, VYN_CONFIG)
+            log.info(f"Migrated settings from {osg} to {VYN_CONFIG}")
+            break
+            
+    old_secrets = [old_data_dir / "secrets.json", VYN_HOME / "secrets.json"]
+    for os_sec in old_secrets:
+        if os_sec.exists() and not VYN_SECRETS.exists():
+            shutil.copy2(os_sec, VYN_SECRETS)
+            log.info(f"Migrated secrets from {os_sec} to {VYN_SECRETS}")
+            break
+
+    # Secrets permission
+    if not VYN_SECRETS.exists():
+        VYN_SECRETS.write_text("{}", encoding="utf-8")
+        
+    if os.name != "nt":
+        try:
+            os.chmod(VYN_SECRETS, 0o600)
+        except OSError:
+            pass
+    else:
+        log.warning("WARNING: secrets.json has no file permission protection on Windows. Store API keys as environment variables for better security.")
+
+ensure_vyn_home()
 
 # ---------------------------------------------------------------------------
 # Environment
@@ -72,15 +146,18 @@ _env_file = PROJECT_ROOT / ".env"
 if _env_file.exists():
     load_dotenv(_env_file)
 
-_settings_store = RuntimeSettingsStore()
+_settings_store = None
 
-
-def get_settings_store() -> RuntimeSettingsStore:
+def get_settings_store() -> "RuntimeSettingsStore":
+    global _settings_store
+    if _settings_store is None:
+        from aria.runtime.settings import RuntimeSettingsStore
+        _settings_store = RuntimeSettingsStore()
     return _settings_store
 
 
-def get_provider_settings(settings_store: RuntimeSettingsStore | None = None) -> dict:
-    store = settings_store or _settings_store
+def get_provider_settings(settings_store = None) -> dict:
+    store = settings_store or get_settings_store()
     saved = store.load_settings()
     
     # Priority: Env Var > Saved Settings > Hardcoded Default
@@ -106,14 +183,14 @@ def get_provider_settings(settings_store: RuntimeSettingsStore | None = None) ->
     }
 
 
-def get_provider_secret(provider: str, key_name: str = "api_key", settings_store: RuntimeSettingsStore | None = None) -> str:
-    store = settings_store or _settings_store
-    stored = store.get_provider_secret(provider, key=key_name)
+def get_provider_secret(provider_id: str, settings_store = None) -> str | None:
+    store = settings_store or get_settings_store()
+    stored = store.get_provider_secret(provider_id)
     if stored:
         return stored
 
     from aria.llm.catalog import MODEL_CATALOG
-    payload = MODEL_CATALOG.get(provider, {})
+    payload = MODEL_CATALOG.get(provider_id, {})
     env_name = payload.get("env_key", "")
     if not env_name:
         return ""
@@ -154,7 +231,7 @@ def env_flag(name: str, default: bool = False) -> bool:
 
 
 def _saved_security_flag(name: str, default: bool) -> bool:
-    settings = _settings_store.load_settings()
+    settings = get_settings_store().load_settings()
     return bool(settings.get("security", {}).get(name, default))
 
 

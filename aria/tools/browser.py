@@ -25,11 +25,11 @@ except ImportError:
     stealth_async = None
 
 from aria.tools.base import BaseTool
-from aria.utils.config import browser_actions_enabled, PROJECT_ROOT
+from aria.utils.config import browser_actions_enabled, WORKSPACE_DIR
 from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.tools.browser")
-BROWSER_OUTPUT_DIR = PROJECT_ROOT / "workspace" / "browser"
+BROWSER_OUTPUT_DIR = WORKSPACE_DIR / "browser"
 ALLOWED_SCHEMES = {"http", "https"}
 
 

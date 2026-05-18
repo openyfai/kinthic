@@ -7,13 +7,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-VYN_HOME = Path.home() / ".vyn"
-DATA_DIR = VYN_HOME
-DATA_DIR.mkdir(exist_ok=True)
+from aria.utils.config import VYN_CONFIG, VYN_SECRETS
 
-SETTINGS_PATH = VYN_HOME / "settings.json"
-SECRETS_PATH = VYN_HOME / "secrets.json"
+SETTINGS_PATH = VYN_CONFIG
+SECRETS_PATH = VYN_SECRETS
 
 
 def _now() -> str:

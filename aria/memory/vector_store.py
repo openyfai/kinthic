@@ -16,7 +16,7 @@ try:
 except ImportError:
     chromadb = None
 
-from aria.utils.config import DATA_DIR
+from aria.utils.config import VYN_VECTOR_DB
 from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.memory.vector")
@@ -32,7 +32,7 @@ class VectorStore:
             self.client = None
             return
 
-        self.persist_path = os.path.join(DATA_DIR, "vector_db")
+        self.persist_path = str(VYN_VECTOR_DB)
         os.makedirs(self.persist_path, exist_ok=True)
 
         self.client = chromadb.PersistentClient(path=self.persist_path)

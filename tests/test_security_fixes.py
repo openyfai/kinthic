@@ -26,84 +26,56 @@ import pytest
 
 
 class TestShellInjection:
-    """Prove that a malicious PID file cannot trigger shell command execution."""
+    """Prove that a malicious daemon.lock cannot trigger shell command execution."""
 
     def test_malicious_pid_file_does_not_execute(self, tmp_path: Path):
-        """A PID file containing shell metacharacters must NOT be passed to a shell.
-        The code must reject it as a non-integer and print an error."""
-        pid_file = tmp_path / "aria.pid"
-        pid_file.write_text("1234; rm -rf /")
+        """A daemon.lock containing non-JSON content must be handled safely."""
+        lock_file = tmp_path / "daemon.lock"
+        lock_file.write_text("1234; rm -rf /")  # invalid JSON
 
         from scripts.cli import run_stop
 
         buffer = StringIO()
         with (
-            patch("scripts.cli.Path", return_value=pid_file),
+            patch("aria.utils.config.VYN_DAEMON_LOCK", lock_file),
             patch("sys.stdout", buffer),
         ):
-            # Patch Path("data/aria.pid") to use our tmp file
-            original_path = Path
-
-            class FakePath(type(Path())):
-                def __new__(cls, *args, **kwargs):
-                    if args and args[0] == "data/aria.pid":
-                        return pid_file
-                    return original_path(*args, **kwargs)
-
-            with patch("scripts.cli.Path", FakePath):
-                run_stop()
+            run_stop()
 
         output = buffer.getvalue()
-        assert "Corrupted PID file" in output
+        assert "Corrupted" in output
 
     def test_valid_pid_calls_os_kill(self, tmp_path: Path):
         """A valid integer PID must be killed via os.kill, not subprocess."""
-        pid_file = tmp_path / "aria.pid"
-        pid_file.write_text("99999")
-
-        original_path = Path
-
-        class FakePath(type(Path())):
-            def __new__(cls, *args, **kwargs):
-                if args and args[0] == "data/aria.pid":
-                    return pid_file
-                return original_path(*args, **kwargs)
+        import json
+        lock_file = tmp_path / "daemon.lock"
+        lock_file.write_text(json.dumps({"pid": 99999}))
 
         from scripts.cli import run_stop
 
         with (
-            patch("scripts.cli.Path", FakePath),
+            patch("aria.utils.config.VYN_DAEMON_LOCK", lock_file),
             patch("os.kill") as mock_kill,
             patch("sys.stdout", StringIO()),
         ):
-            # First os.kill(pid, 0) check — say the process exists
-            # Second os.kill(pid, SIGTERM) — actually kill it
             mock_kill.side_effect = [None, None]
             run_stop()
 
-            # Verify os.kill was called with integer PID, not a string
             calls = mock_kill.call_args_list
             assert len(calls) == 2
-            assert calls[0].args == (99999, 0)  # existence check
-            assert calls[1].args == (99999, signal.SIGTERM)  # actual kill
+            assert calls[0].args == (99999, 0)
+            assert calls[1].args == (99999, signal.SIGTERM)
 
     def test_stale_pid_cleans_up(self, tmp_path: Path):
         """If the PID is valid but the process is dead, clean up without error."""
-        pid_file = tmp_path / "aria.pid"
-        pid_file.write_text("88888")
-
-        original_path = Path
-
-        class FakePath(type(Path())):
-            def __new__(cls, *args, **kwargs):
-                if args and args[0] == "data/aria.pid":
-                    return pid_file
-                return original_path(*args, **kwargs)
+        import json
+        lock_file = tmp_path / "daemon.lock"
+        lock_file.write_text(json.dumps({"pid": 88888}))
 
         from scripts.cli import run_stop
 
         with (
-            patch("scripts.cli.Path", FakePath),
+            patch("aria.utils.config.VYN_DAEMON_LOCK", lock_file),
             patch("os.kill", side_effect=OSError("No such process")),
             patch("sys.stdout", StringIO()) as buf,
         ):
@@ -118,24 +90,18 @@ class TestShellInjection:
 
 
 class TestFileReaderSandbox:
-    """Prove that paths outside ARIA_WORKSPACE are rejected."""
+    """Prove that paths outside the workspace root are rejected."""
 
     def test_path_outside_workspace_is_blocked(self, tmp_path: Path):
         """Reading a file outside the workspace must return an access denied error."""
         workspace = tmp_path / "workspace"
         workspace.mkdir()
 
-        # Create a secret file OUTSIDE the workspace
         secret = tmp_path / "secret.txt"
         secret.write_text("API_KEY=sk-super-secret")
 
-        with patch.dict(os.environ, {"ARIA_WORKSPACE": str(workspace)}):
-            # Re-import to pick up the new env var
-            import importlib
-            import aria.tools.file_reader as fr
-
-            importlib.reload(fr)
-
+        import aria.tools.file_reader as fr
+        with patch.object(fr, "_PROJECT_ROOT", workspace):
             tool = fr.FileReaderTool()
             result = asyncio.run(tool.execute(file_path=str(secret)))
 
@@ -148,12 +114,8 @@ class TestFileReaderSandbox:
         safe_file = workspace / "readme.txt"
         safe_file.write_text("Hello from ARIA")
 
-        with patch.dict(os.environ, {"ARIA_WORKSPACE": str(workspace)}):
-            import importlib
-            import aria.tools.file_reader as fr
-
-            importlib.reload(fr)
-
+        import aria.tools.file_reader as fr
+        with patch.object(fr, "_PROJECT_ROOT", workspace):
             tool = fr.FileReaderTool()
             result = asyncio.run(tool.execute(file_path=str(safe_file)))
 
@@ -166,12 +128,8 @@ class TestFileReaderSandbox:
         env_file = workspace / ".env"
         env_file.write_text("SECRET=leaked")
 
-        with patch.dict(os.environ, {"ARIA_WORKSPACE": str(workspace)}):
-            import importlib
-            import aria.tools.file_reader as fr
-
-            importlib.reload(fr)
-
+        import aria.tools.file_reader as fr
+        with patch.object(fr, "_PROJECT_ROOT", workspace):
             tool = fr.FileReaderTool()
             result = asyncio.run(tool.execute(file_path=str(env_file)))
 

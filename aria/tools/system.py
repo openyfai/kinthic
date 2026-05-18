@@ -17,21 +17,21 @@ except ImportError:
     docker = None
 
 from aria.tools.base import BaseTool
-from aria.utils.config import terminal_execution_enabled, PROJECT_ROOT
+from aria.utils.config import terminal_execution_enabled, WORKSPACE_DIR
 from aria.utils.logger import setup_logger
 
 log = setup_logger("aria.tools.system")
-WORKSPACE_ROOT = PROJECT_ROOT / "workspace"
+WORKSPACE_ROOT = WORKSPACE_DIR
 BLOCKED_PATH_PARTS = {".git", "node_modules", ".venv", "venv", "__pycache__"}
 
 
 def _resolve_project_path(path: str) -> Path:
     candidate = Path(path)
     if not candidate.is_absolute():
-        candidate = PROJECT_ROOT / candidate
+        candidate = WORKSPACE_ROOT / candidate
     resolved = candidate.resolve()
     try:
-        resolved.relative_to(PROJECT_ROOT)
+        resolved.relative_to(WORKSPACE_ROOT)
     except ValueError:
         raise ValueError("path is outside the project directory")
     if any(part in BLOCKED_PATH_PARTS for part in resolved.parts):
@@ -133,7 +133,7 @@ class RunTerminalCommandTool(BaseTool):
             # Execute in container with dual-volume mapping for maximum safety:
             # 1. Project Root -> /project (READ-ONLY)
             # 2. Project Workspace -> /workspace (READ-WRITE)
-            cwd = str(PROJECT_ROOT)
+            cwd = str(WORKSPACE_ROOT)
             WORKSPACE_ROOT.mkdir(parents=True, exist_ok=True)
             lab_dir = str(WORKSPACE_ROOT)
             
