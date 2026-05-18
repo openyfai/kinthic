@@ -229,7 +229,7 @@ class ContextBuilder:
 
         # Section 11: Markdown Skills (Phase C)
         if self.skill_loader:
-            skill_block = self.skill_loader.format_for_prompt()
+            skill_block = self.skill_loader.format_for_prompt(user_input)
             if skill_block:
                 sections.append(skill_block)
 

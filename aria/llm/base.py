@@ -144,6 +144,117 @@ class BaseLLMProvider(ABC):
 
     def __init__(self, default_model: str):
         self.default_model = default_model
+        
+        # Dynamically wrap complete_json with caching
+        original_complete_json = self.complete_json
+        
+        async def wrapped_complete_json(
+            *,
+            schema: type[SchemaT],
+            system_prompt: str,
+            user_input: str,
+            images: list[dict] | None = None,
+            model_override: str | None = None,
+            temperature: float = 0.7,
+            request_kind: str = "chat",
+        ) -> SchemaT:
+            return await self._cached_complete_json(
+                original_complete_json,
+                schema=schema,
+                system_prompt=system_prompt,
+                user_input=user_input,
+                images=images,
+                model_override=model_override,
+                temperature=temperature,
+                request_kind=request_kind,
+            )
+        
+        self.complete_json = wrapped_complete_json
+
+    async def _cached_complete_json(
+        self,
+        original_complete_json,
+        *,
+        schema: type[SchemaT],
+        system_prompt: str,
+        user_input: str,
+        images: list[dict] | None = None,
+        model_override: str | None = None,
+        temperature: float = 0.7,
+        request_kind: str = "chat",
+    ) -> SchemaT:
+        # Resolve DB from usage tracker
+        db = None
+        if hasattr(self, "_usage_tracker") and self._usage_tracker:
+            db = self._usage_tracker.db
+            
+        if not db:
+            return await original_complete_json(
+                schema=schema,
+                system_prompt=system_prompt,
+                user_input=user_input,
+                images=images,
+                model_override=model_override,
+                temperature=temperature,
+                request_kind=request_kind,
+            )
+
+        import hashlib
+        from datetime import datetime, timezone
+
+        # 3. Hashing
+        hash_input = f"{system_prompt}||{user_input}||{schema.__name__}"
+        query_hash = hashlib.sha256(hash_input.encode("utf-8")).hexdigest()
+
+        # 4. Retrieval & TTL (15 minutes = 900 seconds)
+        try:
+            cached_row = await db.fetch_one(
+                "SELECT response, created_at FROM response_cache WHERE query_hash = ?",
+                (query_hash,)
+            )
+            if cached_row:
+                cached_response = cached_row["response"]
+                created_at_str = cached_row["created_at"]
+                
+                created_at = datetime.fromisoformat(created_at_str)
+                now = datetime.now(timezone.utc)
+                age = (now - created_at).total_seconds()
+                
+                if age <= 900:
+                    log.info("Semantic Response Cache HIT! (Age: %.1fs)", age)
+                    return self.parse_model_json(schema, cached_response)
+                else:
+                    log.debug("Cache hit but expired (Age: %.1fs)", age)
+        except Exception as e:
+            log.warning("Failed to check response cache: %s", e)
+
+        # 5. Storage (on cache miss)
+        result = await original_complete_json(
+            schema=schema,
+            system_prompt=system_prompt,
+            user_input=user_input,
+            images=images,
+            model_override=model_override,
+            temperature=temperature,
+            request_kind=request_kind,
+        )
+
+        try:
+            if isinstance(result, BaseModel):
+                json_str = result.model_dump_json()
+            else:
+                json_str = json.dumps(result)
+
+            now_str = datetime.now(timezone.utc).isoformat()
+            await db.execute(
+                "INSERT OR REPLACE INTO response_cache (query_hash, response, created_at) VALUES (?, ?, ?)",
+                (query_hash, json_str, now_str)
+            )
+            log.debug("Stored response in Semantic Response Cache.")
+        except Exception as e:
+            log.warning("Failed to save response to cache: %s", e)
+
+        return result
 
     @abstractmethod
     def connect(self) -> None:

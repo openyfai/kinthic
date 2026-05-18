@@ -1,3 +1,8 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from aria.memory.vector_store import VectorStore
+
 from aria.utils.logger import setup_logger
 from aria.utils.config import VYN_SKILLS
 
@@ -13,9 +18,20 @@ class SkillLoader:
     This allows users to extend VYN's capabilities without writing Python code.
     """
 
-    def __init__(self):
+    def __init__(self, vector_store: VectorStore | None = None):
         self.skills_dir = VYN_SKILLS
         self.skills: dict[str, str] = {}
+        self.vector_store = vector_store
+        self.collection = None
+
+        if self.vector_store and self.vector_store.is_active:
+            try:
+                self.collection = self.vector_store.client.get_or_create_collection(
+                    name="aria_skills",
+                    embedding_function=self.vector_store.embedding_function
+                )
+            except Exception as e:
+                log.warning(f"Could not initialize vector collection for skills: {e}")
 
     def load_all(self) -> int:
         """Scan the skills directory and load all markdown files."""
@@ -36,15 +52,53 @@ class SkillLoader:
                     skill_name = file_path.stem
                     self.skills[skill_name] = content
                     count += 1
+
+                    if self.collection:
+                        self.collection.upsert(
+                            documents=[content],
+                            metadatas=[{"name": skill_name}],
+                            ids=[f"skill_{skill_name}"]
+                        )
             except Exception as e:
                 log.error(f"Failed to load skill {file_path.name}: {e}")
 
         log.info(f"Loaded {count} Markdown skills from {self.skills_dir}")
         return count
 
-    def format_for_prompt(self) -> str:
-        """Format all loaded skills into a block for the system prompt."""
+    def get_relevant_skills(self, query: str, limit: int = 3) -> dict[str, str]:
+        """Retrieve only the top matches relevant to the user query."""
         if not self.skills:
+            return {}
+
+        if not self.collection:
+            # Fallback to returning all/first few skills if vector store is not active
+            return dict(list(self.skills.items())[:limit])
+
+        try:
+            results = self.collection.query(
+                query_texts=[query],
+                n_results=min(limit, len(self.skills))
+            )
+            
+            relevant = {}
+            if results and results.get("metadatas") and results["metadatas"][0]:
+                for meta in results["metadatas"][0]:
+                    name = meta.get("name")
+                    if name and name in self.skills:
+                        relevant[name] = self.skills[name]
+            return relevant
+        except Exception as e:
+            log.error(f"Error querying semantic skills: {e}")
+            # Fallback
+            return dict(list(self.skills.items())[:limit])
+
+    def format_for_prompt(self, query: str | None = None) -> str:
+        """Format matching/relevant loaded skills into a block for the system prompt."""
+        skills_to_format = self.skills
+        if query:
+            skills_to_format = self.get_relevant_skills(query)
+
+        if not skills_to_format:
             return ""
 
         sections = [
@@ -56,7 +110,7 @@ class SkillLoader:
             ""
         ]
 
-        for name, content in self.skills.items():
+        for name, content in skills_to_format.items():
             sections.append(f"<skill name=\"{name}\">")
             sections.append(content.strip())
             sections.append("</skill>\n")

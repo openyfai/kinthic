@@ -77,7 +77,10 @@ class FileReaderTool(BaseTool):
         if not file_path:
             return "Error: 'file_path' argument is required."
 
-        path = Path(file_path).resolve()
+        candidate = Path(file_path)
+        if not candidate.is_absolute():
+            candidate = _PROJECT_ROOT / candidate
+        path = candidate.resolve()
 
         # ── Security gate ──────────────────────────────────────────
         safe, reason = _is_path_safe(path)

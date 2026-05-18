@@ -125,7 +125,7 @@ class CognitiveLoop:
         self.generalization_engine = GeneralizationEngine(self.gemini, self.db)
 
         # Phase C — Markdown Skills Ecosystem
-        self.skill_loader = SkillLoader()
+        self.skill_loader = SkillLoader(vector_store=self.vector_store)
         self.skill_loader.load_all()
         self.creativity_stack = CreativityStack()
 
@@ -451,6 +451,7 @@ class CognitiveLoop:
                         if status_callback:
                             status_callback(f"[yellow]  ⚠ Tool failure detected. Triggering Self-Healing (Attempt {attempt})...[/]")
                         
+                        safe_healing_results = sanitize_for_injection(tool_results_text)
                         healing_prompt = system_prompt + (
                             "\n\n═══════════════════════════════════════════════════════════\n"
                             "IMMUNE SYSTEM: SELF-HEALING PROTOCOL\n"
@@ -458,7 +459,7 @@ class CognitiveLoop:
                             "The following tool calls failed with errors. "
                             "You MUST analyze the errors, fix the cause (e.g., via code_editor or run_terminal_command), "
                             "and retry the necessary actions.\n\n"
-                            f"{tool_results_text}\n\n"
+                            f"{safe_healing_results}\n\n"
                             "Your mission is to resolve these failures autonomously. DO NOT ask the user for help."
                         )
                         
@@ -484,12 +485,13 @@ class CognitiveLoop:
                     if status_callback:
                         status_callback("[bright_cyan]  Observing results and re-drafting...[/]")
                         
+                    safe_tool_results = sanitize_for_injection(tool_results_text)
                     tool_prompt = system_prompt + (
                         "\n\n═══════════════════════════════════════════════════════════\n"
                         "TOOL EXECUTION RESULTS\n"
                         "═══════════════════════════════════════════════════════════\n"
                         "You requested to use tools. Here are the cumulative results:\n\n"
-                        f"{tool_results_text}\n\n"
+                        f"{safe_tool_results}\n\n"
                         "Now, incorporate these facts into your final response."
                     )
                     cognitive = await self.gemini.think(tool_prompt, user_input, model_override=target_model)
@@ -554,12 +556,13 @@ class CognitiveLoop:
                         )
                         await self.planner.reconcile_tools(plan_id, retry_tool_results)
                         
+                        safe_retry_tool_results = sanitize_for_injection(retry_tool_results_text)
                         retry_context = retry_prompt + (
                             "\n\n═══════════════════════════════════════════════════════════\n"
                             "CRITIC RETRY: TOOL EXECUTION RESULTS\n"
                             "═══════════════════════════════════════════════════════════\n"
                             "You requested to use tools during this critique retry. Here are the results:\n\n"
-                            f"{retry_tool_results_text}\n\n"
+                            f"{safe_retry_tool_results}\n\n"
                             "Incorporate these facts into your updated final response."
                         )
                         retry_cognitive = await self.gemini.think(retry_context, user_input, model_override=target_model)

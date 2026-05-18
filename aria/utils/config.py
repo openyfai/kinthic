@@ -41,6 +41,7 @@ VYN_ONTOLOGY     = VYN_HOME / "ontology.json"
 VYN_EXPORTS      = VYN_HOME / "exports"
 VYN_TRACES       = VYN_HOME / "traces"
 VYN_PENDING_EDITS = VYN_HOME / "pending_edits.json"
+VYN_BACKUPS      = VYN_HOME / "backups"
 
 
 # Legacy aliases kept so existing imports don't break
@@ -74,6 +75,7 @@ def ensure_vyn_home() -> None:
     VYN_SKILLS.mkdir(exist_ok=True)
     VYN_LOGS.mkdir(exist_ok=True)
     VYN_TRACES.mkdir(exist_ok=True)
+    VYN_BACKUPS.mkdir(exist_ok=True)
 
     log = logging.getLogger("vyn.init")
 

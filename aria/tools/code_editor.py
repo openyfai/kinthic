@@ -148,8 +148,21 @@ class CodeEditorTool(BaseTool):
         Called ONLY by ApplyEditTool after the edit has passed through
         the ethics engine and approval queue.
         """
+        import shutil
+        from datetime import datetime
+        from aria.utils.config import VYN_BACKUPS
+
         full_path = _resolve_workspace_path(proposal["file_path"])
         full_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if full_path.exists():
+            try:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_path = VYN_BACKUPS / f"{full_path.name}_{timestamp}.bak"
+                shutil.copy2(full_path, backup_path)
+                log.info(f"Failsafe backup created: {backup_path}")
+            except Exception as e:
+                log.warning(f"Failed to create failsafe backup for {full_path}: {e}")
 
         if proposal["target_content"] and full_path.exists():
             with open(full_path, "r", encoding="utf-8") as f:
