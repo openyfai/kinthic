@@ -42,7 +42,7 @@ jobs:
           bun build --compile --minify --target=${{ matrix.target }} src/index.tsx --outfile dist/${{ matrix.outfile }}
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.outfile }}
           path: kinthic-ink-ui/dist/${{ matrix.outfile }}
