@@ -32,6 +32,8 @@ kinthic init
 *(Architecture diagram coming soon: A visual representation of how memory nodes and edges operate)*
 <!-- ![Architecture](docs/assets/architecture.png) -->
 
+At the core of the agent is the **Silex Memory Engine**. Instead of relying on flat vector embeddings, Silex dynamically handles entity extraction, edge generation, and persistent causal routing to build a living knowledge graph on your local machine.
+
 kinthic is designed around a rigid noun-verb CLI structure:
 - `kinthic` — Initialize standard interactive loop
 - `kinthic daemon start` — Boot the background supervisor
