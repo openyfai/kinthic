@@ -5,9 +5,8 @@
 > **kinthic — the agent that knows how things connect.**
 
 <div align="center">
-  <a href="https://github.com/kinthic/kinthic/stargazers"><img src="https://img.shields.io/github/stars/kinthic/kinthic?style=flat-square&color=312e81" alt="GitHub stars"></a>
-  <a href="https://pypi.org/project/kinthic/"><img src="https://img.shields.io/pypi/v/kinthic?style=flat-square&color=312e81" alt="PyPI version"></a>
-  <a href="https://github.com/kinthic/kinthic/blob/main/LICENSE"><img src="https://img.shields.io/github/license/kinthic/kinthic?style=flat-square&color=312e81" alt="License"></a>
+  <a href="https://github.com/openyfai/kinthic"><img src="https://img.shields.io/github/stars/openyfai/kinthic?style=flat-square&color=312e81" alt="GitHub stars"></a>
+  <a href="https://github.com/openyfai/kinthic/blob/main/LICENSE"><img src="https://img.shields.io/github/license/openyfai/kinthic?style=flat-square&color=312e81" alt="License"></a>
 </div>
 
 <div align="center">
