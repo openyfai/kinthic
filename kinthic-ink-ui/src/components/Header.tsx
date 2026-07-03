@@ -88,7 +88,7 @@ const Header: React.FC<HeaderProps> = ({ meta }) => {
           borderColor={colors.separator}
         >
           {ASCII_LINES.map((line, i) => (
-            <Text key={i} color={colors.teal}>{line}</Text>
+            <Text key={i} color={colors.primary}>{line}</Text>
           ))}
         </Box>
 

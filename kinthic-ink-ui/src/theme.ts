@@ -19,10 +19,8 @@ export const colors = {
   separator: '#44475A',
   /** Prompt gold — interactive cursor prompt */
   prompt: '#F1FA8C',
-  /** Custom Gold - ASCII art and prompt */
-  gold: '#B48A37',
-  /** Kin Teal */
-  teal: '#00C9A7',
+  /** Kin Primary (Void Indigo) */
+  primary: '#312e81',
 } as const;
 
 export const symbols = {
