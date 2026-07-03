@@ -1,38 +1,38 @@
 version: '3.8'
 
 services:
-  kronos-api:
+  kinthic-api:
     build: .
-    container_name: kronos-api
+    container_name: kinthic-api
     ports:
       - "8000:8000"
     volumes:
-      - kronos-data:/home/kronos/.kronos
+      - kinthic-data:/home/kinthic/.kinthic
     restart: unless-stopped
     command: python -m uvicorn silex.api.server:app --host 0.0.0.0 --port 8000
 
-  kronos-dashboard:
+  kinthic-dashboard:
     build: 
-      context: ./kronos-dashboard
+      context: ./kinthic-dashboard
       dockerfile: Dockerfile
-    container_name: kronos-dashboard
+    container_name: kinthic-dashboard
     ports:
       - "3000:3000"
     depends_on:
-      - kronos-api
+      - kinthic-api
     restart: unless-stopped
     # Depending on how the dashboard is built, it might run via npm run start
     command: npm run start
 
-  kronos-telegram:
+  kinthic-telegram:
     profiles:
       - telegram
     build: .
-    container_name: kronos-telegram
+    container_name: kinthic-telegram
     volumes:
-      - kronos-data:/home/kronos/.kronos
+      - kinthic-data:/home/kinthic/.kinthic
     restart: unless-stopped
-    command: kronos telegram run
+    command: kinthic telegram run
 
 volumes:
-  kronos-data:
+  kinthic-data:

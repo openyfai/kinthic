@@ -29,7 +29,7 @@ class VoiceListener:
             log.info("Whisper model '%s' loaded", model_size)
         except ImportError as e:
             raise RuntimeError(
-                f"Voice listener dependencies not installed: {e}. Run: pip install \"kronos[voice]\""
+                f"Voice listener dependencies not installed: {e}. Run: pip install \"kinthic[voice]\""
             )
 
     def listen(self) -> str:

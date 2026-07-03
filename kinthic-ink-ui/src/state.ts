@@ -68,7 +68,7 @@ export interface AppState {
   history:          HistoryEntry[];
   commands:         Array<{ cmd: string; args: string; desc: string }>;
   turnCounter:      number;
-  /** Shell input history loaded from ~/.kronos/history, newest-last. */
+  /** Shell input history loaded from ~/.kinthic/history, newest-last. */
   inputHistory:     string[];
   /** Text currently being streamed (typewriter animation); null when idle. */
   streamingText:    string | null;
@@ -337,7 +337,7 @@ export function projectTurnEvents(
         break;
 
       case 'response':
-        if (evt.title === 'Kronos') {
+        if (evt.title === 'Kinthic') {
           const text = String(p.text ?? evt.detail ?? '');
           if (text && !streamingActive) {
             items.push({ id, kind: 'assistant', text });
@@ -456,7 +456,7 @@ function applyTurnEventSideEffects(
       lastError = null;
       break;
     case 'response':
-      if (evt.title === 'Kronos') {
+      if (evt.title === 'Kinthic') {
         thinking = { phase: 'done' };
         mode = 'prompt';
       } else {

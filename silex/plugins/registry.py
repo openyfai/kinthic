@@ -1,12 +1,12 @@
 """
-silex/plugins/registry.py — KronosHub local plugin & skill registry.
+silex/plugins/registry.py — KinthicHub local plugin & skill registry.
 
 Maintains a catalog of available skills, tool plugins, and provider plugins
-at ~/.kronos/registry/catalog.yaml.  The catalog can be:
+at ~/.kinthic/registry/catalog.yaml.  The catalog can be:
 
   - Seeded automatically from the bundled skills and provider plugins.
   - Extended by installing community packages via :plugin install.
-  - Refreshed from a remote URL (KRONOS_REGISTRY_URL env var).
+  - Refreshed from a remote URL (KINTHIC_REGISTRY_URL env var).
 
 Catalog entry schema:
   name:        str   — unique identifier
@@ -35,17 +35,17 @@ from typing import Any
 log = logging.getLogger("silex.plugins.registry")
 
 DEFAULT_REGISTRY_URL = os.getenv(
-    "KRONOS_REGISTRY_URL",
-    "https://kronos.openyf.dev/registry/catalog.yaml",
+    "KINTHIC_REGISTRY_URL",
+    "https://kinthic.openyf.dev/registry/catalog.yaml",
 )
 
 
-class KronosRegistry:
-    """Local plugin/skill registry backed by ~/.kronos/registry/catalog.yaml."""
+class KinthicRegistry:
+    """Local plugin/skill registry backed by ~/.kinthic/registry/catalog.yaml."""
 
     def __init__(self) -> None:
-        from silex.utils.config import KRONOS_HOME
-        self.registry_dir = KRONOS_HOME / "registry"
+        from silex.utils.config import KINTHIC_HOME
+        self.registry_dir = KINTHIC_HOME / "registry"
         self.catalog_path = self.registry_dir / "catalog.yaml"
         self._catalog: list[dict[str, Any]] | None = None
 
@@ -110,7 +110,7 @@ class KronosRegistry:
                     data = yaml.safe_load(f) or {}
                 entries = list(data.get("entries", []))
                 if entries:
-                    log.info("Seeded KronosHub catalog from bundled registry/catalog.yaml (%d entries)", len(entries))
+                    log.info("Seeded KinthicHub catalog from bundled registry/catalog.yaml (%d entries)", len(entries))
                     self._write_catalog(entries)
                     return
             except Exception as exc:
@@ -169,7 +169,7 @@ class KronosRegistry:
                 except Exception:
                     pass
 
-        log.info("Seeded KronosHub catalog with %d entries", len(entries))
+        log.info("Seeded KinthicHub catalog with %d entries", len(entries))
         self._write_catalog(entries)
 
     # ------------------------------------------------------------------
@@ -214,7 +214,7 @@ class KronosRegistry:
 
         Returns (success: bool, message: str).
         """
-        from silex.utils.config import KRONOS_SKILLS, KRONOS_PLUGINS_TOOLS
+        from silex.utils.config import KINTHIC_SKILLS, KINTHIC_PLUGINS_TOOLS
 
         catalog = self.load_catalog()
 
@@ -232,7 +232,7 @@ class KronosRegistry:
                      "source": "remote"}
 
         if entry is None:
-            return False, f"'{name_or_url}' not found in catalog. Try: kronos skills search {name_or_url}"
+            return False, f"'{name_or_url}' not found in catalog. Try: kinthic skills search {name_or_url}"
 
         if entry.get("installed"):
             return False, f"'{entry['name']}' is already installed."
@@ -264,7 +264,7 @@ class KronosRegistry:
             plugin_type = entry.get("type", "skill")
 
             if plugin_type == "skill":
-                dest = KRONOS_SKILLS / f"{entry['name']}.md"
+                dest = KINTHIC_SKILLS / f"{entry['name']}.md"
                 dest.write_bytes(content_bytes)
                 self._mark_installed(entry["name"])
                 return True, f"Skill '{entry['name']}' installed to {dest}"
@@ -273,7 +273,7 @@ class KronosRegistry:
                 # Expect a .zip archive containing plugin.yaml + tool.py
                 import io
                 import zipfile
-                plugin_dest = KRONOS_PLUGINS_TOOLS / entry["name"]
+                plugin_dest = KINTHIC_PLUGINS_TOOLS / entry["name"]
                 plugin_dest.mkdir(parents=True, exist_ok=True)
                 with zipfile.ZipFile(io.BytesIO(content_bytes)) as zf:
                     zf.extractall(plugin_dest)
@@ -287,21 +287,21 @@ class KronosRegistry:
             return False, f"Install failed: {exc}"
 
     def install_bundled(self, name: str) -> tuple[bool, str]:
-        """Copy a bundled skill from the repo into ~/.kronos/skills/."""
-        from silex.utils.config import PROJECT_ROOT, KRONOS_SKILLS
+        """Copy a bundled skill from the repo into ~/.kinthic/skills/."""
+        from silex.utils.config import PROJECT_ROOT, KINTHIC_SKILLS
 
-        KRONOS_SKILLS.mkdir(parents=True, exist_ok=True)
+        KINTHIC_SKILLS.mkdir(parents=True, exist_ok=True)
         src_md = PROJECT_ROOT / "skills" / f"{name}.md"
         if not src_md.exists():
             return False, f"Bundled skill '{name}' not found in package (missing {src_md.name})."
 
-        dest_md = KRONOS_SKILLS / f"{name}.md"
+        dest_md = KINTHIC_SKILLS / f"{name}.md"
         shutil.copy2(src_md, dest_md)
 
         for suffix in (".yaml", ".skill.yaml"):
             src_yaml = PROJECT_ROOT / "skills" / f"{name}{suffix}"
             if src_yaml.exists():
-                shutil.copy2(src_yaml, KRONOS_SKILLS / src_yaml.name)
+                shutil.copy2(src_yaml, KINTHIC_SKILLS / src_yaml.name)
                 break
 
         return True, f"Skill '{name}' installed to {dest_md}"
@@ -329,24 +329,24 @@ class KronosRegistry:
 
     def uninstall(self, name: str) -> tuple[bool, str]:
         """Remove an installed skill or tool plugin by name."""
-        from silex.utils.config import KRONOS_SKILLS, KRONOS_PLUGINS_TOOLS, KRONOS_PLUGINS_SKILLS
+        from silex.utils.config import KINTHIC_SKILLS, KINTHIC_PLUGINS_TOOLS, KINTHIC_PLUGINS_SKILLS
 
         # Try flat skill
-        skill_file = KRONOS_SKILLS / f"{name}.md"
+        skill_file = KINTHIC_SKILLS / f"{name}.md"
         if skill_file.exists():
             skill_file.unlink()
             self._mark_uninstalled(name)
             return True, f"Skill '{name}' removed."
 
         # Try nested skill folder
-        for skill_dir in [KRONOS_SKILLS / name, KRONOS_PLUGINS_SKILLS / name]:
+        for skill_dir in [KINTHIC_SKILLS / name, KINTHIC_PLUGINS_SKILLS / name]:
             if skill_dir.is_dir():
                 shutil.rmtree(skill_dir)
                 self._mark_uninstalled(name)
                 return True, f"Skill '{name}' removed."
 
         # Try tool plugin folder
-        tool_dir = KRONOS_PLUGINS_TOOLS / name
+        tool_dir = KINTHIC_PLUGINS_TOOLS / name
         if tool_dir.is_dir():
             shutil.rmtree(tool_dir)
             self._mark_uninstalled(name)
@@ -437,11 +437,11 @@ class KronosRegistry:
 
 
 # Module-level singleton
-_registry: KronosRegistry | None = None
+_registry: KinthicRegistry | None = None
 
 
-def get_registry() -> KronosRegistry:
+def get_registry() -> KinthicRegistry:
     global _registry
     if _registry is None:
-        _registry = KronosRegistry()
+        _registry = KinthicRegistry()
     return _registry

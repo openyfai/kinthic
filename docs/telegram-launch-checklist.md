@@ -1,4 +1,4 @@
-# Kronos pre-launch checklist (Telegram-first)
+# Kinthic pre-launch checklist (Telegram-first)
 
 Use this as a gate before public announcement. **Telegram is the primary chat interface** — security and pairing come first, then reliability, then polish.
 
@@ -22,21 +22,21 @@ Related docs: [quickstart](quickstart.md) · [WSL setup](wsl-setup.md) · [MCP](
 
 Run on a **clean WSL2 Ubuntu VM** (not your dev machine):
 
-- [ ] `curl -fsSL https://kronos.openyf.dev/install.sh | bash` completes without error
-- [ ] `kronos` CLI exists after `source ~/.bashrc`
-- [ ] `kronos onboard` completes: provider ping OK, 5 core skills installed
+- [ ] `curl -fsSL https://kinthic.openyf.dev/install.sh | bash` completes without error
+- [ ] `kinthic` CLI exists after `source ~/.bashrc`
+- [ ] `kinthic onboard` completes: provider ping OK, 5 core skills installed
 - [ ] During onboard: Telegram pairing succeeds (deep link or `/start PAIR-…`)
-- [ ] `kronos doctor` shows: setup complete, provider key OK, **≥1 paired Telegram user**
-- [ ] `kronos doctor --ping` returns `[ok]`
-- [ ] `kronos telegram run` starts and prints **pairing active** (not public mode, not empty deny list with no pairs)
+- [ ] `kinthic doctor` shows: setup complete, provider key OK, **≥1 paired Telegram user**
+- [ ] `kinthic doctor --ping` returns `[ok]`
+- [ ] `kinthic telegram run` starts and prints **pairing active** (not public mode, not empty deny list with no pairs)
 
 **Success criteria:** First working Telegram reply in under ~20 minutes, without reading `PLUGIN_DEVELOPMENT.md`.
 
 ```bash
-curl -fsSL https://kronos.openyf.dev/install.sh | bash
+curl -fsSL https://kinthic.openyf.dev/install.sh | bash
 source ~/.bashrc
-kronos onboard
-kronos telegram run
+kinthic onboard
+kinthic telegram run
 ```
 
 ---
@@ -45,18 +45,18 @@ kronos telegram run
 
 Default must be **deny-by-default, paired users only**.
 
-- [ ] `TELEGRAM_PUBLIC_MODE` is **unset or `false`** in `~/.kronos/.env`
-- [ ] `kronos doctor` does **not** show public mode enabled
+- [ ] `TELEGRAM_PUBLIC_MODE` is **unset or `false`** in `~/.kinthic/.env`
+- [ ] `kinthic doctor` does **not** show public mode enabled
 - [ ] Unpaired Telegram account gets **Access Denied** (not a cognitive reply)
 - [ ] Pairing works via all documented paths:
-  - [ ] `kronos telegram pair` → user sends `PAIR-…` or `/pair CODE`
-  - [ ] `/start CODE` deep link from `kronos onboard`
+  - [ ] `kinthic telegram pair` → user sends `PAIR-…` or `/pair CODE`
+  - [ ] `/start CODE` deep link from `kinthic onboard`
   - [ ] Optional legacy: `ALLOWED_TELEGRAM_USERS=<id>` in `.env`
 - [ ] `/logout` revokes access; next message is denied
 - [ ] Bot token never appears in bot replies or public logs
-- [ ] `~/.kronos/.env` and `~/.kronos/config/secrets.json` are **not** committed to git
+- [ ] `~/.kinthic/.env` and `~/.kinthic/config/secrets.json` are **not** committed to git
 
-On startup, `kronos telegram run` should print one of:
+On startup, `kinthic telegram run` should print one of:
 
 - `🔒 Whitelist active: …` (env allowlist)
 - `🔒 Pairing active: N Telegram user(s) authorized.` ← **target for launch**
@@ -64,7 +64,7 @@ On startup, `kronos telegram run` should print one of:
 
 **Never acceptable in production:**
 
-- `⚠️  PUBLIC MODE: Any Telegram user can interact with Kronos!`
+- `⚠️  PUBLIC MODE: Any Telegram user can interact with Kinthic!`
 
 Implementation reference: `silex/adapters/telegram.py` → `_print_security_status()`.
 
@@ -74,7 +74,7 @@ Implementation reference: `silex/adapters/telegram.py` → `_print_security_stat
 
 Telegram users can trigger tools remotely. Verify defaults match [SECURITY.md](../SECURITY.md):
 
-| Setting | Launch value | Verify with `kronos doctor` |
+| Setting | Launch value | Verify with `kinthic doctor` |
 |---------|--------------|----------------------------|
 | Tool approvals | **ON** | `Approvals required: True` |
 | Terminal execution | **OFF** | disabled |
@@ -87,7 +87,7 @@ Manual tests **in Telegram** (as paired user):
 - [ ] Web search request → works or fails gracefully
 - [ ] “Run `rm -rf`” / shell command → blocked or requires approval (not silent auto-run)
 - [ ] File edit request → enters approval queue, not instant write
-- [ ] MCP write tools (if enabled) → respect `requires_approval` in `~/.kronos/config/mcp.yaml`
+- [ ] MCP write tools (if enabled) → respect `requires_approval` in `~/.kinthic/config/mcp.yaml`
 
 ---
 
@@ -107,18 +107,18 @@ End-to-end test:
 - [ ] `/reject <prefix>` → agent explains refusal; no side effects
 - [ ] No approval within 120s → turn times out cleanly (no hang, no partial writes)
 
-**Launch decision:** Either document “when Kronos pauses, run `/approvals`” in quickstart, or implement proactive approval push before marketing Telegram as primary (see [Known gaps](#known-gaps-and-launch-risks)).
+**Launch decision:** Either document “when Kinthic pauses, run `/approvals`” in quickstart, or implement proactive approval push before marketing Telegram as primary (see [Known gaps](#known-gaps-and-launch-risks)).
 
 ---
 
 ### 5. Secrets and process isolation
 
 - [ ] Separate @BotFather tokens for dev vs production
-- [ ] Provider API keys only in `~/.kronos/.env` or secrets store — never in repo
-- [ ] Do **not** run TUI (`kronos`) and `kronos telegram run` against the same brain without understanding SQLite single-writer risk
+- [ ] Provider API keys only in `~/.kinthic/.env` or secrets store — never in repo
+- [ ] Do **not** run TUI (`kinthic`) and `kinthic telegram run` against the same brain without understanding SQLite single-writer risk
 - [ ] For 24/7, pick **one** process model and test restart:
-  - [ ] `kronos telegram run` (simple), or
-  - [ ] `kronos daemon` (watchdog) — survives kill -9 and restarts cleanly
+  - [ ] `kinthic telegram run` (simple), or
+  - [ ] `kinthic daemon` (watchdog) — survives kill -9 and restarts cleanly
 
 ---
 
@@ -155,7 +155,7 @@ Test each as a **paired** user:
 
 ### 8. Onboard → Telegram story
 
-- [ ] README and [quickstart](quickstart.md) lead with: install → **`kronos onboard`** → **`kronos telegram run`**
+- [ ] README and [quickstart](quickstart.md) lead with: install → **`kinthic onboard`** → **`kinthic telegram run`**
 - [ ] `telegram_setup` skill installed after onboard
 - [ ] `.env.example` documents pairing (not public mode)
 - [ ] 2–3 min demo recorded: install → onboard → Telegram joke → `/status`
@@ -166,17 +166,17 @@ Test each as a **paired** user:
 
 ### 9. Hosted assets
 
-- [ ] `https://kronos.openyf.dev/install.sh` serves current `scripts/install.sh`
-- [ ] `https://kronos.openyf.dev/registry/catalog.yaml` live (offline install still works via bundled catalog)
-- [ ] GitHub release includes `kronos-ui-linux-x64` **or** install script shows clear UI build instructions
+- [ ] `https://kinthic.openyf.dev/install.sh` serves current `scripts/install.sh`
+- [ ] `https://kinthic.openyf.dev/registry/catalog.yaml` live (offline install still works via bundled catalog)
+- [ ] GitHub release includes `kinthic-ui-linux-x64` **or** install script shows clear UI build instructions
 
-Spec: [kronoshub-registry-spec.md](kronoshub-registry-spec.md)
+Spec: [kinthichub-registry-spec.md](kinthichub-registry-spec.md)
 
 ---
 
 ### 10. Docker Telegram (optional)
 
-**Verify before recommending Docker** — compose file mounts `./data` but Kronos defaults to `~/.kronos` inside the container.
+**Verify before recommending Docker** — compose file mounts `./data` but Kinthic defaults to `~/.kinthic` inside the container.
 
 - [ ] `docker compose --profile telegram up` persists brain + paired users
 - [ ] Token and keys load from mounted `.env`
@@ -188,7 +188,7 @@ Spec: [kronoshub-registry-spec.md](kronoshub-registry-spec.md)
 ### 11. CI and smoke tests
 
 - [ ] `python -m pytest tests/` green on main
-- [ ] Fresh install smoke: `kronos doctor`, `kronos skills list`, `kronos mcp list`
+- [ ] Fresh install smoke: `kinthic doctor`, `kinthic skills list`, `kinthic mcp list`
 - [ ] `tests/test_security_fixes.py` passes
 
 ---
@@ -199,8 +199,8 @@ Spec: [kronoshub-registry-spec.md](kronoshub-registry-spec.md)
 
 - [ ] Filesystem preset scoped to workspace only (`WORKSPACE_DIR`)
 - [ ] `requires_approval` includes write tools in `mcp.yaml`
-- [ ] `kronos mcp test filesystem` passes where `npx` is available
-- [ ] `kronos doctor` MCP section shows no risky combos (fetch + terminal + code apply all on)
+- [ ] `kinthic mcp test filesystem` passes where `npx` is available
+- [ ] `kinthic doctor` MCP section shows no risky combos (fetch + terminal + code apply all on)
 
 See [mcp.md](mcp.md).
 
@@ -208,9 +208,9 @@ See [mcp.md](mcp.md).
 
 ### 13. Skills
 
-- [ ] `kronos skills list` shows core skills after onboard
+- [ ] `kinthic skills list` shows core skills after onboard
 - [ ] “Tell me a joke” works via progressive `skill_view` loading
-- [ ] Edit `~/.kronos/skills/*.md` → reload → change visible in session
+- [ ] Edit `~/.kinthic/skills/*.md` → reload → change visible in session
 
 ---
 
@@ -245,7 +245,7 @@ TELEGRAM_BOT_TOKEN=...
 # ARIA_ENABLE_BACKGROUND_LOOP=false
 ```
 
-**Recommended runtime:** one machine, one `kronos telegram run`, one paired operator, approvals on, terminal and code apply off.
+**Recommended runtime:** one machine, one `kinthic telegram run`, one paired operator, approvals on, terminal and code apply off.
 
 ---
 
@@ -253,12 +253,12 @@ TELEGRAM_BOT_TOKEN=...
 
 Run once on a clean WSL VM:
 
-1. Install → `kronos onboard` (with Telegram pairing)
-2. `kronos telegram run` → send “hi”, “tell me a joke”, “search for …”
+1. Install → `kinthic onboard` (with Telegram pairing)
+2. `kinthic telegram run` → send “hi”, “tell me a joke”, “search for …”
 3. Trigger approval → `/approvals` → `/approve`
 4. Second phone / unpaired account → confirm **Access Denied**
 5. `/logout` → confirm denied
-6. `kronos doctor --ping`
+6. `kinthic doctor --ping`
 7. Kill bot process → restart → session/memory still sane
 
 If step 3 feels broken (user doesn’t know to run `/approvals`), treat as a **launch blocker** for Telegram-primary positioning—or narrow the tool surface to read-only for v1.
@@ -271,11 +271,11 @@ If step 3 feels broken (user doesn’t know to run `/approvals`), treat as a **l
 |-----|--------|------------------|
 | **No push when tool approval queued** | User thinks bot is stuck mid-turn | Document `/approvals`; or implement Telegram notification on `approval_required` |
 | **4096-char Telegram limit** | Long answers may fail to send | Shorten prompts; or implement message splitting |
-| **Docker `./data` vs `~/.kronos`** | Broken persistence in containers | Fix compose volumes or document WSL-only install |
+| **Docker `./data` vs `~/.kinthic`** | Broken persistence in containers | Fix compose volumes or document WSL-only install |
 | **TUI + Telegram same DB** | SQLite races / corruption | Run one writer process only |
 | **`TELEGRAM_PUBLIC_MODE=true`** | Anyone can drive your agent | Never enable; verify in doctor |
 | **MCP + terminal + code apply all on** | Large remote execution surface | Keep MCP read-only; approvals on |
-| **Pair codes expire in 10 min** | Onboard pairing timeouts confuse users | Regenerate with `kronos telegram pair` |
+| **Pair codes expire in 10 min** | Onboard pairing timeouts confuse users | Regenerate with `kinthic telegram pair` |
 | **Approval timeout 120s** | Slow operators lose the turn | `/approvals` quickly; or increase timeout / add push |
 | **Background notifications poll every 60s** | Delayed goal-complete messages | Acceptable for v1; not used for tool approvals today |
 | **`.env.example` still uses `ARIA_*` names** | Confusing for new users | Align env names in docs before launch |
@@ -303,7 +303,7 @@ Inbound message
   → Reply (Markdown with plain-text fallback)
 ```
 
-Pairing storage: `~/.kronos/config/` settings via `RuntimeSettingsStore` (`paired_users`, `pair_codes` with TTL).
+Pairing storage: `~/.kinthic/config/` settings via `RuntimeSettingsStore` (`paired_users`, `pair_codes` with TTL).
 
 ---
 
@@ -324,18 +324,18 @@ If time is limited, prioritize:
 
 ```bash
 # Install & configure
-curl -fsSL https://kronos.openyf.dev/install.sh | bash
-kronos onboard
-kronos doctor --ping
+curl -fsSL https://kinthic.openyf.dev/install.sh | bash
+kinthic onboard
+kinthic doctor --ping
 
 # Telegram
-kronos telegram pair          # generate PAIR- code
-kronos telegram run           # start bot
+kinthic telegram pair          # generate PAIR- code
+kinthic telegram run           # start bot
 
 # Operator
-kronos doctor                 # security + MCP status
-kronos skills list
-kronos mcp list
+kinthic doctor                 # security + MCP status
+kinthic skills list
+kinthic mcp list
 ```
 
 In Telegram (paired user): `/status` · `/skills` · `/approvals` · `/approve <id>` · `/logout`

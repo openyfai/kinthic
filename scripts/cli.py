@@ -9,12 +9,12 @@ import logging
 import os
 from pathlib import Path as _Path
 
-_log_dir = _Path.home() / ".kronos"
+_log_dir = _Path.home() / ".kinthic"
 _log_dir.mkdir(parents=True, exist_ok=True)
-_log_file = _log_dir / "kronos.log"
+_log_file = _log_dir / "kinthic.log"
 
 # Set env var so silex/utils/logger.py setup_logger() picks file mode
-os.environ.setdefault("KRONOS_INK_ACTIVE", "1")
+os.environ.setdefault("KINTHIC_INK_ACTIVE", "1")
 
 _root = logging.getLogger()
 _root.handlers.clear()
@@ -40,7 +40,7 @@ from silex.utils.config import (
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="kronos", description="Kronos local operator CLI")
+    parser = argparse.ArgumentParser(prog="kinthic", description="Kinthic local operator CLI")
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("init", help="First-run wizard: provider, skills, Telegram, MCP")
@@ -51,7 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run a tiny live API call to verify configured provider credentials",
     )
     subparsers.add_parser("models", help="List supported providers and models")
-    subparsers.add_parser("web", help="Launch the local Kronos web dashboard")
+    subparsers.add_parser("web", help="Launch the local Kinthic web dashboard")
     subparsers.add_parser("usage", help="View usage and token costs")
 
     daemon_parser = subparsers.add_parser("daemon", help="Manage the background supervisor daemon")
@@ -65,7 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     data_parser = subparsers.add_parser("data", help="Manage memories, backups, and exports")
     data_sub = data_parser.add_subparsers(dest="data_command")
     backup_p = data_sub.add_parser("backup", help="Export data to zip")
-    backup_p.add_argument("--output", default="kronos-backup.zip", help="Output zip file")
+    backup_p.add_argument("--output", default="kinthic-backup.zip", help="Output zip file")
     export_p = data_sub.add_parser("export", help="Export training trajectories (SFT / GRPO / CSV)")
     export_p.add_argument("--format", choices=["sft", "grpo", "csv"], default="grpo", help="Output format (default: grpo)")
     export_p.add_argument("--output", default=None, help="Output file path")
@@ -99,7 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
     reject_p = proposals_sub.add_parser("reject", help="Reject a proposal by ID prefix")
     reject_p.add_argument("proposal_id", help="Proposal ID or prefix")
 
-    skills_parser = subparsers.add_parser("skills", help="Manage Kronos skills")
+    skills_parser = subparsers.add_parser("skills", help="Manage Kinthic skills")
     skills_sub = skills_parser.add_subparsers(dest="skills_command")
     skills_sub.add_parser("list", help="List installed and catalog skills")
     skills_search = skills_sub.add_parser("search", help="Search the skill catalog")
@@ -164,17 +164,17 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
 
     # Silence internal warnings and client initialization logs during the setup TUI
     logging.getLogger("silex").setLevel(logging.ERROR)
-    logging.getLogger("kronos").setLevel(logging.ERROR)
+    logging.getLogger("kinthic").setLevel(logging.ERROR)
 
     ui = OnboardingUI()
     ui.clear()  # Clear any initial warning logs printed during imports/startup
     store = RuntimeSettingsStore()
 
     if onboard:
-        from silex.utils.config import KRONOS_HOME, KRONOS_SKILLS, WORKSPACE_DIR
+        from silex.utils.config import KINTHIC_HOME, KINTHIC_SKILLS, WORKSPACE_DIR
         ui.render_step(
-            "Welcome to Kronos",
-            f"Home: {KRONOS_HOME}\nSkills: {KRONOS_SKILLS}\nWorkspace: {WORKSPACE_DIR}",
+            "Welcome to Kinthic",
+            f"Home: {KINTHIC_HOME}\nSkills: {KINTHIC_SKILLS}\nWorkspace: {WORKSPACE_DIR}",
             subtitle="This wizard configures your provider, skills, and optional channels",
         )
         ui.prompt("Press Enter to continue")
@@ -434,7 +434,7 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
         "Telegram link",
         ["Yes (recommended for remote access)", "No"],
         default_idx=1,
-        subtitle="Would you like to link Kronos to your Telegram account?",
+        subtitle="Would you like to link Kinthic to your Telegram account?",
     )
     wants_telegram = (telegram_idx == 0)
 
@@ -460,9 +460,9 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
                 store.set_provider_secret("telegram", bot_token)
                 store.add_paired_telegram_user(chat_id)
 
-                # Write to .env to allow kronos telegram run to work out of the box
-                from silex.utils.config import KRONOS_HOME
-                env_path = KRONOS_HOME / ".env"
+                # Write to .env to allow kinthic telegram run to work out of the box
+                from silex.utils.config import KINTHIC_HOME
+                env_path = KINTHIC_HOME / ".env"
                 env_lines = []
                 if env_path.exists():
                     env_lines = env_path.read_text(encoding="utf-8").splitlines()
@@ -514,7 +514,7 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
         mcp_idx = ui.prompt_choice(
             "MCP servers",
             [
-                "Skip for now (configure later with kronos mcp add)",
+                "Skip for now (configure later with kinthic mcp add)",
                 "Enable filesystem MCP (read-only workspace)",
                 "Enable fetch MCP",
                 "Enable both filesystem + fetch",
@@ -529,26 +529,26 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
 
     # 4.5. Configure Agent Persona
     ui.render_step("Configure Agent Persona", "Choose the identity and name of your local agent.")
-    agent_name_input = ui.prompt("Name your specific agent instance (Default: Kronos)", default="Kronos").strip()
+    agent_name_input = ui.prompt("Name your specific agent instance (Default: Kinthic)", default="Kinthic").strip()
     
-    from silex.utils.config import KRONOS_PERSONA
+    from silex.utils.config import KINTHIC_PERSONA
     import yaml
     
     persona_data = {
-        "agent_name": "Kronos",
+        "agent_name": "Kinthic",
         "engine_name": "SILEX",
-        "primary_brand": "Kronos (λ)",
+        "primary_brand": "Kinthic (λ)",
         "personality_archetype": "Sovereign CLI Development Engine",
         "tone_modifiers": [
             "Direct, sharp, and technically flawless.",
             "Gives raw engineering facts, completely avoiding polite fluff."
         ],
-        "custom_greeting": "🧠 SILEX memory core active. Kronos CLI operational. Systems are 100% green."
+        "custom_greeting": "🧠 SILEX memory core active. Kinthic CLI operational. Systems are 100% green."
     }
     
-    if KRONOS_PERSONA.exists():
+    if KINTHIC_PERSONA.exists():
         try:
-            with open(KRONOS_PERSONA, "r", encoding="utf-8") as f:
+            with open(KINTHIC_PERSONA, "r", encoding="utf-8") as f:
                 loaded = yaml.safe_load(f)
                 if isinstance(loaded, dict):
                     persona_data.update(loaded)
@@ -559,10 +559,10 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
         persona_data["agent_name"] = agent_name_input
         
     try:
-        with open(KRONOS_PERSONA, "w", encoding="utf-8") as f:
+        with open(KINTHIC_PERSONA, "w", encoding="utf-8") as f:
             yaml.safe_dump(persona_data, f, sort_keys=False, allow_unicode=True)
     except Exception as e:
-        logging.getLogger("kronos.cli").error("Failed to save persona name in setup: %s", e)
+        logging.getLogger("kinthic.cli").error("Failed to save persona name in setup: %s", e)
 
     # 5. Finalize
     settings_payload = {
@@ -584,18 +584,18 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
         ui.render_step(
             "You're ready",
             "Next steps:\n\n"
-            "  kronos              — interactive terminal agent\n"
-            "  kronos telegram run — messaging bot (if paired)\n"
-            "  kronos skills list  — browse installed skills\n"
-            "  kronos mcp list     — MCP server status",
-            subtitle="Run kronos doctor --ping anytime to verify connectivity",
+            "  kinthic              — interactive terminal agent\n"
+            "  kinthic telegram run — messaging bot (if paired)\n"
+            "  kinthic skills list  — browse installed skills\n"
+            "  kinthic mcp list     — MCP server status",
+            subtitle="Run kinthic doctor --ping anytime to verify connectivity",
         )
     else:
-        greeting = persona_data.get("custom_greeting", "🧠 SILEX memory core active. Kronos CLI operational. Systems are 100% green.")
+        greeting = persona_data.get("custom_greeting", "🧠 SILEX memory core active. Kinthic CLI operational. Systems are 100% green.")
         ui.render_step(
             "Activation Complete",
-            f"Kronos cognitive core is now active.\n\n  {greeting}",
-            subtitle="Run 'kronos onboard' for the full first-run path, or 'kronos' to start",
+            f"Kinthic cognitive core is now active.\n\n  {greeting}",
+            subtitle="Run 'kinthic onboard' for the full first-run path, or 'kinthic' to start",
         )
     ui.prompt("Press Enter to exit")
     ui.clear()
@@ -625,7 +625,7 @@ def run_onboard() -> None:
 
 
 def run_setup() -> None:
-    print("Tip: use 'kronos onboard' for the full first-run wizard (provider, skills, Telegram, MCP).")
+    print("Tip: use 'kinthic onboard' for the full first-run wizard (provider, skills, Telegram, MCP).")
     asyncio.run(run_interactive_setup())
 
 
@@ -640,7 +640,7 @@ def run_doctor(*, ping: bool = False) -> None:
     if status['provider'] == 'custom':
         provider_label = f"Custom ({settings.get('custom_label', 'Unknown')})"
 
-    print("\nKronos doctor\n")
+    print("\nKinthic doctor\n")
     print(f"Setup complete: {status['setup_completed']}")
     print(f"Provider: {provider_label}")
     print(f"Model: {status['model']}")
@@ -691,7 +691,7 @@ def run_doctor(*, ping: bool = False) -> None:
     
     warnings = []
     if os.name == "nt":
-        warnings.append("Windows detected: ~/.kronos/secrets.json has no OS-level file permission protection. (Prefer Env Vars)")
+        warnings.append("Windows detected: ~/.kinthic/secrets.json has no OS-level file permission protection. (Prefer Env Vars)")
 
     if warnings:
         print("\nWarnings:")
@@ -714,7 +714,7 @@ def run_doctor(*, ping: bool = False) -> None:
             print(f"  [{'ok' if result.get('ok') else 'fail'}] {result.get('message')}")
 
 def run_models() -> None:
-    print("\nKronos supported providers\n")
+    print("\nKinthic supported providers\n")
     for provider in list_providers():
         print(f"{provider['label']} ({provider['id']})")
         for model in provider["models"]:
@@ -784,7 +784,7 @@ def run_skills(command: str, name: str | None = None) -> None:
     registry = get_registry()
     if command == "list":
         entries = registry.get_all(type_filter="skill")
-        print("\nKronos skills\n")
+        print("\nKinthic skills\n")
         print(registry.format_list(entries))
         loader = SkillLoader()
         count = loader.load_all()
@@ -798,7 +798,7 @@ def run_skills(command: str, name: str | None = None) -> None:
     elif command == "reload":
         loader = SkillLoader()
         count = loader.load_all()
-        print(f"Reloaded {count} skill(s) from ~/.kronos/skills/")
+        print(f"Reloaded {count} skill(s) from ~/.kinthic/skills/")
 
 
 def run_mcp(command: str, name: str | None = None, **kwargs) -> None:
@@ -809,9 +809,9 @@ def run_mcp(command: str, name: str | None = None, **kwargs) -> None:
     mgr = get_mcp_manager()
     if command == "list":
         cfg = load_mcp_config()
-        print("\nMCP servers (~/.kronos/config/mcp.yaml)\n")
+        print("\nMCP servers (~/.kinthic/config/mcp.yaml)\n")
         if not cfg.servers:
-            print("  (none — run: kronos mcp add filesystem --preset filesystem)")
+            print("  (none — run: kinthic mcp add filesystem --preset filesystem)")
         for srv_name, srv in cfg.servers.items():
             state = "enabled" if srv.get("enabled", True) else "disabled"
             desc = srv.get("description", "")
@@ -893,7 +893,7 @@ def run_backup(command: str, output: str) -> None:
         from silex.ops.backup import export_backup
         export_backup(output)
     else:
-        print("Usage: kronos backup export [--output filename.zip]")
+        print("Usage: kinthic backup export [--output filename.zip]")
 
 def run_migrate(command: str, source: str, path: str | None, dry_run: bool) -> None:
     if source == "hermes":
@@ -924,20 +924,20 @@ def run_start() -> None:
     import sys
     import os
     import json
-    from silex.utils.config import KRONOS_DAEMON_LOCK
+    from silex.utils.config import KINTHIC_DAEMON_LOCK
     
-    if KRONOS_DAEMON_LOCK.exists():
+    if KINTHIC_DAEMON_LOCK.exists():
         try:
-            lock_data = json.loads(KRONOS_DAEMON_LOCK.read_text(encoding="utf-8").strip())
+            lock_data = json.loads(KINTHIC_DAEMON_LOCK.read_text(encoding="utf-8").strip())
             pid = lock_data.get("pid")
             if pid:
                 os.kill(pid, 0)
-                print(f"Kronos daemon is already running (PID {pid}).")
+                print(f"Kinthic daemon is already running (PID {pid}).")
                 return
         except Exception:
             pass
 
-    print("Starting Kronos daemon in the background...")
+    print("Starting Kinthic daemon in the background...")
     
     if os.name == 'nt':
         CREATE_NO_WINDOW = 0x08000000
@@ -950,10 +950,10 @@ def run_start() -> None:
 def run_stop() -> None:
     import json
     import signal
-    from silex.utils.config import KRONOS_DAEMON_LOCK
-    lock_path = KRONOS_DAEMON_LOCK
+    from silex.utils.config import KINTHIC_DAEMON_LOCK
+    lock_path = KINTHIC_DAEMON_LOCK
     if not lock_path.exists():
-        print("Kronos is not running (no daemon.lock found).")
+        print("Kinthic is not running (no daemon.lock found).")
         return
     try:
         lock_data = json.loads(lock_path.read_text(encoding="utf-8").strip())
@@ -972,9 +972,9 @@ def run_stop() -> None:
 
     try:
         os.kill(pid, signal.SIGTERM)
-        print(f"Stopped Kronos (PID {pid}).")
+        print(f"Stopped Kinthic (PID {pid}).")
     except OSError as e:
-        print(f"Failed to stop Kronos: {e}")
+        print(f"Failed to stop Kinthic: {e}")
     lock_path.unlink(missing_ok=True)
 
 
@@ -1005,12 +1005,12 @@ def run_web() -> None:
     import os
     from silex.utils.config import PROJECT_ROOT
     
-    dashboard_path = PROJECT_ROOT / "kronos-dashboard"
+    dashboard_path = PROJECT_ROOT / "kinthic-dashboard"
     if not dashboard_path.exists():
         print("Dashboard not found. Run the setup or check installation.")
         return
         
-    print("Starting Kronos Dashboard (Backend + Frontend)...")
+    print("Starting Kinthic Dashboard (Backend + Frontend)...")
     api_proc = None
     ui_proc = None
     try:
@@ -1030,50 +1030,50 @@ def run_web() -> None:
 def run_daemon_status() -> None:
     import json
     import os
-    from silex.utils.config import KRONOS_DAEMON_LOCK
-    lock_path = KRONOS_DAEMON_LOCK
+    from silex.utils.config import KINTHIC_DAEMON_LOCK
+    lock_path = KINTHIC_DAEMON_LOCK
     if not lock_path.exists():
-        print("Kronos daemon is NOT running.")
+        print("Kinthic daemon is NOT running.")
         return
     try:
         lock_data = json.loads(lock_path.read_text(encoding="utf-8").strip())
         pid = lock_data.get("pid")
         if pid:
             os.kill(pid, 0)
-            print(f"Kronos daemon is RUNNING (PID {pid}).")
+            print(f"Kinthic daemon is RUNNING (PID {pid}).")
             return
     except OSError:
         pass
     except Exception:
         pass
-    print("Kronos daemon is NOT running (stale lockfile).")
+    print("Kinthic daemon is NOT running (stale lockfile).")
     lock_path.unlink(missing_ok=True)
 
 def run_daemon_logs() -> None:
-    from silex.utils.config import KRONOS_DAEMON_LOG
+    from silex.utils.config import KINTHIC_DAEMON_LOG
     import subprocess
     import os
-    if not KRONOS_DAEMON_LOG.exists():
+    if not KINTHIC_DAEMON_LOG.exists():
         print("No daemon logs found.")
         return
-    print(f"Tailing {KRONOS_DAEMON_LOG}...")
+    print(f"Tailing {KINTHIC_DAEMON_LOG}...")
     if os.name == "nt":
-        subprocess.run(["powershell", "-c", f"Get-Content '{KRONOS_DAEMON_LOG}' -Wait"])
+        subprocess.run(["powershell", "-c", f"Get-Content '{KINTHIC_DAEMON_LOG}' -Wait"])
     else:
-        subprocess.run(["tail", "-f", str(KRONOS_DAEMON_LOG)])
+        subprocess.run(["tail", "-f", str(KINTHIC_DAEMON_LOG)])
 
 def run_daemon_foreground() -> None:
     import json
     import os
-    from silex.utils.config import KRONOS_DAEMON_LOCK
-    lock_path = KRONOS_DAEMON_LOCK
+    from silex.utils.config import KINTHIC_DAEMON_LOCK
+    lock_path = KINTHIC_DAEMON_LOCK
     if lock_path.exists():
         try:
             lock_data = json.loads(lock_path.read_text(encoding="utf-8").strip())
             pid = lock_data.get("pid")
             if pid:
                 os.kill(pid, 0)
-                print(f"Kronos daemon is already running (PID {pid}).")
+                print(f"Kinthic daemon is already running (PID {pid}).")
                 return
         except OSError:
             lock_path.unlink(missing_ok=True)
@@ -1084,22 +1084,22 @@ def run_daemon_foreground() -> None:
     lock_path.write_text(json.dumps({"pid": os.getpid()}), encoding="utf-8")
 
     def setup_daemon_logging():
-        from silex.utils.config import KRONOS_DAEMON_LOG
+        from silex.utils.config import KINTHIC_DAEMON_LOG
         import os
-        if KRONOS_DAEMON_LOG.exists() and KRONOS_DAEMON_LOG.stat().st_size > 10 * 1024 * 1024:
+        if KINTHIC_DAEMON_LOG.exists() and KINTHIC_DAEMON_LOG.stat().st_size > 10 * 1024 * 1024:
             for i in range(2, 0, -1):
-                old = KRONOS_DAEMON_LOG.with_name(f"daemon.log.{i}")
-                new = KRONOS_DAEMON_LOG.with_name(f"daemon.log.{i+1}")
+                old = KINTHIC_DAEMON_LOG.with_name(f"daemon.log.{i}")
+                new = KINTHIC_DAEMON_LOG.with_name(f"daemon.log.{i+1}")
                 if old.exists():
                     try:
                         old.replace(new)
                     except OSError:
                         pass
             try:
-                KRONOS_DAEMON_LOG.replace(KRONOS_DAEMON_LOG.with_name("daemon.log.1"))
+                KINTHIC_DAEMON_LOG.replace(KINTHIC_DAEMON_LOG.with_name("daemon.log.1"))
             except OSError:
                 pass
-        log_file = open(KRONOS_DAEMON_LOG, "a", buffering=1, encoding="utf-8")
+        log_file = open(KINTHIC_DAEMON_LOG, "a", buffering=1, encoding="utf-8")
         try:
             os.dup2(log_file.fileno(), 1)
             os.dup2(log_file.fileno(), 2)
@@ -1147,7 +1147,7 @@ def main() -> None:
             print("Unknown daemon command")
     elif args.command == "data":
         if args.data_command == "backup":
-            run_backup("export", getattr(args, "output", "kronos-backup.zip"))
+            run_backup("export", getattr(args, "output", "kinthic-backup.zip"))
         elif args.data_command == "export":
             _run_export_trajectories(args)
         elif args.data_command == "migrate":

@@ -16,20 +16,20 @@ class BayesianTrustEngine:
 
     async def initialize(self):
         """Load or create trust state."""
-        row = await self.db.fetch_one("SELECT * FROM trust_state WHERE actor_id = 'kronos'")
+        row = await self.db.fetch_one("SELECT * FROM trust_state WHERE actor_id = 'kinthic'")
         if not row:
             now = datetime.now(timezone.utc).timestamp()
             await self.db.execute(
                 "INSERT INTO trust_state (actor_id, alpha, beta, last_updated) VALUES (?, ?, ?, ?)",
-                ('kronos', 10.0, 1.0, now)
+                ('kinthic', 10.0, 1.0, now)
             )
 
     async def record_operation(self, success: bool, is_security_violation: bool = False):
         """Update Bayesian trust model."""
-        row = await self.db.fetch_one("SELECT alpha, beta FROM trust_state WHERE actor_id = 'kronos'")
+        row = await self.db.fetch_one("SELECT alpha, beta FROM trust_state WHERE actor_id = 'kinthic'")
         if not row:
             await self.initialize()
-            row = await self.db.fetch_one("SELECT alpha, beta FROM trust_state WHERE actor_id = 'kronos'")
+            row = await self.db.fetch_one("SELECT alpha, beta FROM trust_state WHERE actor_id = 'kinthic'")
             if not row:
                 return
             
@@ -43,7 +43,7 @@ class BayesianTrustEngine:
             
         now = datetime.now(timezone.utc).timestamp()
         await self.db.execute(
-            "UPDATE trust_state SET alpha = ?, beta = ?, last_updated = ? WHERE actor_id = 'kronos'",
+            "UPDATE trust_state SET alpha = ?, beta = ?, last_updated = ? WHERE actor_id = 'kinthic'",
             (alpha, beta, now)
         )
         
@@ -55,7 +55,7 @@ class BayesianTrustEngine:
 
     async def verify_actor_threshold(self) -> bool:
         """Check if current trust score allows sensitive operations."""
-        row = await self.db.fetch_one("SELECT alpha, beta FROM trust_state WHERE actor_id = 'kronos'")
+        row = await self.db.fetch_one("SELECT alpha, beta FROM trust_state WHERE actor_id = 'kinthic'")
         if not row:
             return True
             
@@ -65,7 +65,7 @@ class BayesianTrustEngine:
         return trust_score >= self.cutoff
         
     async def get_trust_score(self) -> float:
-        row = await self.db.fetch_one("SELECT alpha, beta FROM trust_state WHERE actor_id = 'kronos'")
+        row = await self.db.fetch_one("SELECT alpha, beta FROM trust_state WHERE actor_id = 'kinthic'")
         if not row:
             return 1.0
             

@@ -76,13 +76,13 @@ async def test_golden_path_turn_event_sequence() -> None:
 async def test_turn_emitter_mirror_legacy_worker_and_approval(tmp_path, monkeypatch) -> None:
     from silex.ui import ink_bridge as ib
 
-    kronos_dir = tmp_path / ".kronos"
-    kronos_dir.mkdir()
-    path = kronos_dir / "ink_events.ndjson"
-    monkeypatch.setattr(ib, "_KRONOS_DIR", kronos_dir)
+    kinthic_dir = tmp_path / ".kinthic"
+    kinthic_dir.mkdir()
+    path = kinthic_dir / "ink_events.ndjson"
+    monkeypatch.setattr(ib, "_KINTHIC_DIR", kinthic_dir)
     monkeypatch.setattr(ib, "_EVENTS_FILE", path)
 
-    bridge = ib.KronosInkBridge()
+    bridge = ib.KinthicInkBridge()
     bridge._enabled = True
 
     emitter = TurnEmitter(bridge.emit, turn_id="turn_mirror", mirror_legacy=True)

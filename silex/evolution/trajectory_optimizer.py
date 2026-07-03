@@ -1,5 +1,5 @@
 """
-Trajectory-Level Optimizer for Kronos (Phase 7.1).
+Trajectory-Level Optimizer for Kinthic (Phase 7.1).
 
 Implements Revision, Recombination, and Refinement on past execution trajectories.
 """
@@ -93,7 +93,7 @@ class TrajectoryOptimizer:
             })
             
         system_prompt = (
-            "You are Kronos's Metacognitive Revision Engine.\n"
+            "You are Kinthic's Metacognitive Revision Engine.\n"
             "Your task is to review a series of execution steps from a task, locate where errors or "
             "dead-ends occurred, write a critique summarizing the failure mode, and propose revised "
             "epistemic categories for the steps. Step categories must be exactly one of: "
@@ -283,7 +283,7 @@ class TrajectoryOptimizer:
         heavy_steps = [s for s in pruned_steps if len(s["execution_output"]) > 500]
         if heavy_steps:
             system_prompt = (
-                "You are Kronos's Token Footprint Refinement Engine.\n"
+                "You are Kinthic's Token Footprint Refinement Engine.\n"
                 "Review the provided verbose execution outputs and produce a compressed/summarized version "
                 "for each step, keeping all critical errors, paths, and metadata, but stripping redundant logs."
             )

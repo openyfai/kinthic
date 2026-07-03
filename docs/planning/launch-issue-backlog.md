@@ -1,6 +1,6 @@
 # Launch Issue Backlog (Good First Issues)
 
-Welcome to Kronos! If you are looking to contribute to the project during our launch window, the following 20 issues are great places to start. They are scoped to be approachable for new contributors.
+Welcome to Kinthic! If you are looking to contribute to the project during our launch window, the following 20 issues are great places to start. They are scoped to be approachable for new contributors.
 
 ## Tool & Plugin Ecosystem
 1. **[Tool] Jira MCP Integration**: Create an MCP preset for querying and updating Jira tickets.
@@ -12,8 +12,8 @@ Welcome to Kronos! If you are looking to contribute to the project during our la
 ## Core Framework
 6. **[Memory] Prune TTL**: Implement a TTL (Time To Live) feature in the `sqlite` graph for ephemeral memories.
 7. **[Memory] Vector Fallback**: Add basic cosine similarity search using `sqlite-vss` for when keyword search fails.
-8. **[CLI] Colorful output**: Add `rich` syntax highlighting to `kronos doctor` output.
-9. **[CLI] Setup retry**: Allow users to retry entering their API key in `kronos onboard` if the validation ping fails.
+8. **[CLI] Colorful output**: Add `rich` syntax highlighting to `kinthic doctor` output.
+9. **[CLI] Setup retry**: Allow users to retry entering their API key in `kinthic onboard` if the validation ping fails.
 10. **[Router] Token Thresholds**: Allow configuring a max token threshold in SmartRouter before forcing the fallback model.
 
 ## UI / UX (Telegram)

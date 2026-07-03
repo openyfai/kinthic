@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 
 from silex.utils.logger import setup_logger
-from silex.utils.config import WORKSPACE_DIR, KRONOS_PHANTOM
+from silex.utils.config import WORKSPACE_DIR, KINTHIC_PHANTOM
 
 log = setup_logger("aria.world_model.simulator")
 
@@ -22,7 +22,7 @@ class PhantomSimulator:
     """Safely dry-runs file modifications before committing them to the workspace."""
 
     def __init__(self):
-        self.phantom_dir = KRONOS_PHANTOM
+        self.phantom_dir = KINTHIC_PHANTOM
         
     def _setup_phantom_dir(self):
         """Ensure the phantom directory is clean before starting."""

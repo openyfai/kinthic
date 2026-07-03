@@ -35,7 +35,7 @@ class ActuationLease:
     def _get_secret_key(cls) -> bytes:
         if cls._secret_key is not None:
             return cls._secret_key
-        key_path = Path.home() / ".kronos" / "config" / "hmac_key.bin"
+        key_path = Path.home() / ".kinthic" / "config" / "hmac_key.bin"
         key_path.parent.mkdir(parents=True, exist_ok=True)
         if key_path.exists():
             cls._secret_key = key_path.read_bytes()
@@ -140,7 +140,7 @@ class ActuationLease:
     def write_egress_policy(self, workspace_dir: Path) -> None:
         """Write per-worker egress policy for the network proxy."""
         worker_id = workspace_dir.name
-        policy_root = Path.home() / ".kronos" / "workers" / worker_id
+        policy_root = Path.home() / ".kinthic" / "workers" / worker_id
         policy_root.mkdir(parents=True, exist_ok=True)
         policy_file = policy_root / ".egress_policy.json"
         policy = {

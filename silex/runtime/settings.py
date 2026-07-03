@@ -7,10 +7,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from silex.utils.config import KRONOS_CONFIG, KRONOS_SECRETS, KRONOS_HMAC_KEY
+from silex.utils.config import KINTHIC_CONFIG, KINTHIC_SECRETS, KINTHIC_HMAC_KEY
 
-SETTINGS_PATH = KRONOS_CONFIG
-SECRETS_PATH = KRONOS_SECRETS
+SETTINGS_PATH = KINTHIC_CONFIG
+SECRETS_PATH = KINTHIC_SECRETS
 
 
 def _now() -> str:
@@ -65,10 +65,10 @@ def _get_fernet():
     except ImportError:
         return None
     import base64
-    if not KRONOS_HMAC_KEY.exists():
+    if not KINTHIC_HMAC_KEY.exists():
         return None
     try:
-        with open(KRONOS_HMAC_KEY, "rb") as f:
+        with open(KINTHIC_HMAC_KEY, "rb") as f:
             key = f.read(32)
         if len(key) != 32:
             return None
@@ -137,7 +137,7 @@ def default_settings() -> dict[str, Any]:
             "disable_expensive_models": False,
         },
         "identity": {
-            "assistant_name": "Kronos",
+            "assistant_name": "Kinthic",
             "persona": "",
         },
         "updated_at": _now(),

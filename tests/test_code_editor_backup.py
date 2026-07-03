@@ -1,11 +1,11 @@
 import pytest
 from silex.tools.code_editor import CodeEditorTool
-from silex.utils.config import KRONOS_BACKUPS, WORKSPACE_DIR, ensure_kronos_home
+from silex.utils.config import KINTHIC_BACKUPS, WORKSPACE_DIR, ensure_kinthic_home
 
 @pytest.mark.asyncio
 async def test_failsafe_backup_for_edits(tmp_path):
     # Ensure VYN HOME structures are created
-    ensure_kronos_home()
+    ensure_kinthic_home()
 
     # Create a mock file in the workspace
     file_name = "test_failsafe_backup.txt"
@@ -24,7 +24,7 @@ async def test_failsafe_backup_for_edits(tmp_path):
     }
 
     # Verify backups directory exists
-    assert KRONOS_BACKUPS.exists()
+    assert KINTHIC_BACKUPS.exists()
 
     # Apply the edit
     tool = CodeEditorTool()
@@ -35,8 +35,8 @@ async def test_failsafe_backup_for_edits(tmp_path):
     assert "edited line 1" in updated_content
     assert "original line 1" not in updated_content
 
-    # 2. Verify a backup file was created in KRONOS_BACKUPS
-    backups = list(KRONOS_BACKUPS.glob("test_failsafe_backup.txt_*.bak"))
+    # 2. Verify a backup file was created in KINTHIC_BACKUPS
+    backups = list(KINTHIC_BACKUPS.glob("test_failsafe_backup.txt_*.bak"))
     assert len(backups) >= 1
 
     # Get the latest backup file

@@ -1,7 +1,7 @@
 """
 Telegram bot entry point — delegates to silex.adapters.telegram.
 
-Kept for backward compatibility with `kronos telegram run` and daemon worker.
+Kept for backward compatibility with `kinthic telegram run` and daemon worker.
 """
 from __future__ import annotations
 

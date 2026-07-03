@@ -1,4 +1,4 @@
-"""Telegram messaging adapter for Kronos."""
+"""Telegram messaging adapter for Kinthic."""
 from __future__ import annotations
 
 import os
@@ -95,7 +95,7 @@ class TelegramAdapter(MessageAdapter):
             )
         )
 
-        print("\n🚀 Starting Kronos Telegram adapter...")
+        print("\n🚀 Starting Kinthic Telegram adapter...")
         _print_security_status()
         
         await app.initialize()
@@ -129,7 +129,7 @@ async def _pair_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE") 
     user = update.effective_user
     paired = settings_store.consume_pair_code(code, user.id, user.username)
     if paired:
-        await update.message.reply_text("Pairing successful. You can now use this Kronos bot.")
+        await update.message.reply_text("Pairing successful. You can now use this Kinthic bot.")
     else:
         await update.message.reply_text("That pairing code is invalid or expired.")
 
@@ -139,10 +139,10 @@ async def _start_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE")
     if context.args:
         code = context.args[0].strip().upper()
         if settings_store.consume_pair_code(code, user_id, update.effective_user.username):
-            await update.message.reply_text("Pairing successful. Kronos is now linked to your Telegram account.")
+            await update.message.reply_text("Pairing successful. Kinthic is now linked to your Telegram account.")
             return
     await update.message.reply_text(
-        "👋 Hello! I am Kronos — a local-first cognitive agent.\n\n"
+        "👋 Hello! I am Kinthic — a local-first cognitive agent.\n\n"
         "My engine is online. I have access (within policy) to your tools, memory, "
         "and knowledge graph. How can I help you today?\n\n"
         f"Your Telegram ID: `{user_id}`\n"
@@ -161,7 +161,7 @@ async def _whoami_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE"
 
 async def _logout_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE") -> None:
     settings_store.revoke_telegram_user(update.effective_user.id)
-    await update.message.reply_text("This Telegram account has been unpaired from Kronos.")
+    await update.message.reply_text("This Telegram account has been unpaired from Kinthic.")
 
 
 async def _approvals_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE") -> None:
@@ -185,7 +185,7 @@ async def _status_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE"
         return
     health = await loop.get_health_status()
     await update.message.reply_text(
-        "Kronos status:\n"
+        "Kinthic status:\n"
         f"- Provider: {health.get('provider')}\n"
         f"- Model: {health.get('model')}\n"
         f"- SmartRouter Fast Path: {health.get('router_fast_model', 'none')}\n"
@@ -352,7 +352,7 @@ async def _handle_message(update: "Update", context: "ContextTypes.DEFAULT_TYPE"
                 potential_code, user_id, update.effective_user.username
             ):
                 await update.message.reply_text(
-                    "Pairing successful. Connection secured.\n\nHi, I'm Kronos. What are we working on today?"
+                    "Pairing successful. Connection secured.\n\nHi, I'm Kinthic. What are we working on today?"
                 )
                 return
 
@@ -481,11 +481,11 @@ def _print_security_status() -> None:
     if allowed:
         print(f"🔒 Whitelist active: {allowed}")
     elif public:
-        print("⚠️  PUBLIC MODE: Any Telegram user can interact with Kronos!")
+        print("⚠️  PUBLIC MODE: Any Telegram user can interact with Kinthic!")
     elif paired_users:
         print(f"🔒 Pairing active: {len(paired_users)} Telegram user(s) authorized.")
     else:
         print(
-            "🔒 Deny-by-default: generate a pairing code with `kronos telegram pair` "
+            "🔒 Deny-by-default: generate a pairing code with `kinthic telegram pair` "
             "or set ALLOWED_TELEGRAM_USERS."
         )

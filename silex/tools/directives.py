@@ -6,7 +6,7 @@ Allows VYN to update its own core behavior rules transparently.
 from __future__ import annotations
 
 from silex.tools.base import BaseTool
-from silex.utils.config import KRONOS_DIRECTIVES_FILE
+from silex.utils.config import KINTHIC_DIRECTIVES_FILE
 from silex.utils.logger import setup_logger
 
 log = setup_logger("silex.tools.directives")
@@ -40,8 +40,8 @@ class UpdateDirectivesTool(BaseTool):
         """Update the directives file using the LLM to rewrite it."""
         try:
             current_content = ""
-            if KRONOS_DIRECTIVES_FILE.exists():
-                current_content = KRONOS_DIRECTIVES_FILE.read_text(encoding="utf-8")
+            if KINTHIC_DIRECTIVES_FILE.exists():
+                current_content = KINTHIC_DIRECTIVES_FILE.read_text(encoding="utf-8")
                 
             prompt = (
                 "You are updating the VYN Core Directives markdown file. "
@@ -73,17 +73,17 @@ class UpdateDirectivesTool(BaseTool):
             if len(new_content) > 5000:
                 return f"Error: New directives content exceeds 5000 bytes (got {len(new_content)}). Request rejected."
                 
-            if KRONOS_DIRECTIVES_FILE.exists():
+            if KINTHIC_DIRECTIVES_FILE.exists():
                 import shutil
                 from datetime import datetime
-                from silex.utils.config import KRONOS_BACKUPS
-                KRONOS_BACKUPS.mkdir(parents=True, exist_ok=True)
+                from silex.utils.config import KINTHIC_BACKUPS
+                KINTHIC_BACKUPS.mkdir(parents=True, exist_ok=True)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                backup_path = KRONOS_BACKUPS / f"directives_{timestamp}.bak"
-                shutil.copy2(KRONOS_DIRECTIVES_FILE, backup_path)
+                backup_path = KINTHIC_BACKUPS / f"directives_{timestamp}.bak"
+                shutil.copy2(KINTHIC_DIRECTIVES_FILE, backup_path)
                 log.info(f"Directives backup created: {backup_path}")
             
-            KRONOS_DIRECTIVES_FILE.write_text(new_content, encoding="utf-8")
+            KINTHIC_DIRECTIVES_FILE.write_text(new_content, encoding="utf-8")
             return f"Successfully updated Core Directives. New size: {len(new_content)} bytes."
             
         except Exception as e:

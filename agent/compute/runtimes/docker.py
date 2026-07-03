@@ -85,8 +85,8 @@ class DockerRuntime(BaseRuntime):
                 cap_drop=["ALL"],
                 security_opt=["no-new-privileges:true"],
                 labels={
-                    "kronos.managed": "true",
-                    "kronos.worker_id": str(self.workspace_dir.name),
+                    "kinthic.managed": "true",
+                    "kinthic.worker_id": str(self.workspace_dir.name),
                 },
             )
 
@@ -138,12 +138,12 @@ class DockerRuntime(BaseRuntime):
         if lease is None or not lease.validate("run_terminal_command"):
             return "Security Violation: Invalid or expired actuation lease"
 
-        allow = os.environ.get("KRONOS_ALLOW_LOCAL_FALLBACK", "").lower() in ("1", "true", "yes", "on")
-        allow = allow or os.environ.get("KRONOS_DEV_MODE", "").lower() in ("1", "true", "yes", "on")
+        allow = os.environ.get("KINTHIC_ALLOW_LOCAL_FALLBACK", "").lower() in ("1", "true", "yes", "on")
+        allow = allow or os.environ.get("KINTHIC_DEV_MODE", "").lower() in ("1", "true", "yes", "on")
         if not allow:
             return (
                 "Security Violation: Docker unavailable and local fallback is disabled. "
-                "Set KRONOS_ALLOW_LOCAL_FALLBACK=1 for dev mode only."
+                "Set KINTHIC_ALLOW_LOCAL_FALLBACK=1 for dev mode only."
             )
 
         try:

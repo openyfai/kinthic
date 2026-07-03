@@ -158,7 +158,7 @@ class SemanticSearchTool(BaseTool):
         if not getattr(self.vs, "is_active", False):
             return (
                 "Semantic search is disabled: vector memory (ChromaDB) is not installed. "
-                'Install with pip install "openyfai-kronos[vector]" or `pip install chromadb`, then restart Kronos.'
+                'Install with pip install "openyfai-kinthic[vector]" or `pip install chromadb`, then restart Kinthic.'
             )
 
         try:

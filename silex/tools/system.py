@@ -25,7 +25,7 @@ from silex.utils.logger import setup_logger
 
 log = setup_logger("silex.tools.system")
 WORKSPACE_ROOT = WORKSPACE_DIR
-BLOCKED_PATH_PARTS = {".git", "node_modules", ".venv", "venv", "__pycache__", ".kronos"}
+BLOCKED_PATH_PARTS = {".git", "node_modules", ".venv", "venv", "__pycache__", ".kinthic"}
 
 
 def _resolve_project_path(path: str) -> Path:

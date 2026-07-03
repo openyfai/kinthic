@@ -1,4 +1,4 @@
-# Kronos TUI Operator Guide
+# Kinthic TUI Operator Guide
 
 The Ink ledger UI shows one chronological activity stream per session. Each row maps to a **TurnEvent** phase emitted by Python.
 
@@ -7,16 +7,16 @@ The Ink ledger UI shows one chronological activity stream per session. Each row 
 | Row | Meaning |
 |-----|---------|
 | **You** | Your submitted prompt |
-| **● routing / context / tool** | Live activity (spinner) while the turn runs — collapses when Kronos replies |
+| **● routing / context / tool** | Live activity (spinner) while the turn runs — collapses when Kinthic replies |
 | **● sub-agent** | Worker spawned (e.g. `cognitive_worker`) |
 | **● memory** | Items written to long-term memory |
 | **● error** | Turn or tool failed — read the detail line |
-| **Kronos** | Assistant reply (streams with typewriter) |
+| **Kinthic** | Assistant reply (streams with typewriter) |
 | **── Ns · … ──** | Turn summary: latency, tools, memory, tokens, sub-agents |
 
 ## Approvals
 
-When Kronos needs permission for a risky tool (e.g. `spawn_worker`):
+When Kinthic needs permission for a risky tool (e.g. `spawn_worker`):
 
 1. An interactive **Tool approval** prompt appears below the ledger.
 2. Use **↑↓** to select **Allow once** or **Deny**, then **Enter** (or **y** / **n**).
@@ -38,7 +38,7 @@ spawn an agent to find Anthropic's latest blog
 ● tool      Running spawn_worker...
 ● sub-agent cognitive_worker  running
 ● sub-agent cognitive_worker  done
-Kronos
+Kinthic
 Here is what the agent found: …
 
 ── 45.2s · 1 tool · 1 memory · 12,400 tok · 1 sub-agent ──
@@ -49,9 +49,9 @@ If Docker, network, or the worker fails, you should see **● error** or **● s
 ## Demo without LLM
 
 ```bash
-cd kronos-ink-ui && npm run demo
+cd kinthic-ink-ui && npm run demo
 ```
 
 ## Transport
 
-Events use NDJSON at `~/.kronos/ink_events.ndjson` (50ms poll). Keyboard and approvals go to Python on stderr as JSON packets.
+Events use NDJSON at `~/.kinthic/ink_events.ndjson` (50ms poll). Keyboard and approvals go to Python on stderr as JSON packets.

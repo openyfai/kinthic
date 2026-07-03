@@ -72,7 +72,7 @@ from silex.storage.database import Database
 from silex.tools.registry import ToolRegistry
 from silex.runtime.settings import RuntimeSettingsStore
 from silex.runtime.usage import UsageTracker
-from silex.utils.config import KRONOS_PROCESS_LOCK, KRONOS_ONTOLOGY, KRONOS_EXPORTS, KRONOS_HOME, WORKSPACE_DIR, autonomy_policy_snapshot
+from silex.utils.config import KINTHIC_PROCESS_LOCK, KINTHIC_ONTOLOGY, KINTHIC_EXPORTS, KINTHIC_HOME, WORKSPACE_DIR, autonomy_policy_snapshot
 from silex.utils.config import allow_multi_writer, get_process_role, get_provider_settings, get_settings_store
 from silex.utils.config import max_tool_calls_per_turn
 from silex.utils.config import telegram_public_mode_enabled
@@ -108,7 +108,7 @@ class CognitiveLoop:
         self.llm = self.smart_router.get_proxy()   # backwards-compatible proxy alias
         provider_settings = get_provider_settings(self.settings_store)
         self.router = self.smart_router               # SmartRouter IS the router now
-        self._process_lock_path = KRONOS_PROCESS_LOCK
+        self._process_lock_path = KINTHIC_PROCESS_LOCK
 
         # Phase 2 — World Model
         self.kg = KnowledgeGraph(self.db)
@@ -157,7 +157,7 @@ class CognitiveLoop:
 
         # Phase 7: Semantic Disambiguation
         self.ontology = Ontology()
-        _ontology_overlay = KRONOS_ONTOLOGY
+        _ontology_overlay = KINTHIC_ONTOLOGY
         if _ontology_overlay.is_file():
             try:
                 self.ontology.merge_from_json_file(_ontology_overlay)
@@ -243,12 +243,12 @@ class CognitiveLoop:
         except Exception as e:
             log.warning(f"Failed to run startup recovery checkpoints: {e}")
 
-        # Kill orphaned Kronos worker containers from previous crashes
+        # Kill orphaned Kinthic worker containers from previous crashes
         try:
             import docker as docker_lib
             client = docker_lib.from_env()
             # docker container list is a blocking call, but we can do it safely in startup
-            orphans = client.containers.list(filters={"label": "kronos.managed=true"})
+            orphans = client.containers.list(filters={"label": "kinthic.managed=true"})
             for container in orphans:
                 log.warning(f"Killing orphaned worker container: {container.short_id}")
                 container.kill()
@@ -305,7 +305,7 @@ class CognitiveLoop:
                 f"- [{m.memory_type}] {m.content}" for m in memories[:20]
             )
             summary_prompt = (
-                "You are Kronos's Memory Summarizer. Below are the agent's most important memories. "
+                "You are Kinthic's Memory Summarizer. Below are the agent's most important memories. "
                 "Write a single dense paragraph (max 150 words) summarizing the key facts, user "
                 "preferences, ongoing projects, and important constraints. Be factual and concise.\n\n"
                 f"MEMORIES:\n{mem_text}"
@@ -544,7 +544,7 @@ class CognitiveLoop:
 
         lease = ActuationLease.issue(
             task_id=f"goal_{goal_id[:8]}",
-            agent_id="kronos_background",
+            agent_id="kinthic_background",
             ttl_seconds=3600.0,
             allowed_tools=["run_terminal_command", "read_file", "list_directory", "search_web"],
         )
@@ -554,7 +554,7 @@ class CognitiveLoop:
             command=f"[BACKGROUND GOAL] {target_goal.description}",
             allowed_tools=["run_terminal_command", "read_file", "list_directory", "search_web"],
             parent_task_id=goal_id,
-            agent_id="kronos_background",
+            agent_id="kinthic_background",
             worker_class=WorkerClass.COGNITIVE,
             max_turns=10,
             budget_tokens=50_000,
@@ -1384,16 +1384,16 @@ class CognitiveLoop:
                 skill_content = skill_content[:-3]
             skill_content = skill_content.strip()
             
-            # 3. Save to KRONOS_SKILLS
+            # 3. Save to KINTHIC_SKILLS
             import re
             import hashlib
-            from silex.utils.config import KRONOS_SKILLS
+            from silex.utils.config import KINTHIC_SKILLS
             
             slug = re.sub(r'[^a-z0-9]+', '_', goal_description.lower()).strip('_')
             slug = slug[:30].strip('_')
             if not slug:
                 slug = hashlib.md5(goal_description.encode()).hexdigest()[:8]
-            skill_path = KRONOS_SKILLS / f"{slug}.md"
+            skill_path = KINTHIC_SKILLS / f"{slug}.md"
             
             if not skill_content.startswith("#") and not skill_content.startswith("---"):
                 skill_content = f"# Skill: {goal_description}\n\n{skill_content}"
@@ -1798,7 +1798,7 @@ class CognitiveLoop:
             ],
         }
 
-        export_dir = KRONOS_EXPORTS
+        export_dir = KINTHIC_EXPORTS
         export_dir.mkdir(exist_ok=True)
 
         filename = f"aria_session_{session.id[:8]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -1831,7 +1831,7 @@ class CognitiveLoop:
         provider_settings = get_provider_settings(self.settings_store)
         return {
             "database_path": str(self.db.db_path),
-            "data_dir": str(KRONOS_HOME),
+            "data_dir": str(KINTHIC_HOME),
             "project_root": str(WORKSPACE_DIR),
             "vector_store_active": bool(getattr(self.vector_store, "client", None)),
             "docker_available": bool(getattr(self.tool_registry.tools.get("run_terminal_command"), "client", None)),

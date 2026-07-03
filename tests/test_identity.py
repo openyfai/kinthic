@@ -23,7 +23,7 @@ def test_build_identity_section_merges_persona():
 
 def test_build_identity_section_empty_persona():
     prompt = build_identity_section({})
-    assert "You are Kronos." in prompt
+    assert "You are Kinthic." in prompt
     assert "Use a helpful, precise tone" in prompt
 
 

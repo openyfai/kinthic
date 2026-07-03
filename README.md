@@ -1,72 +1,67 @@
 <div align="center">
-  <img src="docs/assets/banner.jpg" alt="Kronos" width="100%" />
+  <img src="docs/assets/banner.jpg" alt="kinthic" width="100%" />
 </div>
 
-# Kronos
+> **kinthic — the agent that knows how things connect.**
 
-**Kronos is a local, persistent cognitive engine.**
+<div align="center">
+  <a href="https://github.com/kinthic/kinthic/stargazers"><img src="https://img.shields.io/github/stars/kinthic/kinthic?style=flat-square&color=00C9A7" alt="GitHub stars"></a>
+  <a href="https://pypi.org/project/kinthic/"><img src="https://img.shields.io/pypi/v/kinthic?style=flat-square&color=00C9A7" alt="PyPI version"></a>
+  <a href="https://github.com/kinthic/kinthic/blob/main/LICENSE"><img src="https://img.shields.io/github/license/kinthic/kinthic?style=flat-square&color=00C9A7" alt="License"></a>
+</div>
 
-Most AI agents are stateless scripts. They forget you the moment the terminal closes. They compete on context windows; Kronos competes on state. 
-
-Built on the **Silex** memory engine, Kronos constructs a causal knowledge graph of its interactions, learns workflows via dynamic skills, and exposes its Epistemic Topology in real-time through a dedicated Next.js dashboard.
-
-It is 0 to 1. It does not compete with generic wrappers. It replaces them.
-
----
-
-### The Paradigm
-
-- **Absolute State:** Memory is not a vector search afterthought. It is a local, persistent causal graph.
-- **Dynamic Capabilities:** Drop a Markdown file into `~/.kronos/skills/` and the cognitive engine absorbs a new workflow instantly. No Python required.
-- **Total Locality:** Your data never leaves your machine unless you explicitly grant network access.
-- **Ubiquitous Access:** Run the terminal agent at your desk, or deploy `kronos channels telegram run` to interface with your engine from your phone.
+<div align="center">
+  <em>(Demo coming soon: A 5-second visualization of kinthic traversing the graph memory)</em>
+  <!-- ![Demo](docs/assets/demo.gif) -->
+</div>
 
 ---
 
-### Initialization
+kinthic is a local-first AI agent with graph-based memory. It stores what it learns as a network of entities and relationships — so it can answer the questions flat-memory agents can't: not just *what* it knows, but *how* things are connected.
 
-The system is designed for modern development environments. 
+## Quickstart
 
 ```bash
-curl -fsSL https://kronos.openyf.dev/install.sh | bash
-kronos init
+curl -fsSL https://kinthic.openyf.dev/install.sh | bash
+kinthic init
 ```
-
 *Note: Windows requires WSL2.*
 
-To initialize the full stack (FastAPI Backend + Topology Dashboard + Telegram Worker):
-```bash
-docker-compose up -d
-```
-Access the cognitive topology at `http://localhost:3000`.
+## Architecture
 
----
+*(Architecture diagram coming soon: A visual representation of how memory nodes and edges operate)*
+<!-- ![Architecture](docs/assets/architecture.png) -->
 
-### Architecture
+kinthic is designed around a rigid noun-verb CLI structure:
+- `kinthic` — Initialize standard interactive loop
+- `kinthic daemon start` — Boot the background supervisor
+- `kinthic mcp add filesystem` — Attach local Model Context Protocol
+- `kinthic skills install <name>` — Ingest new workflow capabilities
 
-Manage the engine through a rigid noun-verb CLI structure:
+## Features
 
-```bash
-kronos                        # Initialize standard interactive loop
-kronos daemon start           # Boot the background supervisor
-kronos channels telegram run  # Engage mobile channel 
-kronos mcp add filesystem     # Attach local Model Context Protocol
-kronos skills install <name>  # Ingest new workflow capabilities
-```
+- **Absolute State:** Memory is not a vector search afterthought. It is a local, persistent causal graph.
+- **Dynamic Capabilities:** Drop a Markdown file into `~/.kinthic/skills/` and the cognitive engine absorbs a new workflow instantly. No Python required.
+- **Total Locality:** Your data never leaves your machine unless you explicitly grant network access.
 
-For the complete architectural spec, read the [CLI Reference](docs/cli_reference.md).
+## Comparison
 
----
+| Peer | Memory model | kinthic's edge |
+|------|--------------|----------------|
+| OpenClaw | Flat files | Traversable entity graph |
+| Hermes Agent | Vector search index | Relationship-style queries ("how are X and Y connected?") |
+| **kinthic** | **Knowledge graph** | Both factual recall AND relationship reasoning |
 
-### Security
+## Contributing & Roadmap
 
-Kronos is sandboxed by default.
+- **Contributing**: Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting pull requests.
+- **Roadmap**: See [docs/roadmap.md](docs/roadmap.md) for upcoming features and the long-term vision.
+
+## Security
+
+kinthic is sandboxed by default.
 - Tool usage requires explicit cryptographic approval.
 - Terminal execution is locked.
 - File system modification is restricted.
 
 Read the [Security Policy](SECURITY.md) before deployment.
-
----
-
-*Built by [OpenYF AI](https://x.com/openyfai).*

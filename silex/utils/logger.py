@@ -1,10 +1,10 @@
 """
-silex/utils/logger.py — Structured logging for ARIA/Kronos.
+silex/utils/logger.py — Structured logging for ARIA/Kinthic.
 
 Behaviour
 ─────────
   Interactive CLI mode (INK_ACTIVE=1 env var set by scripts/run.py):
-    • All output → ~/.kronos/kronos.log (file only, no terminal noise)
+    • All output → ~/.kinthic/kinthic.log (file only, no terminal noise)
     • RichHandler is NOT attached — Ink owns the terminal exclusively
 
   All other modes (daemon, telegram, tests, sub-commands):
@@ -21,8 +21,8 @@ from pathlib import Path
 
 
 # ── Log file path ─────────────────────────────────────────────────────────────
-_LOG_DIR  = Path.home() / ".kronos"
-_LOG_FILE = _LOG_DIR / "kronos.log"
+_LOG_DIR  = Path.home() / ".kinthic"
+_LOG_FILE = _LOG_DIR / "kinthic.log"
 
 _FILE_FORMATTER = logging.Formatter(
     "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
@@ -32,7 +32,7 @@ _FILE_FORMATTER = logging.Formatter(
 
 def _is_ink_active() -> bool:
     """True when the Ink UI subprocess is rendering and owns the terminal."""
-    return os.environ.get("KRONOS_INK_ACTIVE", "") == "1"
+    return os.environ.get("KINTHIC_INK_ACTIVE", "") == "1"
 
 
 def _ensure_file_handler(logger: logging.Logger) -> None:
@@ -52,7 +52,7 @@ def setup_logger(name: str = "aria", level: str = "INFO") -> logging.Logger:
     """
     Create a logger for a silex/aria module.
 
-    When KRONOS_INK_ACTIVE=1:  file-only (zero terminal output)
+    When KINTHIC_INK_ACTIVE=1:  file-only (zero terminal output)
     Otherwise:                  RichHandler on stderr (original behaviour)
     """
     # Fix Windows charmap encode errors when printing emojis (e.g. ❌)

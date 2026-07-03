@@ -39,7 +39,7 @@ class RuntimeExtensionEngine:
 
     def __init__(self, sandbox_dir: Path | str | None = None):
         if sandbox_dir is None:
-            self.sandbox_dir = Path("~/.kronos/evolution/sandbox").expanduser()
+            self.sandbox_dir = Path("~/.kinthic/evolution/sandbox").expanduser()
         else:
             self.sandbox_dir = Path(sandbox_dir)
         self.sandbox_dir.mkdir(parents=True, exist_ok=True)
@@ -132,7 +132,7 @@ class RuntimeExtensionEngine:
 
             # 2. Query LLM to resolve failures
             system_prompt = (
-                "You are Kronos's Automated Test-Driven Development Engine (TDD Loops).\n"
+                "You are Kinthic's Automated Test-Driven Development Engine (TDD Loops).\n"
                 "Review the original implementation guidance, the current source code, and the test failure output.\n"
                 "Synthesize a corrected, syntactically valid implementation that resolves all failures.\n"
                 "You must return the COMPLETE corrected source code. Do not omit any sections."

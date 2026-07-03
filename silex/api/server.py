@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
         await db.close()
 
 
-app = FastAPI(title="Kronos Omnichannel Gateway", lifespan=lifespan)
+app = FastAPI(title="Kinthic Omnichannel Gateway", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -200,8 +200,8 @@ async def approve_chat(req: ApprovalRequest):
 @app.get("/api/skills")
 async def get_skills() -> Dict[str, Any]:
     """Fetch all synthesized skills from the skills directory."""
-    from silex.utils.config import KRONOS_HOME
-    skills_dir = KRONOS_HOME / "skills"
+    from silex.utils.config import KINTHIC_HOME
+    skills_dir = KINTHIC_HOME / "skills"
     if not skills_dir.exists():
         return {"skills": []}
     

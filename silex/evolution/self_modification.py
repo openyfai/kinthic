@@ -1,5 +1,5 @@
 """
-Self-Modification Engine for Kronos (Phase 7.2).
+Self-Modification Engine for Kinthic (Phase 7.2).
 
 Manages code mutations using UCB (Upper Confidence Bound) population search
 and enforces safety safeguards (sacred file checks).
@@ -52,7 +52,7 @@ class SelfModificationEngine:
 
     def __init__(self, base_dir: Path | str | None = None, manifest_path: Path | str | None = None):
         if base_dir is None:
-            self.base_dir = Path("~/.kronos/evolution").expanduser()
+            self.base_dir = Path("~/.kinthic/evolution").expanduser()
         else:
             self.base_dir = Path(base_dir)
 
@@ -219,7 +219,7 @@ class SelfModificationEngine:
 
         # 3. Request LLM mutation
         system_prompt = (
-            "You are Kronos's Metacognitive Codebase Mutation Engine (HyperAgent).\n"
+            "You are Kinthic's Metacognitive Codebase Mutation Engine (HyperAgent).\n"
             "Your task is to modify the provided code to satisfy the user's optimization request "
             "while maintaining syntax correctness, interfaces, and backward compatibility.\n"
             "You must return the COMPLETE modified source code file. Do not omit any sections."

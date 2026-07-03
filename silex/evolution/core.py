@@ -51,7 +51,7 @@ class SelfEvolutionCoordinator:
         self.llm_client = llm_client
 
         if evolution_dir is None:
-            self.evolution_dir = Path("~/.kronos/evolution").expanduser()
+            self.evolution_dir = Path("~/.kinthic/evolution").expanduser()
         else:
             self.evolution_dir = Path(evolution_dir)
         self.evolution_dir.mkdir(parents=True, exist_ok=True)
@@ -182,7 +182,7 @@ class SelfEvolutionCoordinator:
 
         # 3. Prompt LLM to synthesize Markdown instructions
         system_prompt = (
-            "You are Kronos's Skill Distillation and Memory Synthesis Engine.\n"
+            "You are Kinthic's Skill Distillation and Memory Synthesis Engine.\n"
             "Review the successful execution path (actions, inputs, outputs) of a completed task "
             "and synthesize a reusable markdown-formatted instruction skill manual.\n"
             "This manual should be structured, concise, detail all prerequisites, steps, warnings, "

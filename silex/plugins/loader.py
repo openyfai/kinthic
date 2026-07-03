@@ -13,8 +13,8 @@ Unified plugin.yaml spec (all fields are optional except `name`):
   requires_approval: false
   signature: ""           # HMAC-SHA256 of tool.py for community plugins
 
-Each plugin is a directory under ~/.kronos/plugins/tools/:
-  ~/.kronos/plugins/tools/<plugin_name>/
+Each plugin is a directory under ~/.kinthic/plugins/tools/:
+  ~/.kinthic/plugins/tools/<plugin_name>/
   ├── plugin.yaml     ← required: name, description, version
   └── tool.py         ← required: class inheriting BaseTool
 
@@ -97,7 +97,7 @@ def load_tool_plugins(plugins_dir: Path) -> list["BaseTool"]:
             plugin_version = manifest.get("version", "?")
 
             # Load tool.py as an isolated module
-            module_name = f"kronos_user_plugins.tools.{plugin_dir.name}"
+            module_name = f"kinthic_user_plugins.tools.{plugin_dir.name}"
 
             # Remove stale cached version so hot-reload works
             if module_name in sys.modules:

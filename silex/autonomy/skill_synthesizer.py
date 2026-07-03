@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from silex.storage.database import Database
 from silex.llm.base import SupportsLLM
 from silex.world.graph import KnowledgeGraph
-from silex.utils.config import KRONOS_HOME
+from silex.utils.config import KINTHIC_HOME
 from silex.utils.logger import setup_logger
 
 log = setup_logger("silex.autonomy.skill_synthesizer")
@@ -92,9 +92,9 @@ class GenesisSynthesizer:
         
         # 3. Call LLM to synthesize the skill
         system_prompt = (
-            "You are Kronos's Genesis Skill Synthesizer.\n"
+            "You are Kinthic's Genesis Skill Synthesizer.\n"
             "Your job is to review a successful multi-step workflow (a trajectory) and abstract it into a reusable Skill.\n"
-            "A Kronos Skill consists of a SKILL.md file (which teaches the agent how to use it) and optionally a Python script "
+            "A Kinthic Skill consists of a SKILL.md file (which teaches the agent how to use it) and optionally a Python script "
             "that the agent can execute. The script must be parameterized so it works for similar future tasks.\n"
             "If the workflow relies heavily on standard terminal commands, you can just write a SKILL.md that explains "
             "the terminal commands to use. If it requires complex logic, write a Python script.\n\n"
@@ -124,7 +124,7 @@ class GenesisSynthesizer:
                 return None
                 
             # 5. Write to Disk
-            skill_dir = KRONOS_HOME / "skills" / synthesis.skill_name
+            skill_dir = KINTHIC_HOME / "skills" / synthesis.skill_name
             skill_dir.mkdir(parents=True, exist_ok=True)
             
             # Write SKILL.md

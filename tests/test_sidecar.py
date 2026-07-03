@@ -7,7 +7,7 @@ from agent.compute.sidecar_daemon import handle_client
 
 @pytest.mark.asyncio
 async def test_sidecar_rejects_unauthenticated_payload(tmp_path, monkeypatch):
-    monkeypatch.setenv("KRONOS_WORKER_SESSION_KEY", "test-session-secret")
+    monkeypatch.setenv("KINTHIC_WORKER_SESSION_KEY", "test-session-secret")
 
     class MockReader:
         async def read(self):
@@ -37,7 +37,7 @@ async def test_sidecar_rejects_unauthenticated_payload(tmp_path, monkeypatch):
 async def test_sidecar_execution(tmp_path, monkeypatch):
     """Verify that the sidecar daemon can execute a command with valid session key."""
     session_key = "test-session-secret-for-sidecar"
-    monkeypatch.setenv("KRONOS_WORKER_SESSION_KEY", session_key)
+    monkeypatch.setenv("KINTHIC_WORKER_SESSION_KEY", session_key)
 
     class MockReader:
         async def read(self):

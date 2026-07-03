@@ -1,5 +1,5 @@
 """
-Ephemeral connectivity checks for LLM providers (setup wizard + kronos doctor --ping).
+Ephemeral connectivity checks for LLM providers (setup wizard + kinthic doctor --ping).
 """
 
 from __future__ import annotations
@@ -33,10 +33,10 @@ def humanize_llm_error(exc: BaseException, provider_id: str) -> tuple[str, str, 
     class_name = exc.__class__.__name__.lower()
     status_code = getattr(exc, "status_code", getattr(exc, "code", None))
 
-    if "install openyfai-kronos" in low or "install kronos" in low or "install silex" in low or "install aria" in low:
+    if "install openyfai-kinthic" in low or "install kinthic" in low or "install silex" in low or "install aria" in low:
         return (
             "Missing optional dependency for this provider.",
-            "Install provider extras: pip install \"openyfai-kronos[providers]\"",
+            "Install provider extras: pip install \"openyfai-kinthic[providers]\"",
             "missing_dependency",
         )
     if (
@@ -68,7 +68,7 @@ def humanize_llm_error(exc: BaseException, provider_id: str) -> tuple[str, str, 
     if "model" in low and ("not found" in low or "does not exist" in low or "unknown model" in low):
         return (
             "This model name was not accepted.",
-            "Pick another model from `kronos models` or the setup list for this provider.",
+            "Pick another model from `kinthic models` or the setup list for this provider.",
             "model_not_found",
         )
     if "connection refused" in low or "failed to establish" in low:
@@ -99,7 +99,7 @@ def humanize_llm_error(exc: BaseException, provider_id: str) -> tuple[str, str, 
     trimmed = raw if len(raw) < 320 else raw[:300] + "…"
     return (
         trimmed,
-        "If this persists, run `kronos doctor --ping` from the same machine and compare the raw error.",
+        "If this persists, run `kinthic doctor --ping` from the same machine and compare the raw error.",
         "unknown",
     )
 
@@ -137,12 +137,12 @@ async def ping_provider(
     if model_id and provider_id not in ("custom", "ollama", "lm_studio", "azure") and find_model(provider_id, model_use) is None:
         return {
             "ok": False,
-            "message": f"Model `{model_use}` is not in Kronos's catalog for `{provider_id}`.",
-            "hint": "Pick a model from the dropdown or run `kronos models` to see supported ids.",
+            "message": f"Model `{model_use}` is not in Kinthic's catalog for `{provider_id}`.",
+            "hint": "Pick a model from the dropdown or run `kinthic models` to see supported ids.",
             "code": "unknown_model",
         }
 
-    with tempfile.TemporaryDirectory(prefix="kronos-provider-test-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="kinthic-provider-test-") as tmp:
         tpath = Path(tmp)
         store = RuntimeSettingsStore(settings_path=tpath / "settings.json", secrets_path=tpath / "secrets.json")
         store.save_settings(

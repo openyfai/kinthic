@@ -24,7 +24,7 @@ export default function SkillForge() {
       </div>
 
       <p className="text-neutral-400 mb-8 max-w-2xl">
-        This repository contains autonomous skills synthesized by the Genesis engine. Kronos automatically 
+        This repository contains autonomous skills synthesized by the Genesis engine. Kinthic automatically 
         distills successful problem-solving trajectories into reusable code blocks.
       </p>
 
@@ -32,7 +32,7 @@ export default function SkillForge() {
         <div className="text-cyan-400 animate-pulse">Scanning skill repository...</div>
       ) : skills.length === 0 ? (
         <div className="text-neutral-500 italic p-8 border border-dashed border-white/10 rounded-xl text-center">
-          No synthesized skills found yet. Kronos will generate them automatically over time.
+          No synthesized skills found yet. Kinthic will generate them automatically over time.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

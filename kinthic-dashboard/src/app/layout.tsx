@@ -5,8 +5,8 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Kronos Studio',
-  description: 'Epistemic Graph and Control Center for Kronos AGI',
+  title: 'Kinthic Studio',
+  description: 'Epistemic Graph and Control Center for Kinthic AGI',
 };
 
 export default function RootLayout({

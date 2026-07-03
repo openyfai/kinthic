@@ -1,6 +1,6 @@
 ---
 name: Skill Submission
-about: Submit a new workflow skill for inclusion in the KronosHub registry
+about: Submit a new workflow skill for inclusion in the KinthicHub registry
 title: '[SKILL] <skill_name>'
 labels: ['skill-submission', 'needs-audit']
 assignees: ''
@@ -14,7 +14,7 @@ assignees: ''
 
 ## 📋 Audit Checklist
 Before submitting, please ensure you have checked the following:
-- [ ] I have tested this skill locally with `kronos skills reload`.
+- [ ] I have tested this skill locally with `kinthic skills reload`.
 - [ ] My skill does not attempt to bypass `requires_approval` safeguards.
 - [ ] My skill is safe and does not execute arbitrary unsigned remote code.
 - [ ] I have included the raw `.md` file contents below.

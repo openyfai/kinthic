@@ -19,10 +19,10 @@ from urllib.parse import urlparse
 log = logging.getLogger("agent.security.network_proxy")
 
 DEFAULT_ALLOWED_DOMAINS: set[str] = set()
-if Path("/kronos/workers").exists():
-    _POLICY_ROOT = Path("/kronos/workers")
+if Path("/kinthic/workers").exists():
+    _POLICY_ROOT = Path("/kinthic/workers")
 else:
-    _POLICY_ROOT = Path.home() / ".kronos" / "workers"
+    _POLICY_ROOT = Path.home() / ".kinthic" / "workers"
 _PROXY_PORT = 8080
 
 
@@ -114,7 +114,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
         self.end_headers()
-        self.wfile.write(b"Kronos egress proxy active\n")
+        self.wfile.write(b"Kinthic egress proxy active\n")
 
     def _tunnel(self, client: socket.socket, remote: socket.socket) -> None:
         import select

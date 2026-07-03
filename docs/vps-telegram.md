@@ -1,6 +1,6 @@
-# Kronos VPS & Telegram Deployment Guide
+# Kinthic VPS & Telegram Deployment Guide
 
-This guide explains how to deploy Kronos on a standard Ubuntu Linux VPS (Virtual Private Server) using Docker Compose and connect it to Telegram.
+This guide explains how to deploy Kinthic on a standard Ubuntu Linux VPS (Virtual Private Server) using Docker Compose and connect it to Telegram.
 
 ## 1. Prerequisites
 
@@ -22,11 +22,11 @@ sudo usermod -aG docker $USER
 
 ## 3. Clone and Configure
 
-Clone the Kronos repository:
+Clone the Kinthic repository:
 
 ```bash
-git clone https://github.com/openyfai/kronos.git
-cd kronos
+git clone https://github.com/openyfai/kinthic.git
+cd kinthic
 ```
 
 Create a `.env` file to store your API keys. Make sure it contains your Telegram bot token and preferred LLM provider key:
@@ -38,22 +38,22 @@ GEMINI_API_KEY=your_gemini_api_key_here
 EOF
 ```
 
-## 4. Launch Kronos
+## 4. Launch Kinthic
 
-Use Docker Compose to build and start Kronos in detached mode.
+Use Docker Compose to build and start Kinthic in detached mode.
 
 ```bash
 docker compose --profile telegram up -d --build
 ```
 
-Kronos is now running! The `kronos-data` docker volume securely persists your brain (`silex.db`), skills, and configuration at `/home/kronos/.kronos` inside the container.
+Kinthic is now running! The `kinthic-data` docker volume securely persists your brain (`silex.db`), skills, and configuration at `/home/kinthic/.kinthic` inside the container.
 
 ## 5. Pair via Telegram
 
 1. Open Telegram and search for your bot.
 2. Send the `/start` command.
-3. Send `/pair` to link your Telegram account to Kronos.
-4. You are now the exclusive operator of this Kronos instance. 
+3. Send `/pair` to link your Telegram account to Kinthic.
+4. You are now the exclusive operator of this Kinthic instance. 
 
 ## 6. Maintenance Commands
 
@@ -62,17 +62,17 @@ To view logs:
 docker compose logs -f
 ```
 
-To stop Kronos:
+To stop Kinthic:
 ```bash
 docker compose --profile telegram down
 ```
 
-To backup your Kronos data, run the `backup export` command using `docker exec`:
+To backup your Kinthic data, run the `backup export` command using `docker exec`:
 ```bash
-docker exec -it kronos-telegram kronos backup export
+docker exec -it kinthic-telegram kinthic backup export
 ```
 Then copy the zip file out of the container to your host system:
 ```bash
-docker cp kronos-telegram:/app/kronos-backup.zip ./kronos-backup.zip
+docker cp kinthic-telegram:/app/kinthic-backup.zip ./kinthic-backup.zip
 ```
 *(Note: `secrets.json` is safely excluded from backups to prevent credential leakage).*

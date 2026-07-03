@@ -30,13 +30,13 @@ import uuid
 from pathlib import Path
 
 from silex.tools.base import BaseTool
-from silex.utils.config import KRONOS_HOME, WORKSPACE_DIR as _WORKSPACE_ROOT
+from silex.utils.config import KINTHIC_HOME, WORKSPACE_DIR as _WORKSPACE_ROOT
 from silex.utils.logger import setup_logger
 
 log = setup_logger("silex.tools.phantom")
 
 # The phantom runs live here — outside the workspace so the watcher ignores them.
-PHANTOM_BASE = KRONOS_HOME / "phantom"
+PHANTOM_BASE = KINTHIC_HOME / "phantom"
 
 
 def _resolve_workspace_path(file_path: str) -> Path:

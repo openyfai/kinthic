@@ -1,7 +1,7 @@
 """
 silex/memory/file_indexer.py — Indexes local files into ChromaDB for RAG.
 
-Stores chunks in a separate collection `kronos_files` (not `aria_workspace`)
+Stores chunks in a separate collection `kinthic_files` (not `aria_workspace`)
 so file content doesn't pollute the tool-retrieved workspace snippets.
 
 Chunking strategy:
@@ -45,8 +45,8 @@ class FileIndexer:
         """
         Args:
             vector_store: A VectorStore instance. If None, creates its own
-                          ChromaDB client pointed at ~/.kronos/storage/vector_db
-                          using a separate 'kronos_files' collection.
+                          ChromaDB client pointed at ~/.kinthic/storage/vector_db
+                          using a separate 'kinthic_files' collection.
         """
         self._vs = vector_store
         self._collection = None
@@ -60,9 +60,9 @@ class FileIndexer:
             client = chromadb.PersistentClient(path=str(SILEX_VECTOR_DB))
             ef = embedding_functions.DefaultEmbeddingFunction()
             self._collection = client.get_or_create_collection(
-                name="kronos_files", embedding_function=ef
+                name="kinthic_files", embedding_function=ef
             )
-            log.info("FileIndexer initialized (collection: kronos_files)")
+            log.info("FileIndexer initialized (collection: kinthic_files)")
         except Exception as exc:
             log.warning("FileIndexer: ChromaDB not available: %s", exc)
 
@@ -124,12 +124,12 @@ class FileIndexer:
             from chromadb.utils import embedding_functions
             from silex.utils.config import SILEX_VECTOR_DB
             client = chromadb.PersistentClient(path=str(SILEX_VECTOR_DB))
-            client.delete_collection("kronos_files")
+            client.delete_collection("kinthic_files")
             ef = embedding_functions.DefaultEmbeddingFunction()
             self._collection = client.get_or_create_collection(
-                name="kronos_files", embedding_function=ef
+                name="kinthic_files", embedding_function=ef
             )
-            log.info("FileIndexer: cleared kronos_files collection")
+            log.info("FileIndexer: cleared kinthic_files collection")
         except Exception as exc:
             log.warning("FileIndexer clear failed: %s", exc)
 

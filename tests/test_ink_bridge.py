@@ -1,4 +1,4 @@
-"""Tests for the Kronos Ink bridge (Python ↔ NDJSON file bus + TCP push)."""
+"""Tests for the Kinthic Ink bridge (Python ↔ NDJSON file bus + TCP push)."""
 
 from __future__ import annotations
 
@@ -13,17 +13,17 @@ from silex.ui import ink_bridge as ib
 
 @pytest.fixture
 def events_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    kronos_dir = tmp_path / ".kronos"
-    kronos_dir.mkdir()
-    path = kronos_dir / "ink_events.ndjson"
-    monkeypatch.setattr(ib, "_KRONOS_DIR", kronos_dir)
+    kinthic_dir = tmp_path / ".kinthic"
+    kinthic_dir.mkdir()
+    path = kinthic_dir / "ink_events.ndjson"
+    monkeypatch.setattr(ib, "_KINTHIC_DIR", kinthic_dir)
     monkeypatch.setattr(ib, "_EVENTS_FILE", path)
     return path
 
 
 @pytest.mark.asyncio
 async def test_emit_appends_ndjson_line(events_file: Path) -> None:
-    bridge = ib.KronosInkBridge()
+    bridge = ib.KinthicInkBridge()
     bridge._enabled = True  # bypass subprocess spawn
 
     await bridge.emit({"type": "thinking", "data": {"status": "Thinking..."}})
@@ -37,7 +37,7 @@ async def test_emit_appends_ndjson_line(events_file: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_emit_error_writes_error_and_response(events_file: Path) -> None:
-    bridge = ib.KronosInkBridge()
+    bridge = ib.KinthicInkBridge()
     bridge._enabled = True
 
     await bridge.emit_error("something broke")
@@ -51,7 +51,7 @@ async def test_emit_error_writes_error_and_response(events_file: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_emit_cancel_writes_cancel_and_response(events_file: Path) -> None:
-    bridge = ib.KronosInkBridge()
+    bridge = ib.KinthicInkBridge()
     bridge._enabled = True
 
     await bridge.emit_cancel("Thinking cancelled.")
@@ -63,7 +63,7 @@ async def test_emit_cancel_writes_cancel_and_response(events_file: Path) -> None
 
 @pytest.mark.asyncio
 async def test_read_user_input_from_stderr_packet() -> None:
-    bridge = ib.KronosInkBridge()
+    bridge = ib.KinthicInkBridge()
     bridge._enabled = True
 
     packet = json.dumps({"type": "user_input", "params": {"text": "hello ink"}})
@@ -81,14 +81,14 @@ async def test_read_user_input_from_stderr_packet() -> None:
 
 @pytest.mark.asyncio
 async def test_emit_noop_when_disabled(events_file: Path) -> None:
-    bridge = ib.KronosInkBridge()
+    bridge = ib.KinthicInkBridge()
     bridge._enabled = False
     await bridge.emit({"type": "response", "data": {"text": "nope"}})
     assert not events_file.exists() or events_file.read_text() == ""
 
 
 def test_build_launch_cmd_prefers_compiled_binary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    compiled = tmp_path / "kronos-ui"
+    compiled = tmp_path / "kinthic-ui"
     compiled.write_text("#!/bin/sh\necho ok\n")
     compiled.chmod(0o755)
     monkeypatch.setattr(ib, "_COMPILED_UI", compiled)
@@ -97,7 +97,7 @@ def test_build_launch_cmd_prefers_compiled_binary(tmp_path: Path, monkeypatch: p
 
 
 def test_events_file_truncation_pattern(events_file: Path) -> None:
-    """Document the session-start truncate used by KronosInkBridge.start()."""
+    """Document the session-start truncate used by KinthicInkBridge.start()."""
     events_file.write_text('{"type":"old"}\n', encoding="utf-8")
     events_file.write_text("", encoding="utf-8")
     assert events_file.read_text(encoding="utf-8") == ""
@@ -105,7 +105,7 @@ def test_events_file_truncation_pattern(events_file: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_emit_buffers_tcp_until_client_connects() -> None:
-    bridge = ib.KronosInkBridge()
+    bridge = ib.KinthicInkBridge()
     bridge._enabled = True
     bridge._use_tcp = True
 
@@ -116,7 +116,7 @@ async def test_emit_buffers_tcp_until_client_connects() -> None:
 
 @pytest.mark.asyncio
 async def test_emit_pushes_over_tcp_when_client_connected() -> None:
-    bridge = ib.KronosInkBridge()
+    bridge = ib.KinthicInkBridge()
     bridge._enabled = True
     bridge._use_tcp = True
 

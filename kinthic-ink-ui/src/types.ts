@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// src/types.ts — Shared TypeScript interfaces for all Kronos Ink components.
+// src/types.ts — Shared TypeScript interfaces for all Kinthic Ink components.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Metadata injected into the identity header at startup. */

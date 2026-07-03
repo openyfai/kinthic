@@ -12,7 +12,7 @@ import uuid
 
 from silex.utils.logger import setup_logger
 
-log = setup_logger("kronos.daemon")
+log = setup_logger("kinthic.daemon")
 
 
 def run_gateway_worker() -> None:
@@ -152,7 +152,7 @@ def harvest_zombie_browsers() -> None:
     protected_pids = {os.getpid(), os.getppid()}
     
     # Read active process lock if present
-    process_lock_path = Path("~/.kronos/runtime/process.lock").expanduser()
+    process_lock_path = Path("~/.kinthic/runtime/process.lock").expanduser()
     if process_lock_path.exists():
         try:
             lock_data = json.loads(process_lock_path.read_text(encoding="utf-8"))
@@ -313,7 +313,7 @@ class DaemonWatchdog:
         self._last_heartbeat_check: float = 0.0  # epoch seconds
 
     def _send_webhook(self, message: str) -> None:
-        webhook_url = os.environ.get("KRONOS_WATCHDOG_WEBHOOK")
+        webhook_url = os.environ.get("KINTHIC_WATCHDOG_WEBHOOK")
         if not webhook_url:
             return
             
@@ -383,7 +383,7 @@ class DaemonWatchdog:
                 last_seen = float(hb_row["last_seen"])
                 if time.time() - last_seen > 3 * 3600: # 3 hours
                     if self.cognitive_process and self.cognitive_process.is_alive():
-                        msg = "⚠️ [ALERT] Kronos cognitive worker was frozen for >3 hours and has been force-restarted."
+                        msg = "⚠️ [ALERT] Kinthic cognitive worker was frozen for >3 hours and has been force-restarted."
                         log.error(msg)
                         self._send_webhook(msg)
                         self.cognitive_process.kill()
@@ -419,7 +419,7 @@ class DaemonWatchdog:
         signal.signal(signal.SIGINT, handle_sigterm)
         signal.signal(signal.SIGTERM, handle_sigterm)
 
-        log.info("--- Kronos Watchdog Started ---")
+        log.info("--- Kinthic Watchdog Started ---")
         
         # Issue 2: Recover orphaned jobs before workers can grab them
         self._recover_stale_jobs()
@@ -510,7 +510,7 @@ class DaemonWatchdog:
 
 
 def main() -> None:
-    import silex.utils.config  # noqa: F401 — loads ~/.kronos/.env before adapter env checks
+    import silex.utils.config  # noqa: F401 — loads ~/.kinthic/.env before adapter env checks
 
     watchdog = DaemonWatchdog()
     watchdog.run()

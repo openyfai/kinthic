@@ -21,7 +21,7 @@ class VoiceSpeaker:
             except ImportError as e:
                 raise RuntimeError(
                     f"Voice speaker offline dependencies not installed: {e}. "
-                    f"Set OPENAI_API_KEY or run: pip install \"kronos[voice]\""
+                    f"Set OPENAI_API_KEY or run: pip install \"kinthic[voice]\""
                 )
 
     def speak(self, text: str) -> None:
@@ -59,5 +59,5 @@ class VoiceSpeaker:
             engine.say(text)
             engine.runAndWait()
         except ImportError:
-            log.error("pyttsx3 not installed. Run: pip install 'kronos[voice]'")
-            raise RuntimeError("pyttsx3 not installed. Run: pip install 'kronos[voice]'")
+            log.error("pyttsx3 not installed. Run: pip install 'kinthic[voice]'")
+            raise RuntimeError("pyttsx3 not installed. Run: pip install 'kinthic[voice]'")

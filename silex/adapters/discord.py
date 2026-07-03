@@ -1,4 +1,4 @@
-"""Discord messaging adapter for Kronos."""
+"""Discord messaging adapter for Kinthic."""
 from __future__ import annotations
 
 import os
@@ -50,7 +50,7 @@ class DiscordAdapter(MessageAdapter):
         except ImportError:
             print(
                 "\n❌ discord.py is not installed.\n"
-                "Install with: uv pip install 'openyfai-kronos[discord]'\n"
+                "Install with: uv pip install 'openyfai-kinthic[discord]'\n"
                 "Or from the project venv: pip install discord.py>=2.3\n"
             )
             return
@@ -74,12 +74,12 @@ class DiscordAdapter(MessageAdapter):
         @bot.event
         async def on_ready() -> None:
             log.info("Discord adapter online as %s", bot.user)
-            print(f"\n🚀 Kronos Discord adapter online as {bot.user}")
+            print(f"\n🚀 Kinthic Discord adapter online as {bot.user}")
 
         @bot.command(name="start")
         async def start_cmd(ctx: commands.Context) -> None:
             await ctx.reply(
-                f"👋 Kronos is online.\n"
+                f"👋 Kinthic is online.\n"
                 f"Your Discord user ID: `{ctx.author.id}`\n"
                 f"Add this ID to ALLOWED_DISCORD_USERS in your .env to authorize access.",
                 mention_author=False,
@@ -190,7 +190,7 @@ def _print_security_status() -> None:
     allowed = os.getenv("ALLOWED_DISCORD_USERS", "")
     public = os.getenv("DISCORD_PUBLIC_MODE", "").lower() in {"1", "true", "yes"}
     if public:
-        print("⚠️  PUBLIC MODE: Any Discord user can interact with Kronos!")
+        print("⚠️  PUBLIC MODE: Any Discord user can interact with Kinthic!")
     elif allowed:
         print(f"🔒 Discord whitelist active: {allowed}")
     else:

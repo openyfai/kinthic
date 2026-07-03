@@ -1,4 +1,4 @@
-"""Wrap MCP tools as Kronos BaseTool instances."""
+"""Wrap MCP tools as Kinthic BaseTool instances."""
 
 from __future__ import annotations
 

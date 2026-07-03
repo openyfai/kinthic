@@ -103,14 +103,14 @@ const App: React.FC<AppProps> = ({ registerDispatch }) => {
 
   const handleApprove = useCallback((txId: string) => {
     setState(prev => reduceAuthDecision(prev, true));
-    const demoComplete = (globalThis as Record<string, unknown>).__kronosDemoComplete;
+    const demoComplete = (globalThis as Record<string, unknown>).__kinthicDemoComplete;
     if (typeof demoComplete === 'function') demoComplete();
     void txId;
   }, []);
 
   const handleReject = useCallback(() => {
     setState(prev => reduceAuthDecision(prev, false));
-    const demoComplete = (globalThis as Record<string, unknown>).__kronosDemoComplete;
+    const demoComplete = (globalThis as Record<string, unknown>).__kinthicDemoComplete;
     if (typeof demoComplete === 'function') demoComplete();
   }, []);
 

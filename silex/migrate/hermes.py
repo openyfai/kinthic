@@ -3,10 +3,10 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from silex.utils.config import KRONOS_HOME, KRONOS_SECRETS
+from silex.utils.config import KINTHIC_HOME, KINTHIC_SECRETS
 from silex.utils.logger import setup_logger
 
-log = setup_logger("kronos.migrate.hermes")
+log = setup_logger("kinthic.migrate.hermes")
 
 def _load_yaml(path: Path) -> dict[str, Any]:
     if not path.exists():
@@ -53,9 +53,9 @@ def scan_hermes(source_path: str | None = None) -> dict[str, Any]:
     return report
 
 def import_hermes(source_path: str | None = None, dry_run: bool = True) -> list[str]:
-    """Import data from Hermes to Kronos."""
+    """Import data from Hermes to Kinthic."""
     base_dir = Path(source_path).expanduser() if source_path else Path.home() / ".hermes"
-    kronos_dir = Path(KRONOS_HOME)
+    kinthic_dir = Path(KINTHIC_HOME)
     
     logs = []
     
@@ -63,11 +63,11 @@ def import_hermes(source_path: str | None = None, dry_run: bool = True) -> list[
         logs.append(f"❌ Hermes directory not found at {base_dir}")
         return logs
         
-    logs.append(f"📦 Starting migration from {base_dir} to {kronos_dir}")
+    logs.append(f"📦 Starting migration from {base_dir} to {kinthic_dir}")
     if dry_run:
         logs.append("⚠️ DRY RUN MODE: No files will be modified.")
     else:
-        kronos_dir.mkdir(parents=True, exist_ok=True)
+        kinthic_dir.mkdir(parents=True, exist_ok=True)
         
     # Migrate .env secrets to secrets.json loosely
     env_file = base_dir / ".env"
@@ -75,9 +75,9 @@ def import_hermes(source_path: str | None = None, dry_run: bool = True) -> list[
         logs.append("📄 Found .env file, migrating secrets...")
         import json
         secrets = {}
-        if not dry_run and KRONOS_SECRETS.exists():
+        if not dry_run and KINTHIC_SECRETS.exists():
             try:
-                secrets = json.loads(KRONOS_SECRETS.read_text())
+                secrets = json.loads(KINTHIC_SECRETS.read_text())
             except Exception:
                 pass
                 
@@ -95,28 +95,28 @@ def import_hermes(source_path: str | None = None, dry_run: bool = True) -> list[
                 migrated_keys += 1
                 
         if not dry_run:
-            KRONOS_SECRETS.write_text(json.dumps(secrets, indent=2))
+            KINTHIC_SECRETS.write_text(json.dumps(secrets, indent=2))
         logs.append(f"  ✓ Migrated {migrated_keys} keys.")
 
     # Migrate Skills
     skills_dir = base_dir / "skills"
-    kronos_skills = kronos_dir / "skills"
+    kinthic_skills = kinthic_dir / "skills"
     if skills_dir.exists() and skills_dir.is_dir():
         count = 0
         if not dry_run:
-            kronos_skills.mkdir(parents=True, exist_ok=True)
+            kinthic_skills.mkdir(parents=True, exist_ok=True)
             
         for skill_file in skills_dir.glob("*.md"):
             if not dry_run:
-                shutil.copy2(skill_file, kronos_skills / skill_file.name)
+                shutil.copy2(skill_file, kinthic_skills / skill_file.name)
             count += 1
         logs.append(f"🧩 Migrated {count} skills.")
 
     # Migrate Persona / Config logic...
     user_md = base_dir / "memories" / "USER.md"
     if user_md.exists():
-        logs.append("👤 Found USER.md identity file, please manually review it for Kronos personas.")
+        logs.append("👤 Found USER.md identity file, please manually review it for Kinthic personas.")
 
     logs.append("✅ Migration complete.")
-    logs.append("🔒 IMPORTANT: You must run `kronos telegram` and /pair your account to ensure security boundaries are established.")
+    logs.append("🔒 IMPORTANT: You must run `kinthic telegram` and /pair your account to ensure security boundaries are established.")
     return logs

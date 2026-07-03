@@ -10,7 +10,7 @@ import hashlib
 from typing import List
 
 from silex.memory.vector_store import VectorStore
-from silex.utils.config import KRONOS_MANIFEST, WORKSPACE_DIR
+from silex.utils.config import KINTHIC_MANIFEST, WORKSPACE_DIR
 from silex.utils.logger import setup_logger
 
 log = setup_logger("silex.memory.indexer")
@@ -30,7 +30,7 @@ IGNORE_EXTS = {
     ".log", ".lock",
 }
 MAX_INDEX_FILE_BYTES = 1_000_000
-MANIFEST_PATH = KRONOS_MANIFEST
+MANIFEST_PATH = KINTHIC_MANIFEST
 
 class WorkspaceIndexer:
     """

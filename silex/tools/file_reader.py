@@ -19,7 +19,7 @@ log = setup_logger("silex.tools.file_reader")
 # Security — define the sandbox boundary
 # ---------------------------------------------------------------------------
 
-# Sandbox root: resolved from config.py (KRONOS_WORKSPACE or KRONOS_WORKSPACE env override).
+# Sandbox root: resolved from config.py (KINTHIC_WORKSPACE or KINTHIC_WORKSPACE env override).
 # This ensures pip-installed copies don't accidentally expose site-packages.
 _PROJECT_ROOT = WORKSPACE_DIR
 
@@ -29,7 +29,7 @@ _BLOCKED_NAMES = {
     ".git", ".gitignore",
 }
 _BLOCKED_PREFIXES = {".env"}  # Catches .env.anything
-_BLOCKED_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv", ".kronos"}
+_BLOCKED_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv", ".kinthic"}
 
 
 def _is_path_safe(path: Path) -> tuple[bool, str]:

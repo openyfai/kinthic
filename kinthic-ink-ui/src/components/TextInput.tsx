@@ -21,7 +21,7 @@ interface TextInputProps {
   onSubmit: (value: string) => void;
   placeholder?: string;
   commands?: CommandSpec[];
-  /** Shell command history from ~/.kronos/history, newest-last. */
+  /** Shell command history from ~/.kinthic/history, newest-last. */
   history?: string[];
 }
 

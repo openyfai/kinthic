@@ -1,5 +1,5 @@
 """
-agent package for Kronos Agent Orchestration.
+agent package for Kinthic Agent Orchestration.
 Defines parallel worker isolation, orchestration layer, and security guards.
 """
 

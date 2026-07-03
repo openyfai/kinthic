@@ -5,7 +5,7 @@ from silex.core.skills import SkillLoader
 from silex.memory.vector_store import VectorStore
 from silex.mcp.filter import ToolsetFilter
 from silex.mcp.config import _expand_env
-from silex.plugins.registry import KronosRegistry
+from silex.plugins.registry import KinthicRegistry
 
 
 @pytest.mark.asyncio
@@ -28,7 +28,7 @@ async def test_semantic_skill_retrieval(tmp_path):
 
     vector_path = tmp_path / "vector_db"
 
-    with patch("silex.core.skills.KRONOS_SKILLS", skills_dir), patch(
+    with patch("silex.core.skills.KINTHIC_SKILLS", skills_dir), patch(
         "silex.utils.config.SILEX_VECTOR_DB", vector_path
     ):
         vs = VectorStore(collection_name="test_skills_collection")
@@ -59,7 +59,7 @@ def test_format_index_for_prompt(tmp_path):
         "name: tell_joke\ndescription: Jokes\ntrigger: joke humor\n", encoding="utf-8"
     )
 
-    with patch("silex.core.skills.KRONOS_SKILLS", skills_dir):
+    with patch("silex.core.skills.KINTHIC_SKILLS", skills_dir):
         loader = SkillLoader()
         loader.load_all()
         index = loader.format_index_for_prompt()
@@ -77,7 +77,7 @@ def test_inline_skill_in_prompt(tmp_path):
         encoding="utf-8",
     )
 
-    with patch("silex.core.skills.KRONOS_SKILLS", skills_dir):
+    with patch("silex.core.skills.KINTHIC_SKILLS", skills_dir):
         loader = SkillLoader()
         loader.load_all()
         prompt = loader.format_for_prompt("onboard repo")
@@ -93,7 +93,7 @@ async def test_skill_view_tool(tmp_path):
     skills_dir.mkdir()
     (skills_dir / "demo.md").write_text("# Demo skill body", encoding="utf-8")
 
-    with patch("silex.core.skills.KRONOS_SKILLS", skills_dir):
+    with patch("silex.core.skills.KINTHIC_SKILLS", skills_dir):
         loader = SkillLoader()
         loader.load_all()
         tool = SkillViewTool(loader)
@@ -119,20 +119,20 @@ def test_install_bundled_skill(tmp_path, monkeypatch):
     skills.mkdir(parents=True)
     (skills / "tell_joke.md").write_text("# joke", encoding="utf-8")
 
-    kronos_skills = tmp_path / "home" / "skills"
+    kinthic_skills = tmp_path / "home" / "skills"
     registry_dir = tmp_path / "home" / "registry"
     registry_dir.mkdir(parents=True)
 
     monkeypatch.setattr("silex.utils.config.PROJECT_ROOT", project_root)
-    monkeypatch.setattr("silex.utils.config.KRONOS_SKILLS", kronos_skills)
-    monkeypatch.setattr("silex.utils.config.KRONOS_HOME", tmp_path / "home")
+    monkeypatch.setattr("silex.utils.config.KINTHIC_SKILLS", kinthic_skills)
+    monkeypatch.setattr("silex.utils.config.KINTHIC_HOME", tmp_path / "home")
 
-    reg = KronosRegistry()
+    reg = KinthicRegistry()
     reg.registry_dir = registry_dir
     reg.catalog_path = registry_dir / "catalog.yaml"
     ok, msg = reg.install_bundled("tell_joke")
     assert ok
-    assert (kronos_skills / "tell_joke.md").exists()
+    assert (kinthic_skills / "tell_joke.md").exists()
 
 
 def test_mcp_adapter_tool_naming():

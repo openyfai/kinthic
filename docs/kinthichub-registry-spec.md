@@ -1,10 +1,10 @@
-# KronosHub Registry API Specification
+# KinthicHub Registry API Specification
 
-**Host:** `https://kronos.openyf.dev`  
+**Host:** `https://kinthic.openyf.dev`  
 **Version:** 1.0  
 **Status:** Design spec (Phase 3)
 
-This document defines the remote catalog format served at `https://kronos.openyf.dev/registry/catalog.yaml` and consumed by `silex/plugins/registry.py` via `:plugin search` / `:plugin install`.
+This document defines the remote catalog format served at `https://kinthic.openyf.dev/registry/catalog.yaml` and consumed by `silex/plugins/registry.py` via `:plugin search` / `:plugin install`.
 
 ---
 
@@ -16,7 +16,7 @@ This document defines the remote catalog format served at `https://kronos.openyf
 | `/registry/catalog.yaml` | GET | Full plugin & skill catalog |
 | `/registry/catalog.yaml` | HEAD | ETag / Last-Modified for cache validation |
 
-No authentication required for read access. Write access is via GitHub PR to the `openyfai/kronos-hub` repository (future).
+No authentication required for read access. Write access is via GitHub PR to the `openyfai/kinthic-hub` repository (future).
 
 ---
 
@@ -61,7 +61,7 @@ entries:
 | `signature` | string | HMAC-SHA256 of artifact for `verified` trust |
 | `entry_file` | string | Filename inside the package |
 | `requires_approval` | bool | Tool plugins only |
-| `min_kronos_version` | semver | Compatibility gate |
+| `min_kinthic_version` | semver | Compatibility gate |
 
 ---
 
@@ -70,7 +70,7 @@ entries:
 ### Skills (`type: skill`)
 
 - Single `.md` file served at `url`
-- Installed to `~/.kronos/skills/<name>.md`
+- Installed to `~/.kinthic/skills/<name>.md`
 - Optional `skill.yaml` sidecar in nested packages
 
 ### Tool plugins (`type: tool`)
@@ -81,20 +81,20 @@ entries:
   ├── plugin.yaml
   └── tool.py
   ```
-- Installed to `~/.kronos/plugins/tools/<name>/`
+- Installed to `~/.kinthic/plugins/tools/<name>/`
 - Extracted and hot-reloaded via `:plugin reload`
 
 ### Provider plugins (`type: provider`)
 
 - `plugin.yaml` only (no Python required)
-- Installed to `~/.kronos/config/plugins/model-providers/<name>/`
+- Installed to `~/.kinthic/config/plugins/model-providers/<name>/`
 
 ---
 
 ## Client Refresh Flow
 
 ```
-:plugin search <query>     → reads ~/.kronos/registry/catalog.yaml (local)
+:plugin search <query>     → reads ~/.kinthic/registry/catalog.yaml (local)
 :plugin install <name>     → looks up entry, downloads url, verifies sha256
 ```
 
@@ -107,14 +107,14 @@ registry.refresh_from_remote()  # merges new entries; never overwrites local ins
 Environment override:
 
 ```bash
-export KRONOS_REGISTRY_URL=https://kronos.openyf.dev/registry/catalog.yaml
+export KINTHIC_REGISTRY_URL=https://kinthic.openyf.dev/registry/catalog.yaml
 ```
 
 ---
 
 ## Submission Process (Community)
 
-1. Fork `https://github.com/openyfai/kronos-hub`
+1. Fork `https://github.com/openyfai/kinthic-hub`
 2. Add entry to `catalog.yaml` with `sha256` of your artifact
 3. Upload artifact to `releases/` or provide a stable HTTPS URL
 4. Open PR — maintainers audit and set `trust_level: verified` after review
@@ -124,17 +124,17 @@ export KRONOS_REGISTRY_URL=https://kronos.openyf.dev/registry/catalog.yaml
 
 ## Install Surface (not PyPI)
 
-Kronos is distributed exclusively via:
+Kinthic is distributed exclusively via:
 
 ```bash
-curl -fsSL https://kronos.openyf.dev/install.sh | bash
+curl -fsSL https://kinthic.openyf.dev/install.sh | bash
 ```
 
 **Windows:** Native cmd/PowerShell is blocked. Users must install WSL2 and run the command inside a Linux terminal (Ubuntu).
 
 The installer:
-- Creates `~/.kronos/` directory tree
-- Installs Python deps into `~/.kronos/runtime/venv/` via `uv`
-- Registers `kronos` CLI in `~/.kronos/bin/`
-- Seeds bundled skills and KronosHub catalog
-- Writes `~/.kronos/.env` template for API keys and messaging tokens
+- Creates `~/.kinthic/` directory tree
+- Installs Python deps into `~/.kinthic/runtime/venv/` via `uv`
+- Registers `kinthic` CLI in `~/.kinthic/bin/`
+- Seeds bundled skills and KinthicHub catalog
+- Writes `~/.kinthic/.env` template for API keys and messaging tokens

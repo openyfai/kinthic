@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 from silex.storage.database import Database
-from silex.utils.config import KRONOS_SKILLS
+from silex.utils.config import KINTHIC_SKILLS
 from silex.utils.logger import setup_logger
 
 log = setup_logger("silex.evolution.admission_control")
@@ -54,13 +54,13 @@ def calculate_rouge_l(text1: str, text2: str) -> float:
 class SkillAdmissionController:
     """
     Decides whether a newly synthesized capability or memory is admitted into
-    Kronos's persistent database and active skills directory using ROUGE-L and A-MAC.
+    Kinthic's persistent database and active skills directory using ROUGE-L and A-MAC.
     """
 
     def __init__(self, db: Database, skills_dir: Path | str | None = None):
         self.db = db
         if skills_dir is None:
-            self.skills_dir = KRONOS_SKILLS
+            self.skills_dir = KINTHIC_SKILLS
         else:
             self.skills_dir = Path(skills_dir)
         self.skills_dir.mkdir(parents=True, exist_ok=True)
@@ -173,7 +173,7 @@ class SkillAdmissionController:
         nested_file = nested_dir / "SKILL.md"
         nested_file.write_text(full_markdown_payload, encoding="utf-8")
 
-        # Write flat backup for VYN/Kronos flat loader compat
+        # Write flat backup for VYN/Kinthic flat loader compat
         flat_file = self.skills_dir / f"{skill_name}.md"
         flat_file.write_text(full_markdown_payload, encoding="utf-8")
 

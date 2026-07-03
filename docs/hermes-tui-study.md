@@ -1,6 +1,6 @@
-# Hermes TUI Study — Kronos Adoption Reference
+# Hermes TUI Study — Kinthic Adoption Reference
 
-Comparison of [Hermes Agent](file:///E:/hermes%20agent%20clone/hermes-agent) `ui-tui` + `tui_gateway` vs Kronos Ink, and what Kronos adopted in Phase A.
+Comparison of [Hermes Agent](file:///E:/hermes%20agent%20clone/hermes-agent) `ui-tui` + `tui_gateway` vs Kinthic Ink, and what Kinthic adopted in Phase A.
 
 ## Architecture
 
@@ -26,33 +26,33 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-  subgraph kronos [Kronos today]
+  subgraph kinthic [Kinthic today]
     Run[scripts/run.py]
-    File[~/.kronos/ink_events.ndjson]
-    Ink[kronos-ink-ui poll 50ms]
+    File[~/.kinthic/ink_events.ndjson]
+    Ink[kinthic-ink-ui poll 50ms]
     Run --> File --> Ink
     Ink -->|stderr JSON| Run
   end
 ```
 
-| Concern | Hermes | Kronos (Phase A) |
+| Concern | Hermes | Kinthic (Phase A) |
 |---------|--------|------------------|
 | Transport | stdio JSON-RPC gateway subprocess | NDJSON file bus (Phase B candidate) |
 | Live activity | `turnController` single buffer | `ThinkingSpinner` + `state.thinking` |
 | Transcript | user + assistant only when done | Ledger + collapse rules in `prepareDisplayLedger` |
 | Events | `GatewayEvent` union | `TurnEvent` / `turn_event` wire type |
 
-## Event mapping: Hermes GatewayEvent ↔ Kronos TurnPhase
+## Event mapping: Hermes GatewayEvent ↔ Kinthic TurnPhase
 
-| Hermes event | Kronos TurnPhase | Notes |
+| Hermes event | Kinthic TurnPhase | Notes |
 |--------------|------------------|-------|
-| `message.start` / `message.delta` | `response` (Kronos title) + `stream` legacy | Hermes streams deltas; Kronos batch + typewriter |
+| `message.start` / `message.delta` | `response` (Kinthic title) + `stream` legacy | Hermes streams deltas; Kinthic batch + typewriter |
 | `message.complete` | `response` + summary | |
-| `thinking.delta` / `reasoning.delta` | `routing`, `context`, `response` | Kronos feeds `ThinkingSpinner`, not ledger rows |
+| `thinking.delta` / `reasoning.delta` | `routing`, `context`, `response` | Kinthic feeds `ThinkingSpinner`, not ledger rows |
 | `tool.start` / `tool.progress` / `tool.complete` | `tool` | |
 | `approval.request` / respond RPC | `approval` | Overlay via `ApprovalPrompt` |
 | `subagent.*` | `subagent` | Maps to `WorkerLedgerRow` |
-| `status.update` | `routing` stub | Kronos emits pre-process routing from `run.py` |
+| `status.update` | `routing` stub | Kinthic emits pre-process routing from `run.py` |
 | `error` | `error` | |
 | (telemetry footer) | `summary` | One line per `turn_id` after Phase A |
 | — | `memory` | Post-turn memory writes |
@@ -60,16 +60,16 @@ flowchart LR
 
 ## File mapping
 
-| Hermes | Kronos equivalent | Gap |
+| Hermes | Kinthic equivalent | Gap |
 |--------|-------------------|-----|
 | `ui-tui/src/gatewayClient.ts` | `silex/ui/ink_bridge.py` + `index.tsx` poller | No stdio push yet |
-| `ui-tui/src/app/createGatewayEventHandler.ts` | `kronos-ink-ui/src/state.ts` `reduceAppState` | |
+| `ui-tui/src/app/createGatewayEventHandler.ts` | `kinthic-ink-ui/src/state.ts` `reduceAppState` | |
 | `ui-tui/src/app/turnController.ts` | `ThinkingSpinner.tsx` + `applyTurnEventSideEffects` | |
 | `ui-tui/src/components/streamingAssistant.tsx` | `StreamingLedgerRow` + `ActivityLedger` | |
 | `ui-tui/src/components/prompts.tsx` | `ApprovalPrompt.tsx`, `FileEditApprovalPrompt.tsx` | |
 | `ui-tui/src/components/appChrome.tsx` | `PromptRow.tsx` hints only | No status ticker |
 | `tui_gateway/server.py` | `scripts/run.py` + `TurnEmitter` | |
-| `silex/ui/turn_emitter.py` | (Kronos-native) | |
+| `silex/ui/turn_emitter.py` | (Kinthic-native) | |
 
 ## Do not port (unless explicitly wanted)
 
@@ -102,7 +102,7 @@ If Phase A feels responsive enough, **keep NDJSON** — correctness is fine; gat
 
 | Date | Phase A shipped | Phase B needed? | Notes |
 |------|-----------------|-----------------|-------|
-| 2026-06-06 | Yes | Partial TCP only | Phase B shipped localhost TCP push (`KRONOS_EVENTS_PORT`); file poll remains fallback. Full Hermes stdio gateway deferred — instant submit feedback + emission order fixes addressed main UX gaps. |
+| 2026-06-06 | Yes | Partial TCP only | Phase B shipped localhost TCP push (`KINTHIC_EVENTS_PORT`); file poll remains fallback. Full Hermes stdio gateway deferred — instant submit feedback + emission order fixes addressed main UX gaps. |
 
 ## Priority Hermes files for future study
 

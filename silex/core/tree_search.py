@@ -1,5 +1,5 @@
 """
-Language Agent Tree Search (LATS) — MCTS-based planning for ARIA/Kronos.
+Language Agent Tree Search (LATS) — MCTS-based planning for ARIA/Kinthic.
 """
 
 from __future__ import annotations

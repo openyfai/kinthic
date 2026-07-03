@@ -100,7 +100,7 @@ class WorkerOrchestrator:
         event_emitter: Optional[Callable[[dict[str, Any]], Awaitable[None]]] = None,
     ) -> None:
         self.max_workers = max_workers
-        self.workspace_root = Path(workspace_root) if workspace_root else Path.home() / ".kronos" / "workspace"
+        self.workspace_root = Path(workspace_root) if workspace_root else Path.home() / ".kinthic" / "workspace"
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self._semaphore = asyncio.Semaphore(max_workers)
         self._workers: dict[str, WorkerProcess] = {}

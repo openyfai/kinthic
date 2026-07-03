@@ -2,7 +2,7 @@
 Dynamic provider registry.
 Discovers profiles and client classes from:
 1. Built-in plugins: plugins/providers/<name>/
-2. User plugins: ~/.kronos/plugins/model-providers/<name>/
+2. User plugins: ~/.kinthic/plugins/model-providers/<name>/
 """
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Any
 
 from silex.llm.base import ProviderProfile, BaseLLMProvider
-from silex.utils.config import PROJECT_ROOT, KRONOS_PLUGINS_PROVIDERS
+from silex.utils.config import PROJECT_ROOT, KINTHIC_PLUGINS_PROVIDERS
 
-log = logging.getLogger("kronos.providers")
+log = logging.getLogger("kinthic.providers")
 
 _REGISTRY: dict[str, ProviderProfile] = {}
 _CLIENT_CLASSES: dict[str, type[BaseLLMProvider]] = {}
@@ -140,7 +140,7 @@ def _discover_providers() -> None:
         scan_dirs.append((builtin_dir, False))
 
     # 2. User custom plugins
-    user_dir = KRONOS_PLUGINS_PROVIDERS
+    user_dir = KINTHIC_PLUGINS_PROVIDERS
     if user_dir.is_dir():
         scan_dirs.append((user_dir, True))
 

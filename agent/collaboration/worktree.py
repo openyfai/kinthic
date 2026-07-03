@@ -1,7 +1,7 @@
 """
 Git worktree isolation for parallel coding workers.
 
-Creates isolated workspaces under ~/.kronos/worktrees/ so multiple agents
+Creates isolated workspaces under ~/.kinthic/worktrees/ so multiple agents
 can modify code without colliding on the same working directory.
 """
 
@@ -24,14 +24,14 @@ class WorktreeManager:
         self.worktrees_root = (
             Path(worktrees_root).resolve()
             if worktrees_root
-            else Path.home() / ".kronos" / "worktrees"
+            else Path.home() / ".kinthic" / "worktrees"
         )
         self.worktrees_root.mkdir(parents=True, exist_ok=True)
 
     def create_worktree(
         self,
         agent_id: str,
-        branch_prefix: str = "kronos/agent",
+        branch_prefix: str = "kinthic/agent",
         base_ref: str = "HEAD",
     ) -> Path:
         """

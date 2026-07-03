@@ -7,7 +7,7 @@ import hmac
 import hashlib
 import re
 import os
-from silex.utils.config import KRONOS_HMAC_KEY, MEMORY_GUARD_STRICT
+from silex.utils.config import KINTHIC_HMAC_KEY, MEMORY_GUARD_STRICT
 from silex.utils.logger import setup_logger
 
 log = setup_logger("silex.security.guard")
@@ -24,12 +24,12 @@ class MemoryGuardMiddleware:
         ]
 
     def _load_or_generate_key(self) -> bytes:
-        if not KRONOS_HMAC_KEY.parent.exists():
-            KRONOS_HMAC_KEY.parent.mkdir(parents=True, exist_ok=True)
+        if not KINTHIC_HMAC_KEY.parent.exists():
+            KINTHIC_HMAC_KEY.parent.mkdir(parents=True, exist_ok=True)
             
         try:
             # Atomic create: O_CREAT | O_EXCL fails if file already exists
-            fd = os.open(str(KRONOS_HMAC_KEY), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            fd = os.open(str(KINTHIC_HMAC_KEY), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             try:
                 key = os.urandom(32)
                 os.write(fd, key)
@@ -38,7 +38,7 @@ class MemoryGuardMiddleware:
             finally:
                 os.close(fd)
         except FileExistsError:
-            return KRONOS_HMAC_KEY.read_bytes()
+            return KINTHIC_HMAC_KEY.read_bytes()
 
     def _generate_signature(self, content: str, memory_id: str) -> str:
         payload = f"{memory_id}|{content}".encode("utf-8")

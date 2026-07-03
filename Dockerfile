@@ -18,11 +18,11 @@ RUN pip install --no-cache-dir -e ".[mcp]" \
 
 # Set up the data directory for the SQLite database
 RUN mkdir -p data workspace \
-    && useradd --create-home --shell /usr/sbin/nologin kronos \
-    && chown -R kronos:kronos /app
+    && useradd --create-home --shell /usr/sbin/nologin kinthic \
+    && chown -R kinthic:kinthic /app
 
-USER kronos
+USER kinthic
 
 # Default command: run the cli directly, usually overridden by docker-compose
-CMD ["kronos", "--help"]
+CMD ["kinthic", "--help"]
 

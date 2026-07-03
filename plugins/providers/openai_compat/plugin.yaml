@@ -291,8 +291,8 @@ profiles:
         recommended_for: "quality reasoning via a single gateway"
         estimated_cost: "variable"
     default_headers:
-      HTTP-Referer: "https://github.com/openyfai/kronos"
-      X-Title: "Kronos"
+      HTTP-Referer: "https://github.com/openyfai/kinthic"
+      X-Title: "Kinthic"
 
   - name: "ollama"
     display_name: "Ollama"

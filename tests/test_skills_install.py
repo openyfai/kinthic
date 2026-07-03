@@ -1,6 +1,6 @@
 from silex.plugins.registry import get_registry
 
-def test_kronos_skills_install_bundled():
+def test_kinthic_skills_install_bundled():
     registry = get_registry()
     
     # Ensure it is uninstalled first so the test is idempotent
@@ -21,7 +21,7 @@ def test_kronos_skills_install_bundled():
     assert not ok
     assert "already installed" in msg
 
-def test_kronos_skills_search():
+def test_kinthic_skills_search():
     registry = get_registry()
     results = registry.search("security")
     assert len(results) >= 1

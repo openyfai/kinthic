@@ -1,5 +1,5 @@
 """
-Kronos Entry Point — starts the cognitive loop.
+Kinthic Entry Point — starts the cognitive loop.
 
 Usage:
     python -m scripts.run
@@ -18,14 +18,14 @@ import logging as _logging
 import os
 from pathlib import Path as _Path
 
-_log_dir = _Path.home() / ".kronos"
+_log_dir = _Path.home() / ".kinthic"
 _log_dir.mkdir(parents=True, exist_ok=True)
-os.environ.setdefault("KRONOS_INK_ACTIVE", "1")
+os.environ.setdefault("KINTHIC_INK_ACTIVE", "1")
 _root_log = _logging.getLogger()
 if not any(isinstance(h, _logging.FileHandler) for h in _root_log.handlers):
     _root_log.handlers.clear()
     _root_log.setLevel(_logging.DEBUG)
-    _fh = _logging.FileHandler(str(_log_dir / "kronos.log"), encoding="utf-8", mode="a")
+    _fh = _logging.FileHandler(str(_log_dir / "kinthic.log"), encoding="utf-8", mode="a")
     _fh.setFormatter(_logging.Formatter(
         "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
@@ -41,7 +41,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from silex.core.cognitive_loop import CognitiveLoop
-from silex.ui.ink_bridge import KronosInkBridge
+from silex.ui.ink_bridge import KinthicInkBridge
 from silex.ui.terminal import (
     console,
     get_input,
@@ -76,7 +76,7 @@ from silex.ui.terminal import (
 # History file helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-_HISTORY_FILE = _Path.home() / ".kronos" / "history"
+_HISTORY_FILE = _Path.home() / ".kinthic" / "history"
 _MAX_HISTORY  = 500
 
 
@@ -161,7 +161,7 @@ def _fmt_help() -> str:
         "",
         "System",
         "  /clear           Clear the screen",
-        "  /quit            Exit Kronos",
+        "  /quit            Exit Kinthic",
         "",
         "Press Esc to cancel a running turn.",
     ]
@@ -240,7 +240,7 @@ def _fmt_search(memories: list, query: str) -> str:
 
 def _fmt_graph_stats(stats: dict) -> str:
     if not stats:
-        return "Knowledge graph is empty. Talk to Kronos to build it."
+        return "Knowledge graph is empty. Talk to Kinthic to build it."
     lines = [
         "Knowledge Graph",
         "",
@@ -448,13 +448,13 @@ def _fmt_meta_proposal(prop) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def _ink_approval_listener(
-    bridge: KronosInkBridge,
+    bridge: KinthicInkBridge,
     tool_registry,
     turn_emitter_holder: list,
 ) -> None:
     """Forward Ink approval_response packets to the tool approval gate."""
     import logging
-    log = logging.getLogger("kronos.approval")
+    log = logging.getLogger("kinthic.approval")
 
     while bridge.is_active:
         packet = await bridge.read_approval_response(timeout=3600.0)
@@ -502,7 +502,7 @@ async def _ink_approval_listener(
 async def run() -> None:
     """Main async entry point."""
     loop = CognitiveLoop()
-    bridge = KronosInkBridge()
+    bridge = KinthicInkBridge()
 
     # History
     session_history: list[str] = _load_history()
@@ -516,7 +516,7 @@ async def run() -> None:
         await bridge.start()
 
         if not bridge.is_active:
-            os.environ.pop("KRONOS_INK_ACTIVE", None)
+            os.environ.pop("KINTHIC_INK_ACTIVE", None)
             import logging as _lg
             _root = _lg.getLogger()
             if not any(not isinstance(h, _lg.FileHandler) for h in _root.handlers):
@@ -527,9 +527,9 @@ async def run() -> None:
                 _root.addHandler(_rh)
             show_banner()
             show_warning(
-                "Kronos is running in Rich fallback mode, not the production Ink TUI.\n"
+                "Kinthic is running in Rich fallback mode, not the production Ink TUI.\n"
                 f"Reason: {bridge.fallback_reason}\n"
-                "Fix: run `cd kronos-ink-ui && npm install && npm run build`, then restart."
+                "Fix: run `cd kinthic-ink-ui && npm install && npm run build`, then restart."
             )
 
         await loop.startup()
@@ -537,7 +537,7 @@ async def run() -> None:
         if bridge.is_active:
             approval_task = asyncio.create_task(
                 _ink_approval_listener(bridge, loop.tool_registry, _turn_emitter_holder),
-                name="kronos-ink-approval",
+                name="kinthic-ink-approval",
             )
 
         # Emit history to Ink for up/down arrow navigation
@@ -641,7 +641,7 @@ async def run() -> None:
 
                 # ── Quit ─────────────────────────────────────────────────────
                 if cmd in (":quit", ":exit", ":q"):
-                    msg = "Kronos signing off. Memories persisted."
+                    msg = "Kinthic signing off. Memories persisted."
                     if bridge.is_active:
                         await bridge.emit({"type": "response", "data": {"text": msg}})
                     else:
@@ -1066,7 +1066,7 @@ async def run() -> None:
                     lines.append(
                         f"\n  {builtin_count} built-in tools, "
                         f"{plugin_count} user plugin(s). "
-                        f"Drop folders into ~/.kronos/plugins/tools/ to add more."
+                        f"Drop folders into ~/.kinthic/plugins/tools/ to add more."
                     )
                     await _emit_or("\n".join(lines))
                     continue
@@ -1101,7 +1101,7 @@ async def run() -> None:
                         if not results:
                             msg = f"No plugins found matching '{query}'."
                         else:
-                            msg = f"KronosHub — {len(results)} result(s):\n\n" + reg.format_list(results)
+                            msg = f"KinthicHub — {len(results)} result(s):\n\n" + reg.format_list(results)
                     except Exception as exc:
                         msg = f"Registry search error: {exc}"
                     await _emit_or(msg)
@@ -1153,7 +1153,7 @@ async def run() -> None:
                     if hasattr(loop, "skill_loader") and loop.skill_loader:
                         skills_list = loop.skill_loader.list_skills()
                         if not skills_list:
-                            msg = "No skills loaded. Drop .md files into ~/.kronos/skills/"
+                            msg = "No skills loaded. Drop .md files into ~/.kinthic/skills/"
                         else:
                             lines = [f"Loaded skills ({len(skills_list)}):\n"]
                             for s in skills_list:
@@ -1169,7 +1169,7 @@ async def run() -> None:
                                     lines.append(f"       trigger: {s['trigger']}")
                             lines.append(
                                 "\nAdd skills: /plugin install <name>  |  "
-                                "Drop .md into ~/.kronos/skills/"
+                                "Drop .md into ~/.kinthic/skills/"
                             )
                             msg = "\n".join(lines)
                     else:
@@ -1281,12 +1281,12 @@ async def run() -> None:
                         elif not _voice_session:
                             _voice_session = VoiceSession(loop, bridge=bridge)
                             _voice_session.start()
-                            msg = "Voice mode enabled. Speak to Kronos."
+                            msg = "Voice mode enabled. Speak to Kinthic."
                         else:
                             msg = "Voice already active. Say /voice off to disable."
                         await _emit_or(msg, show_success, msg)
                     except Exception as exc:
-                        msg = f"Voice error: {exc}\nRun: pip install 'kronos[voice]'"
+                        msg = f"Voice error: {exc}\nRun: pip install 'kinthic[voice]'"
                         await _emit_or(msg, show_error, msg)
                     continue
 
@@ -1343,14 +1343,14 @@ async def run() -> None:
                         event_emitter=event_emitter,
                         turn_emitter=turn_emitter,
                     ),
-                    name="kronos-process",
+                    name="kinthic-process",
                 )
 
                 if bridge.is_active:
                     # Race between cognitive turn and user cancel request
                     cancel_task = asyncio.create_task(
                         bridge.read_cancel_request(),
-                        name="kronos-cancel-watcher",
+                        name="kinthic-cancel-watcher",
                     )
                     done, pending = await asyncio.wait(
                         [_current_process_task, cancel_task],
@@ -1381,7 +1381,7 @@ async def run() -> None:
                         continue
                 else:
                     with console.status(
-                        "[bright_cyan]  Kronos is thinking...[/]",
+                        "[bright_cyan]  Kinthic is thinking...[/]",
                         spinner="dots",
                         spinner_style="bright_cyan",
                     ) as status:
@@ -1393,12 +1393,12 @@ async def run() -> None:
                 # ── Tool-auth intercept ──────────────────────────────────────
                 if bridge.is_active and response.tool_calls:
                     import json as _json
-                    from silex.utils.config import KRONOS_PENDING_EDITS
+                    from silex.utils.config import KINTHIC_PENDING_EDITS
                     from silex.tools.code_editor import approve_edit_internally
 
-                    if KRONOS_PENDING_EDITS.exists():
+                    if KINTHIC_PENDING_EDITS.exists():
                         try:
-                            with open(KRONOS_PENDING_EDITS) as _f:
+                            with open(KINTHIC_PENDING_EDITS) as _f:
                                 pending = _json.load(_f)
                         except Exception:
                             pending = []
@@ -1433,7 +1433,7 @@ async def run() -> None:
                             else:
                                 edit["status"] = "rejected"
                                 try:
-                                    with open(KRONOS_PENDING_EDITS, "w") as _f:
+                                    with open(KINTHIC_PENDING_EDITS, "w") as _f:
                                         _json.dump(pending, _f, indent=4)
                                 except Exception:
                                     pass

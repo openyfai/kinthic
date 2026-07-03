@@ -1,10 +1,10 @@
 # Security Policy
 
-Kronos is a local AI operator that can read files, browse the web, and, when enabled, execute terminal or code-edit actions. Treat it as powerful local software, not a passive chatbot.
+Kinthic is a local AI operator that can read files, browse the web, and, when enabled, execute terminal or code-edit actions. Treat it as powerful local software, not a passive chatbot.
 
 ## Default Security Posture
 
-By default Kronos should run with:
+By default Kinthic should run with:
 
 - tool approvals enabled
 - terminal execution disabled
@@ -25,21 +25,21 @@ High-risk areas:
 ## Deployment Guidance
 
 - Prefer one writer process per data directory.
-- Pair Telegram with `kronos onboard` or `kronos telegram run` pairing protocol instead of enabling public mode.
+- Pair Telegram with `kinthic onboard` or `kinthic telegram run` pairing protocol instead of enabling public mode.
 - Review pending tool approvals via Telegram `/approve` or terminal before allowing high-impact actions.
 
 ### Telegram Pairing Protocol
-Kronos uses a strict pairing protocol for Telegram. Upon starting the bot daemon, you are given a 1-time PIN in the terminal. You must message this PIN to the Telegram bot to pair your `user_id`. Unpaired users cannot issue commands and are strictly rate-limited to 5 attempts per minute to prevent brute-forcing.
+Kinthic uses a strict pairing protocol for Telegram. Upon starting the bot daemon, you are given a 1-time PIN in the terminal. You must message this PIN to the Telegram bot to pair your `user_id`. Unpaired users cannot issue commands and are strictly rate-limited to 5 attempts per minute to prevent brute-forcing.
 
 ### The `/approve` Security Gate
 Destructive tools and skill generations are tagged with `requires_approval=True`. If you are operating via Telegram, the daemon halts execution and sends a pending request to your chat. You must manually send `/approve` before the agent can write to disk, run a terminal command, or use sensitive MCPs.
 
-### KronosHub Plugin Signatures
-Skills downloaded from KronosHub (`kronos skills install`) can be flagged with a `trust_level`. Core and `verified` community skills are validated using an HMAC-SHA256 signature by the core team. To block all untrusted scripts, set `KRONOS_MEMORY_GUARD_STRICT=1` in your environment.
+### KinthicHub Plugin Signatures
+Skills downloaded from KinthicHub (`kinthic skills install`) can be flagged with a `trust_level`. Core and `verified` community skills are validated using an HMAC-SHA256 signature by the core team. To block all untrusted scripts, set `KINTHIC_MEMORY_GUARD_STRICT=1` in your environment.
 
 ## Reporting Security Issues
 
-Please do not open a public issue for exploitable vulnerabilities that could affect users running Kronos locally or remotely.
+Please do not open a public issue for exploitable vulnerabilities that could affect users running Kinthic locally or remotely.
 
 Instead, share:
 
@@ -86,9 +86,9 @@ An attacker with control of a DNS server could exploit this to make Silex browse
 
 **Status:** Documented, warning implemented.
 
-On Windows, `~/.kronos/config/secrets.json` has no file permission protection because Windows does not support Unix `chmod`. Any process running as the current user can read the file.
+On Windows, `~/.kinthic/config/secrets.json` has no file permission protection because Windows does not support Unix `chmod`. Any process running as the current user can read the file.
 
-**Mitigation:** Kronos logs a warning on Windows recommending environment variables (`GEMINI_API_KEY`, `OPENAI_API_KEY`, etc.) over the secrets file.
+**Mitigation:** Kinthic logs a warning on Windows recommending environment variables (`GEMINI_API_KEY`, `OPENAI_API_KEY`, etc.) over the secrets file.
 
 ### Approval Re-Execution Without Re-Validation
 
@@ -104,5 +104,5 @@ When a user approves a pending tool action, the tool executes with the original 
 
 | Version | Date | Findings Fixed |
 |---------|------|----------------|
-| v1.0.4 | 2026-05-10 | Shell injection in `kronos stop`, file reader sandbox escape, silent Telegram failures, Docker event loop blocking |
+| v1.0.4 | 2026-05-10 | Shell injection in `kinthic stop`, file reader sandbox escape, silent Telegram failures, Docker event loop blocking |
 | v1.0.5 | 2026-05-10 | Code editor ethics bypass, code editor sandbox scope, remaining `shell=True` calls, non-Gemini provider resilience, WebSocket size limits, usage tracker key collisions, history truncation, goal loop token burn, PROJECT_ROOT centralization |

@@ -37,7 +37,7 @@ class TestShellInjection:
 
         buffer = StringIO()
         with (
-            patch("silex.utils.config.KRONOS_DAEMON_LOCK", lock_file),
+            patch("silex.utils.config.KINTHIC_DAEMON_LOCK", lock_file),
             patch("sys.stdout", buffer),
         ):
             run_stop()
@@ -54,7 +54,7 @@ class TestShellInjection:
         from scripts.cli import run_stop
 
         with (
-            patch("silex.utils.config.KRONOS_DAEMON_LOCK", lock_file),
+            patch("silex.utils.config.KINTHIC_DAEMON_LOCK", lock_file),
             patch("os.kill") as mock_kill,
             patch("sys.stdout", StringIO()),
         ):
@@ -75,7 +75,7 @@ class TestShellInjection:
         from scripts.cli import run_stop
 
         with (
-            patch("silex.utils.config.KRONOS_DAEMON_LOCK", lock_file),
+            patch("silex.utils.config.KINTHIC_DAEMON_LOCK", lock_file),
             patch("os.kill", side_effect=OSError("No such process")),
             patch("sys.stdout", StringIO()) as buf,
         ):

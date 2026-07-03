@@ -18,7 +18,7 @@ export default function Home() {
         <div className="p-6 border-b border-white/5 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-extrabold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-white to-neutral-400">
-              KRONOS
+              KINTHIC
             </h1>
             <div className="mt-2 flex items-center gap-2">
               <span className="relative flex h-2 w-2">

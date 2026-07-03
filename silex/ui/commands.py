@@ -8,7 +8,7 @@ Sent to Ink at startup as an `init_commands` event for tab completion.
 SLASH_COMMANDS = [
     # ── General ──────────────────────────────────────────────────────────
     {"cmd": "/help",      "args": "",                    "desc": "Show all commands"},
-    {"cmd": "/quit",      "args": "",                    "desc": "Exit Kronos"},
+    {"cmd": "/quit",      "args": "",                    "desc": "Exit Kinthic"},
     {"cmd": "/clear",     "args": "",                    "desc": "Clear the screen"},
 
     # ── Memory ───────────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ SLASH_COMMANDS = [
     {"cmd": "/plugins",         "args": "",                  "desc": "List all registered tools (built-in + plugins)"},
     {"cmd": "/skills",          "args": "",                  "desc": "List all loaded skills with metadata"},
     {"cmd": "/plugin",          "args": "reload",            "desc": "Hot-reload plugins and skills without restart"},
-    {"cmd": "/plugin",          "args": "search <query>",    "desc": "Search KronosHub catalog"},
+    {"cmd": "/plugin",          "args": "search <query>",    "desc": "Search KinthicHub catalog"},
     {"cmd": "/plugin",          "args": "install <name>",    "desc": "Install a skill or tool plugin from catalog or URL"},
     {"cmd": "/plugin",          "args": "uninstall <name>",  "desc": "Remove an installed skill or tool plugin"},
 

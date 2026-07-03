@@ -14,13 +14,13 @@ jobs:
         include:
           - os: ubuntu-latest
             target: node-linux-x64
-            outfile: kronos-ui-linux-x64
+            outfile: kinthic-ui-linux-x64
           - os: macos-13
             target: node-darwin-x64
-            outfile: kronos-ui-darwin-x64
+            outfile: kinthic-ui-darwin-x64
           - os: macos-latest
             target: node-darwin-arm64
-            outfile: kronos-ui-darwin-arm64
+            outfile: kinthic-ui-darwin-arm64
 
     steps:
       - name: Checkout Source Code
@@ -33,19 +33,19 @@ jobs:
 
       - name: Install Project Dependencies
         run: |
-          cd kronos-ink-ui
+          cd kinthic-ink-ui
           bun install
 
       - name: Compile Standalone UI Binary
         run: |
-          cd kronos-ink-ui
+          cd kinthic-ink-ui
           bun build --compile --minify --target=${{ matrix.target }} src/index.tsx --outfile dist/${{ matrix.outfile }}
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.outfile }}
-          path: kronos-ink-ui/dist/${{ matrix.outfile }}
+          path: kinthic-ink-ui/dist/${{ matrix.outfile }}
 
   publish-release:
     name: Create GitHub Release
@@ -67,8 +67,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist-binaries/kronos-ui-linux-x64
-            dist-binaries/kronos-ui-darwin-x64
-            dist-binaries/kronos-ui-darwin-arm64
+            dist-binaries/kinthic-ui-linux-x64
+            dist-binaries/kinthic-ui-darwin-x64
+            dist-binaries/kinthic-ui-darwin-arm64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

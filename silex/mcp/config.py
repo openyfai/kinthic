@@ -1,4 +1,4 @@
-"""Load and validate ~/.kronos/config/mcp.yaml."""
+"""Load and validate ~/.kinthic/config/mcp.yaml."""
 
 from __future__ import annotations
 
@@ -61,9 +61,9 @@ class McpConfig:
 
 
 def get_mcp_config_path() -> Path:
-    from silex.utils.config import KRONOS_HOME
+    from silex.utils.config import KINTHIC_HOME
 
-    return KRONOS_HOME / "config" / "mcp.yaml"
+    return KINTHIC_HOME / "config" / "mcp.yaml"
 
 
 def load_mcp_config() -> McpConfig:

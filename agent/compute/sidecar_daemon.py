@@ -1,5 +1,5 @@
 """
-Sidecar Daemon for Kronos Sandboxes.
+Sidecar Daemon for Kinthic Sandboxes.
 
 Listens on a Unix domain socket for host-orchestrator payloads.
 Lease HMAC verification happens on the host; the sidecar validates a
@@ -17,19 +17,19 @@ import signal
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 log = logging.getLogger("sidecar")
 
-_worker_id = os.environ.get("KRONOS_WORKER_ID")
-_default_timeout = float(os.environ.get("KRONOS_SIDECAR_DEFAULT_TIMEOUT", "600"))
+_worker_id = os.environ.get("KINTHIC_WORKER_ID")
+_default_timeout = float(os.environ.get("KINTHIC_SIDECAR_DEFAULT_TIMEOUT", "600"))
 if _worker_id:
-    SOCKET_PATH = f"/run/kronos_sockets/kronos_{_worker_id}.sock"
+    SOCKET_PATH = f"/run/kinthic_sockets/kinthic_{_worker_id}.sock"
 else:
-    SOCKET_PATH = "/workspace/kronos.sock"
+    SOCKET_PATH = "/workspace/kinthic.sock"
 SOCKET_MODE = 0o660
 
 
 def _validate_payload(payload: dict) -> tuple[str | None, float | None, str | None]:
     """Validate session key and extract command. Returns (command, timeout, error)."""
     session_key = payload.get("session_key")
-    expected_key = os.environ.get("KRONOS_WORKER_SESSION_KEY", "")
+    expected_key = os.environ.get("KINTHIC_WORKER_SESSION_KEY", "")
     if not expected_key or not session_key:
         return None, None, "Missing session_key — unauthenticated execution denied"
     if not isinstance(session_key, str) or not isinstance(expected_key, str):

@@ -10,7 +10,7 @@ import TextareaAutosize from "react-textarea-autosize";
 
 type Turn = {
   id: string;
-  role: "user" | "kronos";
+  role: "user" | "kinthic";
   content: string;
   thinking?: string;
   processSteps?: { id: string; type: string; content: string; timestamp: number }[];
@@ -67,7 +67,7 @@ export default function TerminalOutput() {
 
   const handleEvent = (turnId: string, event: any) => {
     setHistory(prev => prev.map(turn => {
-      if (turn.id !== "kronos-" + turnId) return turn;
+      if (turn.id !== "kinthic-" + turnId) return turn;
       
       const updated = { ...turn };
       
@@ -169,7 +169,7 @@ export default function TerminalOutput() {
     setHistory(prev => [
       ...prev, 
       { id: "user-" + turnId, role: "user", content: cmd },
-      { id: "kronos-" + turnId, role: "kronos", content: "", toolCalls: [] }
+      { id: "kinthic-" + turnId, role: "kinthic", content: "", toolCalls: [] }
     ]);
     
     setLoading(true);
@@ -217,7 +217,7 @@ export default function TerminalOutput() {
         }
       }
     } catch (err) {
-      setHistory(prev => prev.map(t => t.id === "kronos-" + turnId ? { ...t, error: `Connection Error: ${err}` } : t));
+      setHistory(prev => prev.map(t => t.id === "kinthic-" + turnId ? { ...t, error: `Connection Error: ${err}` } : t));
     } finally {
       setLoading(false);
       setCurrentRequestId(null);
@@ -286,7 +286,7 @@ export default function TerminalOutput() {
 
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2 custom-scrollbar">
         {history.length === 0 ? (
-          <div className="text-neutral-500 italic opacity-50">Kronos terminal online. Type /help for commands. Awaiting input...</div>
+          <div className="text-neutral-500 italic opacity-50">Kinthic terminal online. Type /help for commands. Awaiting input...</div>
         ) : (
           history.map((msg) => (
             <div key={msg.id} className="flex flex-col w-full py-2 items-start">
@@ -299,7 +299,7 @@ export default function TerminalOutput() {
               >
                 <div className="flex justify-between items-center mb-2">
                   <div className="text-xs font-bold tracking-wider opacity-60 text-[#F5A623]">
-                    {msg.role === "user" ? "USER" : "KRONOS"}
+                    {msg.role === "user" ? "USER" : "KINTHIC"}
                   </div>
                   {msg.cost && (
                     <div className="text-[10px] opacity-50">

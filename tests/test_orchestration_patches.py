@@ -12,7 +12,7 @@ def test_hmac_key_generation(tmp_path):
         key = ActuationLease._get_secret_key()
         assert len(key) == 32
         
-        file_path = tmp_path / ".kronos" / "config" / "hmac_key.bin"
+        file_path = tmp_path / ".kinthic" / "config" / "hmac_key.bin"
         assert file_path.exists()
         assert file_path.read_bytes() == key
         
@@ -109,8 +109,8 @@ async def test_docker_container_labels(tmp_path):
         kwargs = mock_client.containers.run.call_args[1]
         assert "labels" in kwargs
         assert kwargs["labels"] == {
-            "kronos.managed": "true",
-            "kronos.worker_id": "worker_123",
+            "kinthic.managed": "true",
+            "kinthic.worker_id": "worker_123",
         }
 
 @pytest.mark.asyncio
@@ -119,7 +119,7 @@ async def test_subprocess_fallback(tmp_path, monkeypatch):
     from agent.compute.runtimes.docker import DockerRuntime
     from agent.security.lease import ActuationLease
 
-    monkeypatch.setenv("KRONOS_ALLOW_LOCAL_FALLBACK", "1")
+    monkeypatch.setenv("KINTHIC_ALLOW_LOCAL_FALLBACK", "1")
 
     with patch("agent.compute.runtimes.docker.docker", None):
         runtime = DockerRuntime(

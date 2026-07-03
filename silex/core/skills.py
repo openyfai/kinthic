@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from silex.memory.vector_store import VectorStore
 
 from silex.utils.logger import setup_logger
-from silex.utils.config import KRONOS_SKILLS, KRONOS_PLUGINS_SKILLS, KRONOS_HOME
+from silex.utils.config import KINTHIC_SKILLS, KINTHIC_PLUGINS_SKILLS, KINTHIC_HOME
 
 log = setup_logger("aria.skills")
 
@@ -49,9 +49,9 @@ class SkillLoader:
     """
     Loads Markdown skill files from multiple source directories:
 
-      ~/.kronos/skills/           — flat *.md files (original user-managed location)
-      ~/.kronos/skills/<dir>/     — nested: looks for SKILL.md inside sub-directories
-      ~/.kronos/plugins/skills/   — community plugin skills (each folder = one skill)
+      ~/.kinthic/skills/           — flat *.md files (original user-managed location)
+      ~/.kinthic/skills/<dir>/     — nested: looks for SKILL.md inside sub-directories
+      ~/.kinthic/plugins/skills/   — community plugin skills (each folder = one skill)
 
     Each skill may optionally ship a skill.yaml alongside its SKILL.md with metadata:
       name, description, version, author, tags, trust_level, trigger, signature
@@ -61,8 +61,8 @@ class SkillLoader:
     """
 
     def __init__(self, vector_store: VectorStore | None = None):
-        self.skills_dir = KRONOS_SKILLS
-        self.plugins_skills_dir = KRONOS_PLUGINS_SKILLS
+        self.skills_dir = KINTHIC_SKILLS
+        self.plugins_skills_dir = KINTHIC_PLUGINS_SKILLS
         self.skills: dict[str, str] = {}              # name → markdown content
         self.skill_meta: dict[str, SkillMeta] = {}    # name → metadata
         self.vector_store = vector_store
@@ -88,13 +88,13 @@ class SkillLoader:
 
         sources: list[tuple[Path, str]] = []  # (md_file, trust_level)
 
-        # 1. Flat files in ~/.kronos/skills/*.md  (core user-managed)
+        # 1. Flat files in ~/.kinthic/skills/*.md  (core user-managed)
         if self.skills_dir.exists():
             for fp in sorted(self.skills_dir.glob("*.md")):
                 if fp.stem.lower() not in _SKIP_SKILL_NAMES:
                     sources.append((fp, "core"))
 
-        # 2. Nested folders in ~/.kronos/skills/<name>/SKILL.md
+        # 2. Nested folders in ~/.kinthic/skills/<name>/SKILL.md
         if self.skills_dir.exists():
             for sub in sorted(self.skills_dir.iterdir()):
                 if sub.is_dir() and not sub.name.startswith((".", "_")):
@@ -104,7 +104,7 @@ class SkillLoader:
                     if skill_md and skill_md.stem.lower() not in _SKIP_SKILL_NAMES:
                         sources.append((skill_md, "core"))
 
-        # 3. Community plugin skills in ~/.kronos/plugins/skills/<name>/
+        # 3. Community plugin skills in ~/.kinthic/plugins/skills/<name>/
         if self.plugins_skills_dir.exists():
             for plugin_dir in sorted(self.plugins_skills_dir.iterdir()):
                 if plugin_dir.is_dir() and not plugin_dir.name.startswith((".", "_")):
@@ -256,7 +256,7 @@ class SkillLoader:
             return "community"
 
         # Verify HMAC-SHA256 using the local HMAC key (if present)
-        hmac_key_path = KRONOS_HOME / "config" / "hmac_key.bin"
+        hmac_key_path = KINTHIC_HOME / "config" / "hmac_key.bin"
         if hmac_key_path.exists():
             try:
                 key = hmac_key_path.read_bytes()

@@ -1,4 +1,4 @@
-"""Watch ~/.kronos/skills for changes and hot-reload."""
+"""Watch ~/.kinthic/skills for changes and hot-reload."""
 
 from __future__ import annotations
 
@@ -17,10 +17,10 @@ class SkillsWatcher:
         reload_callback: Callable[[], None],
         watch_paths: list[Path] | None = None,
     ) -> None:
-        from silex.utils.config import KRONOS_PLUGINS_SKILLS, KRONOS_SKILLS
+        from silex.utils.config import KINTHIC_PLUGINS_SKILLS, KINTHIC_SKILLS
 
         self._callback = reload_callback
-        self._watch_paths = watch_paths or [KRONOS_SKILLS, KRONOS_PLUGINS_SKILLS]
+        self._watch_paths = watch_paths or [KINTHIC_SKILLS, KINTHIC_PLUGINS_SKILLS]
         self._observer = None
         self._started = False
 

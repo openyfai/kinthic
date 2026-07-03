@@ -1,5 +1,5 @@
 """
-Canonical turn event schema for Kronos operator UI.
+Canonical turn event schema for Kinthic operator UI.
 
 All Python surfaces emit TurnEvent records through TurnEmitter so the Ink
 ledger can render a trustworthy chronological stream without string guessing.

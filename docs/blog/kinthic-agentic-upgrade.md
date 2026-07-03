@@ -1,10 +1,10 @@
-# Building a Production-Grade Autonomous Agent System: Inside the Kronos Architecture
+# Building a Production-Grade Autonomous Agent System: Inside the Kinthic Architecture
 
 *Published by OpenYF — June 5, 2026*
 
 ---
 
-We've spent the last several months transforming Kronos from a capable cognitive platform into something significantly more ambitious: a **durable, event-driven autonomous agent system** that can spawn bounded child agents, maintain epistemic integrity over time, recover from failures across restarts, and surface everything to an operator through a coherent real-time interface.
+We've spent the last several months transforming Kinthic from a capable cognitive platform into something significantly more ambitious: a **durable, event-driven autonomous agent system** that can spawn bounded child agents, maintain epistemic integrity over time, recover from failures across restarts, and surface everything to an operator through a coherent real-time interface.
 
 This post documents the architecture decisions, the engineering work, and the research-driven thinking behind each layer. We're sharing it because we believe the agentic systems field moves faster when practitioners publish what they've actually built — not just demos.
 
@@ -32,7 +32,7 @@ Every component we built plugs into this spine.
 
 The most foundational change was replacing a stub with a real system.
 
-Previously, when Kronos received a background goal to execute autonomously, `tick()` would write the goal description to a text file and call it done. The daemon called `loop.process_turn()` — a method that didn't even exist on the real API.
+Previously, when Kinthic received a background goal to execute autonomously, `tick()` would write the goal description to a text file and call it done. The daemon called `loop.process_turn()` — a method that didn't even exist on the real API.
 
 ### What We Built
 
@@ -58,7 +58,7 @@ job = WorkerJob(
     objective=target_goal.description,
     allowed_tools=["run_terminal_command", "read_file", "list_directory", "search_web"],
     parent_task_id=goal_id,
-    agent_id="kronos_background",
+    agent_id="kinthic_background",
 )
 lease = ActuationLease.issue(task_id=..., ttl_seconds=3600.0, ...)
 handle = await self.worker_orchestrator.spawn_job(job, lease)
@@ -165,7 +165,7 @@ This is the layer that separates agents that drift from agents that stay grounde
 
 ### The Problem
 
-Kronos already stored contradictions and hypotheses. But the system was passive: contradictions were detected and logged, then left unresolved indefinitely. Hypotheses accumulated. Beliefs formed from stale evidence never got revised. The world model degraded quietly over time.
+Kinthic already stored contradictions and hypotheses. But the system was passive: contradictions were detected and logged, then left unresolved indefinitely. Hypotheses accumulated. Beliefs formed from stale evidence never got revised. The world model degraded quietly over time.
 
 ### Evidence Ledger and Bayesian Belief Revision
 
@@ -254,7 +254,7 @@ The reducer now handles `worker`, `active_goal`, `approval_requested`, `approval
 
 ### Ink Bridge
 
-`KronosInkBridge` gained four new emit methods:
+`KinthicInkBridge` gained four new emit methods:
 
 ```python
 await bridge.emit_approval_requested(approval_id, tool_name, risk_level, reason)
@@ -305,7 +305,7 @@ Every `process()` turn now writes to `trajectories` and `trajectory_steps`, givi
 ## Engineering Stats
 
 - **165 tests passing** across orchestration, security, cognitive loop, worker jobs, worktree management, sidecar auth, and eval harness
-- **7 new files** — `silex/autonomy/` package, `agent/subagent.py`, `silex/world/belief_engine.py`, `silex/autonomy/belief_maintenance.py`, `kronos-ink-ui/src/components/ApprovalQueue.tsx`, `kronos-ink-ui/src/components/ActiveGoalBar.tsx`
+- **7 new files** — `silex/autonomy/` package, `agent/subagent.py`, `silex/world/belief_engine.py`, `silex/autonomy/belief_maintenance.py`, `kinthic-ink-ui/src/components/ApprovalQueue.tsx`, `kinthic-ink-ui/src/components/ActiveGoalBar.tsx`
 - **Zero breaking changes** to existing APIs — all DB migrations are additive `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE ADD COLUMN` with defaults
 - **Full backward compatibility** — `CognitiveLoop()` with no arguments works identically for existing callers
 
@@ -343,7 +343,7 @@ The architecture is ready for the next wave of capabilities:
 1. **Worktree artifact reconciliation** — mount the git worktree into the sandbox, verify produced artifacts against expected outputs, run a merge/reject flow with operator approval before git commit
 2. **Telegram operator surface** — push approval requests and goal completions to the operator's phone; respond to `approve <id>` or `reject <id>` from Telegram
 3. **Web dashboard** — audit log, benchmark scorecard visualization, memory/belief change timeline, and usage analytics built on top of the now-populated SQLite tables
-4. **Self-modification gate** — Kronos's evolution module proposes code changes only when benchmark scores exceed thresholds, preventing capability regressions
+4. **Self-modification gate** — Kinthic's evolution module proposes code changes only when benchmark scores exceed thresholds, preventing capability regressions
 
 ---
 
@@ -355,4 +355,4 @@ We built the infrastructure. Now the models get to show what they can do.
 
 ---
 
-*Kronos is the autonomous reasoning engine powering OpenYF's enterprise AI platform. If you're building production agent systems and want to compare notes, we're at [your-contact-here].*
+*Kinthic is the autonomous reasoning engine powering OpenYF's enterprise AI platform. If you're building production agent systems and want to compare notes, we're at [your-contact-here].*

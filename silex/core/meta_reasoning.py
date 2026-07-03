@@ -260,7 +260,7 @@ class MetaReasoningEngine:
         systemic alignment decay (beta < -0.015), executes a database snapshot rollback,
         resetting the system prompt configurations cleanly to the last verified stable iteration state.
         """
-        from silex.utils.config import KRONOS_DIRECTIVES_FILE
+        from silex.utils.config import KINTHIC_DIRECTIVES_FILE
 
         recent_turns = await self.db.fetch_all(
             "SELECT confidence FROM turns ORDER BY created_at DESC LIMIT 30"
@@ -272,9 +272,9 @@ class MetaReasoningEngine:
         confidences = [float(r["confidence"]) for r in recent_turns]
         
         baseline = "System instruction baseline"
-        if KRONOS_DIRECTIVES_FILE.exists():
+        if KINTHIC_DIRECTIVES_FILE.exists():
             try:
-                baseline = KRONOS_DIRECTIVES_FILE.read_text(encoding="utf-8")
+                baseline = KINTHIC_DIRECTIVES_FILE.read_text(encoding="utf-8")
             except Exception:
                 pass
                 
@@ -300,11 +300,11 @@ class MetaReasoningEngine:
                 
                 try:
                     stable_prompt = (
-                        "# Kronos Core Directives\n\n"
+                        "# Kinthic Core Directives\n\n"
                         "This file contains unbreakable rules and behavioral guidelines.\n\n"
                         f"## Restored Directives (Rollback from OLS Decay):\n{last_stable_proposal['description']}\n"
                     )
-                    KRONOS_DIRECTIVES_FILE.write_text(stable_prompt, encoding="utf-8")
+                    KINTHIC_DIRECTIVES_FILE.write_text(stable_prompt, encoding="utf-8")
                     log.info(f"System prompt configurations successfully rolled back to proposal {last_stable_proposal['id']}")
                 except Exception as write_err:
                     log.error(f"Failed to write rolled-back directives: {write_err}")
@@ -313,11 +313,11 @@ class MetaReasoningEngine:
                 log.warning("No verified stable improvement proposal found in database for rollback. Restoring default directives.")
                 try:
                     default_directives = (
-                        "# Kronos Core Directives\n\n"
+                        "# Kinthic Core Directives\n\n"
                         "This file contains unbreakable rules and behavioral guidelines. "
                         "Any instructions here override general knowledge and normal operating procedures.\n"
                     )
-                    KRONOS_DIRECTIVES_FILE.write_text(default_directives, encoding="utf-8")
+                    KINTHIC_DIRECTIVES_FILE.write_text(default_directives, encoding="utf-8")
                 except Exception as default_err:
                     log.error(f"Failed to write default directives: {default_err}")
                 return True

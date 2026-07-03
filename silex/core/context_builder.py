@@ -101,9 +101,9 @@ class ContextBuilder:
 
         # Section 1.1: Core Directives
         try:
-            from silex.utils.config import KRONOS_DIRECTIVES_FILE
-            if KRONOS_DIRECTIVES_FILE.exists():
-                directives_content = KRONOS_DIRECTIVES_FILE.read_text(encoding="utf-8").strip()
+            from silex.utils.config import KINTHIC_DIRECTIVES_FILE
+            if KINTHIC_DIRECTIVES_FILE.exists():
+                directives_content = KINTHIC_DIRECTIVES_FILE.read_text(encoding="utf-8").strip()
                 if directives_content:
                     sections.append(
                         "═══════════════════════════════════════════════════════════\n"
@@ -388,14 +388,14 @@ class ContextBuilder:
 
     def _build_identity_section(self, settings: dict | None = None) -> str:
         """
-        Dynamically build the identity system prompt section using ~/.kronos/persona.yaml
+        Dynamically build the identity system prompt section using ~/.kinthic/persona.yaml
         and the KERNEL_PROMPT_TEMPLATE from silex/core/identity.py.
         """
         from silex.utils.config import load_persona_config
         from silex.core.identity import KERNEL_PROMPT_TEMPLATE
         
         persona = load_persona_config()
-        agent_name = persona.get("agent_name", "Kronos")
+        agent_name = persona.get("agent_name", "Kinthic")
         engine_name = persona.get("engine_name", "SILEX")
         archetype = persona.get("personality_archetype", "Sovereign CLI Development Engine")
         tone_modifiers = persona.get("tone_modifiers", [])

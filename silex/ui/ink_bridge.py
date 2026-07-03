@@ -1,10 +1,10 @@
 """
-silex/ui/ink_bridge.py — Kronos Ink UI subprocess bridge.  (v3 — file-pipe architecture)
+silex/ui/ink_bridge.py — Kinthic Ink UI subprocess bridge.  (v3 — file-pipe architecture)
 
 Pipe Architecture
 ─────────────────
-  Python → Ink  :  localhost TCP push (KRONOS_EVENTS_PORT) when Ink connects
-                   ~/.kronos/ink_events.ndjson  (50ms poll fallback / debug)
+  Python → Ink  :  localhost TCP push (KINTHIC_EVENTS_PORT) when Ink connects
+                   ~/.kinthic/ink_events.ndjson  (50ms poll fallback / debug)
   Ink → terminal:  proc.stdout = None            (inherits TTY; Ink renders)
   Ink keyboard  :  proc.stdin  = None            (inherits TTY; Ink owns keyboard)
   Ink → Python  :  proc.stderr = PIPE            (JSON packets: user_input + auth_response)
@@ -38,20 +38,20 @@ log = logging.getLogger("silex.ui.ink_bridge")
 
 _HERE      = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parent.parent
-_INK_ROOT  = _REPO_ROOT / "kronos-ink-ui"
+_INK_ROOT  = _REPO_ROOT / "kinthic-ink-ui"
 _INK_DIST  = _INK_ROOT / "dist" / "index.js"
 _INK_SRC   = _INK_ROOT / "src" / "index.tsx"
 
-_KRONOS_DIR  = Path.home() / ".kronos"
-_EVENTS_FILE = _KRONOS_DIR / "ink_events.ndjson"   # Python → Ink event bus
-_COMPILED_UI = _KRONOS_DIR / "bin" / "kronos-ui"
+_KINTHIC_DIR  = Path.home() / ".kinthic"
+_EVENTS_FILE = _KINTHIC_DIR / "ink_events.ndjson"   # Python → Ink event bus
+_COMPILED_UI = _KINTHIC_DIR / "bin" / "kinthic-ui"
 
 
 # ── Capability detection ──────────────────────────────────────────────────────
 
 def _build_launch_cmd() -> list[str] | None:
     import shutil
-    # 1. Check for pre-compiled binary in ~/.kronos/bin/
+    # 1. Check for pre-compiled binary in ~/.kinthic/bin/
     if _COMPILED_UI.exists() and os.access(str(_COMPILED_UI), os.X_OK):
         return [str(_COMPILED_UI)]
 
@@ -74,20 +74,20 @@ def _diagnose_launch_unavailable() -> str:
     if _COMPILED_UI.exists() and not os.access(str(_COMPILED_UI), os.X_OK):
         return f"Compiled UI exists but is not executable: {_COMPILED_UI}"
     if not shutil.which("node") and not shutil.which("npx"):
-        return "Node.js/npx not found on PATH. Install Node 18+ or run `npm install` in kronos-ink-ui."
+        return "Node.js/npx not found on PATH. Install Node 18+ or run `npm install` in kinthic-ink-ui."
     if shutil.which("node") and not _INK_DIST.exists() and not shutil.which("npx"):
-        return f"Ink build missing: {_INK_DIST}. Run `cd kronos-ink-ui && npm install && npm run build`."
+        return f"Ink build missing: {_INK_DIST}. Run `cd kinthic-ink-ui && npm install && npm run build`."
     if shutil.which("npx") and not _INK_SRC.exists():
         return f"Ink source entry missing: {_INK_SRC}"
     return (
-        "Ink UI not launchable. Run `cd kronos-ink-ui && npm install && npm run build`, "
-        "then restart Kronos."
+        "Ink UI not launchable. Run `cd kinthic-ink-ui && npm install && npm run build`, "
+        "then restart Kinthic."
     )
 
 
 # ── Bridge ────────────────────────────────────────────────────────────────────
 
-class KronosInkBridge:
+class KinthicInkBridge:
     """
     Async bridge between the Python cognitive loop and the Ink terminal UI.
 
@@ -121,11 +121,11 @@ class KronosInkBridge:
     async def start(self) -> None:
         """Spawn the Ink subprocess, clear the event bus, emit the header."""
         if self._cmd is None:
-            log.warning("kronos-ink-ui: not available — falling back to Rich. %s", self._fallback_reason)
+            log.warning("kinthic-ink-ui: not available — falling back to Rich. %s", self._fallback_reason)
             return
 
         # Prepare the event file: truncate to signal a fresh session start (fallback / debug)
-        _KRONOS_DIR.mkdir(parents=True, exist_ok=True)
+        _KINTHIC_DIR.mkdir(parents=True, exist_ok=True)
         _EVENTS_FILE.write_text("", encoding="utf-8")
 
         # Phase B: localhost TCP push (Hermes-style instant delivery vs 50ms file poll)
@@ -140,8 +140,8 @@ class KronosInkBridge:
         env = {
             **os.environ,
             "FORCE_COLOR": "3",
-            "KRONOS_EVENTS_FILE": str(_EVENTS_FILE),
-            "KRONOS_EVENTS_PORT": str(self._events_port),
+            "KINTHIC_EVENTS_FILE": str(_EVENTS_FILE),
+            "KINTHIC_EVENTS_PORT": str(self._events_port),
         }
 
         try:
@@ -158,7 +158,7 @@ class KronosInkBridge:
             )
         except (FileNotFoundError, PermissionError, OSError) as exc:
             self._fallback_reason = f"Failed to spawn Ink UI command `{self._cmd}`: {exc}"
-            log.warning("kronos-ink-ui: spawn failed: %s", exc)
+            log.warning("kinthic-ink-ui: spawn failed: %s", exc)
             return
 
         self._enabled = True
@@ -235,7 +235,7 @@ class KronosInkBridge:
             with open(_EVENTS_FILE, "a", encoding="utf-8") as f:
                 f.write(line)
         except OSError as exc:
-            log.warning("kronos-ink-ui: event write failed: %s", exc)
+            log.warning("kinthic-ink-ui: event write failed: %s", exc)
             self._enabled = False
 
     async def _push_event_line(self, line: str) -> None:
@@ -370,7 +370,7 @@ class KronosInkBridge:
         try:
             return await asyncio.wait_for(self._auth_queue.get(), timeout=timeout)
         except asyncio.TimeoutError:
-            log.warning("kronos-ink-ui: auth timeout after %ss", timeout)
+            log.warning("kinthic-ink-ui: auth timeout after %ss", timeout)
             return None
 
     async def read_cancel_request(self) -> bool:
@@ -388,7 +388,7 @@ class KronosInkBridge:
         try:
             return await asyncio.wait_for(self._approval_response_queue.get(), timeout=timeout)
         except asyncio.TimeoutError:
-            log.warning("kronos-ink-ui: approval_response timeout after %ss", timeout)
+            log.warning("kinthic-ink-ui: approval_response timeout after %ss", timeout)
             return None
 
     @property
@@ -410,8 +410,8 @@ class KronosInkBridge:
 
         skill_count = 0
         try:
-            from silex.utils.config import KRONOS_HOME
-            d = KRONOS_HOME / "skills"
+            from silex.utils.config import KINTHIC_HOME
+            d = KINTHIC_HOME / "skills"
             if d.is_dir():
                 skill_count = len(list(d.glob("*.md")))
         except Exception:
@@ -488,5 +488,5 @@ class KronosInkBridge:
         await self._user_input_queue.put(None)
 
 
-def create_bridge(**kwargs: Any) -> KronosInkBridge:
-    return KronosInkBridge(header_metadata=kwargs)
+def create_bridge(**kwargs: Any) -> KinthicInkBridge:
+    return KinthicInkBridge(header_metadata=kwargs)

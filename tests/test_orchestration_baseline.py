@@ -1,5 +1,5 @@
 """
-Baseline hardening tests for Kronos orchestration (Phase A).
+Baseline hardening tests for Kinthic orchestration (Phase A).
 """
 
 import pytest
@@ -102,8 +102,8 @@ async def test_spawn_worker_fails_on_nonzero_exit(tmp_path):
 
 @pytest.mark.asyncio
 async def test_local_fallback_fail_closed_without_dev_flag(tmp_path, monkeypatch):
-    monkeypatch.delenv("KRONOS_ALLOW_LOCAL_FALLBACK", raising=False)
-    monkeypatch.delenv("KRONOS_DEV_MODE", raising=False)
+    monkeypatch.delenv("KINTHIC_ALLOW_LOCAL_FALLBACK", raising=False)
+    monkeypatch.delenv("KINTHIC_DEV_MODE", raising=False)
 
     from agent.compute.runtimes.warm_pool import DockerWarmPoolManager
 
@@ -120,7 +120,7 @@ async def test_local_fallback_fail_closed_without_dev_flag(tmp_path, monkeypatch
 
 @pytest.mark.asyncio
 async def test_local_fallback_allowed_with_dev_flag(tmp_path, monkeypatch):
-    monkeypatch.setenv("KRONOS_ALLOW_LOCAL_FALLBACK", "1")
+    monkeypatch.setenv("KINTHIC_ALLOW_LOCAL_FALLBACK", "1")
 
     from agent.compute.runtimes.warm_pool import DockerWarmPoolManager, LocalFallbackSandbox
 

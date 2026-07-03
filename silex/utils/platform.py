@@ -1,4 +1,4 @@
-"""Platform detection helpers for Kronos install/runtime guards."""
+"""Platform detection helpers for Kinthic install/runtime guards."""
 from __future__ import annotations
 
 import sys

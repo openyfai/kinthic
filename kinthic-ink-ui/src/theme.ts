@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// src/theme.ts — Centralized color constants for all Kronos Ink components.
+// src/theme.ts — Centralized color constants for all Kinthic Ink components.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const colors = {
-  /** Kronos cyan — headers, ASCII art, accents */
+  /** Kinthic cyan — headers, ASCII art, accents */
   cyan: '#8BE9FD',
   /** Amber — warnings, tool auth emblem */
   amber: '#FFB86C',
@@ -21,6 +21,8 @@ export const colors = {
   prompt: '#F1FA8C',
   /** Custom Gold - ASCII art and prompt */
   gold: '#B48A37',
+  /** Kin Teal */
+  teal: '#00C9A7',
 } as const;
 
 export const symbols = {

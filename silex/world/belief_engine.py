@@ -1,5 +1,5 @@
 """
-Belief/proposition lifecycle engine for Kronos epistemic integrity.
+Belief/proposition lifecycle engine for Kinthic epistemic integrity.
 
 Maintains a truth-maintenance layer over the world model:
 - Tracks propositions with log-odds confidence and stance

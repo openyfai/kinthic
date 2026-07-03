@@ -24,7 +24,7 @@ const HistoryEntryRow = memo(({ role, text }: HistoryEntryRowProps) => (
       </Box>
     ) : (
       <Box flexDirection="column" borderStyle="round" borderColor={colors.separator} paddingX={1}>
-        <Text color={colors.cyan} bold>Kronos</Text>
+        <Text color={colors.cyan} bold>Kinthic</Text>
         <MarkdownText text={text} />
       </Box>
     )}
@@ -44,7 +44,7 @@ const ConversationPane = memo(({ history, streamingText }: ConversationPaneProps
     ))}
     {streamingText && streamingText.length > 0 && (
       <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={colors.cyan} paddingX={1}>
-        <Text color={colors.cyan} bold>Kronos</Text>
+        <Text color={colors.cyan} bold>Kinthic</Text>
         <MarkdownText text={streamingText} />
         <Text color="#6272A4" dimColor>▌</Text>
       </Box>

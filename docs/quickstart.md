@@ -1,4 +1,4 @@
-# Kronos quick start
+# Kinthic quick start
 
 This guide is the **single golden path** from zero to a working agent.
 
@@ -12,14 +12,14 @@ This guide is the **single golden path** from zero to a working agent.
 ## Step 1 — Install
 
 ```bash
-curl -fsSL https://kronos.openyf.dev/install.sh | bash
+curl -fsSL https://kinthic.openyf.dev/install.sh | bash
 source ~/.bashrc   # or ~/.zshrc
 ```
 
 ## Step 2 — Onboard
 
 ```bash
-kronos onboard
+kinthic onboard
 ```
 
 The wizard walks through:
@@ -32,7 +32,7 @@ The wizard walks through:
 ## Step 3 — Run
 
 ```bash
-kronos
+kinthic
 ```
 
 Try: *Analyze this repo and summarize the architecture.*
@@ -40,16 +40,16 @@ Try: *Analyze this repo and summarize the architecture.*
 For Telegram:
 
 ```bash
-kronos telegram run
+kinthic telegram run
 ```
 
 ## Skills CLI
 
 ```bash
-kronos skills list
-kronos skills search docker
-kronos skills install repo_onboard
-kronos skills reload
+kinthic skills list
+kinthic skills search docker
+kinthic skills install repo_onboard
+kinthic skills reload
 ```
 
 Inside a session: `:skills` and use the `skill_view` tool for full instructions.
@@ -57,9 +57,9 @@ Inside a session: `:skills` and use the `skill_view` tool for full instructions.
 ## MCP
 
 ```bash
-kronos mcp add filesystem --preset filesystem
-kronos mcp enable filesystem
-kronos mcp test filesystem
+kinthic mcp add filesystem --preset filesystem
+kinthic mcp enable filesystem
+kinthic mcp test filesystem
 ```
 
 Details: [mcp.md](mcp.md). In-session: `:mcp list`, `:mcp reload`.
@@ -67,18 +67,18 @@ Details: [mcp.md](mcp.md). In-session: `:mcp list`, `:mcp reload`.
 ## Verify
 
 ```bash
-kronos doctor
-kronos doctor --ping
+kinthic doctor
+kinthic doctor --ping
 ```
 
 ## Developing from source
 
 ```bash
-git clone https://github.com/openyfai/kronos.git
-cd kronos
+git clone https://github.com/openyfai/kinthic.git
+cd kinthic
 pip install -e ".[dev,mcp]"
-kronos onboard
-kronos
+kinthic onboard
+kinthic
 ```
 
 ## Demo script
@@ -86,10 +86,10 @@ kronos
 Record a golden-path demo:
 
 1. `curl -fsSL …/install.sh | bash`
-2. `kronos onboard` (pick Gemini + skip Telegram or pair live)
-3. `kronos` → ask *tell me a joke* (uses `tell_joke` skill via `skill_view`)
-4. `kronos skills list`
-5. `kronos doctor --ping`
+2. `kinthic onboard` (pick Gemini + skip Telegram or pair live)
+3. `kinthic` → ask *tell me a joke* (uses `tell_joke` skill via `skill_view`)
+4. `kinthic skills list`
+5. `kinthic doctor --ping`
 
 Outline: [demo-script.md](demo-script.md)
 
@@ -97,10 +97,10 @@ Outline: [demo-script.md](demo-script.md)
 
 | Command | Purpose |
 |---------|---------|
-| `kronos doctor --ping` | Live API check |
-| `kronos skills reload` | Reload skills without restart |
-| `kronos mcp test <name>` | Test MCP server |
-| `kronos setup` | Legacy wizard (prefer `onboard`) |
+| `kinthic doctor --ping` | Live API check |
+| `kinthic skills reload` | Reload skills without restart |
+| `kinthic mcp test <name>` | Test MCP server |
+| `kinthic setup` | Legacy wizard (prefer `onboard`) |
 
 ## Docker (Telegram daemon)
 

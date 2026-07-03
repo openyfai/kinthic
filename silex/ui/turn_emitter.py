@@ -1,5 +1,5 @@
 """
-Single emission API for Kronos turn visibility (Python → Ink NDJSON bus).
+Single emission API for Kinthic turn visibility (Python → Ink NDJSON bus).
 """
 
 from __future__ import annotations
@@ -233,7 +233,7 @@ class TurnEmitter:
         await self._emit({"type": "stream", "data": {"text": text}})
         return await self._next(
             TurnPhase.RESPONSE,
-            "Kronos",
+            "Kinthic",
             detail=text[:120],
             payload={"text": text},
         )

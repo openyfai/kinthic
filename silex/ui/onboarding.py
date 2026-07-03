@@ -1,7 +1,7 @@
 """
 silex/ui/onboarding.py
 ======================
-Zero-dependency raw-ANSI interactive TUI for the Kronos setup wizard.
+Zero-dependency raw-ANSI interactive TUI for the Kinthic setup wizard.
 
 Architecture mirrors a reactive Widget pattern:
   - ProviderSelector  – stateful interactive list (like a Textual Widget)
@@ -279,7 +279,7 @@ class ProviderSelector:
 
 class OnboardingUI:
     """
-    Top-level session orchestrator for the Kronos setup wizard.
+    Top-level session orchestrator for the Kinthic setup wizard.
 
     Provides:
       - clear()          — wipe terminal

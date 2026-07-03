@@ -1,5 +1,5 @@
 """
-Structured worker job model for Kronos orchestration.
+Structured worker job model for Kinthic orchestration.
 
 Moves delegation from raw shell strings toward typed tasks with explicit
 capabilities, artifacts, and lineage metadata.
@@ -31,7 +31,7 @@ class WorkerJob:
     timeout_seconds: float = 600.0
     expected_artifact: Optional[str] = None
     parent_task_id: Optional[str] = None
-    agent_id: str = "kronos_main"
+    agent_id: str = "kinthic_main"
     workspace_mode: str = "ephemeral"  # ephemeral | worktree
     job_id: str = field(default_factory=lambda: f"job_{uuid.uuid4().hex[:10]}")
     # Cognitive sub-agent fields

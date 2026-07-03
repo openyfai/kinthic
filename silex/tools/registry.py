@@ -72,11 +72,11 @@ class ToolRegistry:
             from silex.tools.rag_query import RAGQueryTool
             self.register(RAGQueryTool(self.file_indexer))
 
-        # Phase D — Load user tool plugins from ~/.kronos/plugins/tools/
+        # Phase D — Load user tool plugins from ~/.kinthic/plugins/tools/
         try:
-            from silex.utils.config import KRONOS_PLUGINS_TOOLS
+            from silex.utils.config import KINTHIC_PLUGINS_TOOLS
             from silex.plugins.loader import load_tool_plugins
-            user_tools = load_tool_plugins(KRONOS_PLUGINS_TOOLS)
+            user_tools = load_tool_plugins(KINTHIC_PLUGINS_TOOLS)
             for tool in user_tools:
                 self.register(tool)
         except Exception as exc:

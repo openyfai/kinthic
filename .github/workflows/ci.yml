@@ -32,14 +32,14 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: kronos-ink-ui
+        working-directory: kinthic-ink-ui
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: kronos-ink-ui/package-lock.json
+          cache-dependency-path: kinthic-ink-ui/package-lock.json
       - name: Install UI dependencies
         run: npm ci
       - name: Build UI
@@ -54,4 +54,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build Docker image
-        run: docker build -t kronos-ci .
+        run: docker build -t kinthic-ci .

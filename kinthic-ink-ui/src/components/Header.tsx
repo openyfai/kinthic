@@ -5,7 +5,7 @@
 // Layout (Yoga flexbox, NO string-replication):
 //
 //  ┌────────────────────────────────────┬───────────────────────────────────┐
-//  │  ASCII KRONOS art (left, 50%)      │  metadata fields (right, 50%)     │
+//  │  ASCII KINTHIC art (left, 50%)      │  metadata fields (right, 50%)     │
 //  └────────────────────────────────────┴───────────────────────────────────┘
 //  ────────────────────────────────── rule ────────────────────────────────────
 //
@@ -19,15 +19,15 @@ import { Box, Text } from 'ink';
 import { colors, symbols } from '../theme.js';
 import type { HeaderMetadata } from '../types.js';
 
-// ── ASCII art for "KRONOS" — 7-line block font ────────────────────────────────
-const KRONOS_ART = [
+// ── ASCII art for "KINTHIC" — 7-line block font ────────────────────────────────
+const KINTHIC_ART = [
   ' █  ▀▄▀ █▄▀ █▀▄ █▀█ █▀▀ ',
   ' █▀▀ █  █ █ █▀▄ █ █ ▀▀█ ',
   ' ▀▀▀ ▀  ▀ ▀ ▀ ▀ ▀▀▀ ▀▀▀ ',
 ];
 
-// Fancier big font block using box-drawing — "KRONOS" spelled out
-const KRONOS_BIG: string[] = [
+// Fancier big font block using box-drawing — "KINTHIC" spelled out
+const KINTHIC_BIG: string[] = [
   '  ▄█▄ █▀█ █▀█ █▄ █ █▀█ ▄█▀ ',
   '  █▀▄ █▀▄ █ █ █ ▀█ █ █ ▀█▄ ',
   '  ▀ ▀ ▀ ▀ ▀▀▀ ▀  ▀ ▀▀▀ ▀▀▀ ',
@@ -35,11 +35,12 @@ const KRONOS_BIG: string[] = [
 
 // Full block-character art, 5 rows (Windows safe, no double box corners)
 const ASCII_LINES = [
-  '  ██  ██  ██████    ██████   ███   ██   ██████    ███████ ',
-  '  ██ ██   ██   ██  ██    ██  ████  ██  ██    ██  ██       ',
-  '  ████    ██████   ██    ██  ██ ██ ██  ██    ██   ██████  ',
-  '  ██ ██   ██  ██   ██    ██  ██  ████  ██    ██        ██ ',
-  '  ██  ██  ██   ██   ██████   ██   ███   ██████   ███████  ',
+  '  ██╗  ██╗██╗███╗   ██╗████████╗██╗  ██╗██╗ ██████╗ ',
+  '  ██║ ██╔╝██║████╗  ██║╚══██╔══╝██║  ██║██║██╔════╝ ',
+  '  █████╔╝ ██║██╔██╗ ██║   ██║   ███████║██║██║      ',
+  '  ██╔═██╗ ██║██║╚██╗██║   ██║   ██╔══██║██║██║      ',
+  '  ██║  ██╗██║██║ ╚████║   ██║   ██║  ██║██║╚██████╗ ',
+  '  ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝╚═╝ ╚═════╝ ',
 ];
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -65,14 +66,14 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ meta }) => {
-  const versionStr = `Kronos Terminal [v${meta.version}]`;
+  const versionStr = `Kinthic Terminal [v${meta.version}]`;
 
   return (
     <Box flexDirection="column">
       {/* ── Outer panel: no border frame ─── */}
       <Box flexDirection="row">
 
-        {/* ── Left column: KRONOS ASCII art with only a vertical right border ─── */}
+        {/* ── Left column: KINTHIC ASCII art with only a vertical right border ─── */}
         <Box
           flexDirection="column"
           flexGrow={1}
@@ -87,7 +88,7 @@ const Header: React.FC<HeaderProps> = ({ meta }) => {
           borderColor={colors.separator}
         >
           {ASCII_LINES.map((line, i) => (
-            <Text key={i} color={colors.gold}>{line}</Text>
+            <Text key={i} color={colors.teal}>{line}</Text>
           ))}
         </Box>
 

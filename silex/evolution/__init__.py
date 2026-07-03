@@ -1,5 +1,5 @@
 """
-Evolutionary Self-Improvement System for Kronos (Phase 7).
+Evolutionary Self-Improvement System for Kinthic (Phase 7).
 """
 
 from __future__ import annotations

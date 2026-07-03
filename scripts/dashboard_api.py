@@ -18,7 +18,7 @@ async def lifespan(app: FastAPI):
     # Teardown
     await db.close()
 
-app = FastAPI(title="Kronos Dashboard API", lifespan=lifespan)
+app = FastAPI(title="Kinthic Dashboard API", lifespan=lifespan)
 
 # Allow CORS for the Vite dev server
 app.add_middleware(

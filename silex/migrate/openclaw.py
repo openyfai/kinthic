@@ -4,10 +4,10 @@ import re
 from pathlib import Path
 from typing import Any
 
-from silex.utils.config import KRONOS_HOME
+from silex.utils.config import KINTHIC_HOME
 from silex.utils.logger import setup_logger
 
-log = setup_logger("kronos.migrate.openclaw")
+log = setup_logger("kinthic.migrate.openclaw")
 
 def _parse_json5(text: str) -> dict[str, Any]:
     """A very basic JSON5 parser that strips comments before standard JSON parsing."""
@@ -54,9 +54,9 @@ def scan_openclaw(source_path: str | None = None) -> dict[str, Any]:
     return report
 
 def import_openclaw(source_path: str | None = None, dry_run: bool = True) -> list[str]:
-    """Import data from OpenClaw to Kronos."""
+    """Import data from OpenClaw to Kinthic."""
     base_dir = Path(source_path).expanduser() if source_path else Path.home() / ".openclaw"
-    kronos_dir = Path(KRONOS_HOME)
+    kinthic_dir = Path(KINTHIC_HOME)
     
     logs = []
     
@@ -64,35 +64,35 @@ def import_openclaw(source_path: str | None = None, dry_run: bool = True) -> lis
         logs.append(f"❌ OpenClaw directory not found at {base_dir}")
         return logs
         
-    logs.append(f"📦 Starting migration from {base_dir} to {kronos_dir}")
+    logs.append(f"📦 Starting migration from {base_dir} to {kinthic_dir}")
     if dry_run:
         logs.append("⚠️ DRY RUN MODE: No files will be modified.")
     else:
-        kronos_dir.mkdir(parents=True, exist_ok=True)
+        kinthic_dir.mkdir(parents=True, exist_ok=True)
         
     config_file = base_dir / "openclaw.json"
     if config_file.exists():
-        logs.append("📄 Found openclaw.json, please manually review the allowlists for Kronos.")
+        logs.append("📄 Found openclaw.json, please manually review the allowlists for Kinthic.")
         
     # Migrate Skills from Workspace
     workspace_dir = base_dir / "workspace"
-    kronos_skills = kronos_dir / "skills"
+    kinthic_skills = kinthic_dir / "skills"
     if workspace_dir.exists() and workspace_dir.is_dir():
         count = 0
         if not dry_run:
-            kronos_skills.mkdir(parents=True, exist_ok=True)
+            kinthic_skills.mkdir(parents=True, exist_ok=True)
             
         for skill_file in workspace_dir.glob("*.md"):
             if skill_file.name in ["AGENTS.md", "SOUL.md", "MEMORY.md"]:
                 continue
             if not dry_run:
-                shutil.copy2(skill_file, kronos_skills / skill_file.name)
+                shutil.copy2(skill_file, kinthic_skills / skill_file.name)
             count += 1
         logs.append(f"🧩 Migrated {count} custom markdown skills.")
         
         if (workspace_dir / "SOUL.md").exists():
-            logs.append("👤 Found SOUL.md identity file, please manually review it for Kronos personas.")
+            logs.append("👤 Found SOUL.md identity file, please manually review it for Kinthic personas.")
 
     logs.append("✅ Migration complete.")
-    logs.append("🔒 IMPORTANT: You must run `kronos telegram` and /pair your account to ensure security boundaries are established.")
+    logs.append("🔒 IMPORTANT: You must run `kinthic telegram` and /pair your account to ensure security boundaries are established.")
     return logs

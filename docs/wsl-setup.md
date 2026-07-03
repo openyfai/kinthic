@@ -1,6 +1,6 @@
-# WSL2 setup for Kronos (Windows)
+# WSL2 setup for Kinthic (Windows)
 
-Kronos runs on **Linux only**. On Windows, use **WSL2** (Windows Subsystem for Linux).
+Kinthic runs on **Linux only**. On Windows, use **WSL2** (Windows Subsystem for Linux).
 
 ## 1. Enable WSL2
 
@@ -19,12 +19,12 @@ uname -a
 # Should mention Microsoft / WSL
 ```
 
-## 2. Install Kronos (one command)
+## 2. Install Kinthic (one command)
 
 Inside your **WSL Ubuntu** terminal (not PowerShell):
 
 ```bash
-curl -fsSL https://kronos.openyf.dev/install.sh | bash
+curl -fsSL https://kinthic.openyf.dev/install.sh | bash
 ```
 
 Reload your shell:
@@ -36,7 +36,7 @@ source ~/.bashrc
 ## 3. Onboard
 
 ```bash
-kronos onboard
+kinthic onboard
 ```
 
 This configures your LLM provider, installs core skills, optional Telegram pairing, and optional MCP servers.
@@ -44,9 +44,9 @@ This configures your LLM provider, installs core skills, optional Telegram pairi
 ## 4. Run
 
 ```bash
-kronos                  # terminal agent
-kronos telegram run     # messaging bot (after pairing)
-kronos doctor --ping    # verify API connectivity
+kinthic                  # terminal agent
+kinthic telegram run     # messaging bot (after pairing)
+kinthic doctor --ping    # verify API connectivity
 ```
 
 ## Common mistakes
@@ -54,8 +54,8 @@ kronos doctor --ping    # verify API connectivity
 | Mistake | Fix |
 |---------|-----|
 | Running `curl \| bash` in PowerShell | Open WSL Ubuntu first |
-| `kronos: command not found` | `source ~/.bashrc` or open a new WSL tab |
-| Provider ping fails | Re-run `kronos onboard` and check API key in `~/.kronos/.env` |
+| `kinthic: command not found` | `source ~/.bashrc` or open a new WSL tab |
+| Provider ping fails | Re-run `kinthic onboard` and check API key in `~/.kinthic/.env` |
 
 ## Next steps
 

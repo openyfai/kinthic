@@ -158,7 +158,7 @@ export default function EngineSettings() {
             <label className="flex items-center justify-between py-2 cursor-pointer group">
               <div>
                 <div className="text-white font-medium group-hover:text-neutral-300 transition-colors">Terminal Execution</div>
-                <div className="text-sm text-neutral-500 mt-1">Allow Kronos to run arbitrary CLI commands in the workspace.</div>
+                <div className="text-sm text-neutral-500 mt-1">Allow Kinthic to run arbitrary CLI commands in the workspace.</div>
               </div>
               <div className="relative inline-flex items-center">
                 <input 
@@ -190,7 +190,7 @@ export default function EngineSettings() {
             <label className="flex items-center justify-between py-2 cursor-pointer group">
               <div>
                 <div className="text-white font-medium group-hover:text-neutral-300 transition-colors">Background Autonomy</div>
-                <div className="text-sm text-neutral-500 mt-1">Allow Kronos to proactively wake up and execute asynchronous goals.</div>
+                <div className="text-sm text-neutral-500 mt-1">Allow Kinthic to proactively wake up and execute asynchronous goals.</div>
               </div>
               <div className="relative inline-flex items-center">
                 <input 

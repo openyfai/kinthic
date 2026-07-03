@@ -15,11 +15,11 @@ import type { IncomingMessage, TurnPhase } from './types.js';
 const args = process.argv.slice(2);
 const isDemoMode = args.includes('--demo');
 
-const EVENTS_FILE: string = process.env['KRONOS_EVENTS_FILE']
-  ?? path.join(os.homedir(), '.kronos', 'ink_events.ndjson');
+const EVENTS_FILE: string = process.env['KINTHIC_EVENTS_FILE']
+  ?? path.join(os.homedir(), '.kinthic', 'ink_events.ndjson');
 
 const EVENTS_PORT: number | null = (() => {
-  const raw = process.env['KRONOS_EVENTS_PORT']?.trim();
+  const raw = process.env['KINTHIC_EVENTS_PORT']?.trim();
   if (!raw) return null;
   const port = Number.parseInt(raw, 10);
   return Number.isFinite(port) && port > 0 ? port : null;
@@ -198,13 +198,13 @@ function runDemoSequence(): void {
   };
 
   function fireCompletion(): void {
-    te('response', 'Kronos', 'Sub-agents are wired: one cognitive_worker completed in 2 turns.', {
+    te('response', 'Kinthic', 'Sub-agents are wired: one cognitive_worker completed in 2 turns.', {
       text: 'Sub-agents are wired: one cognitive_worker completed in 2 turns. Memory admission recorded the session context.',
     }, 300);
     send({ type: 'stream', data: {
       text: 'Sub-agents are wired: one cognitive_worker completed in 2 turns. Memory admission recorded the session context.',
     } }, 320);
-    te('memory', 'memory', 'wrote 1 item(s)', { count: 1, items: ['User is testing the production Kronos TUI locally.'] }, 500);
+    te('memory', 'memory', 'wrote 1 item(s)', { count: 1, items: ['User is testing the production Kinthic TUI locally.'] }, 500);
     te('summary', 'summary', '0.81s · 2 tool(s) · 1 memory', {
       latencyMs: 812,
       tokens: 1240,
@@ -214,7 +214,7 @@ function runDemoSequence(): void {
     }, 700);
     setTimeout(() => globalDispatch?.({ type: 'done' }), 1200);
   }
-  (globalThis as Record<string, unknown>).__kronosDemoComplete = fireCompletion;
+  (globalThis as Record<string, unknown>).__kinthicDemoComplete = fireCompletion;
 
   send({
     type: 'header',

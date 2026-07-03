@@ -37,14 +37,14 @@ export const UserLedgerRow = memo(({ text }: { text: string }) => (
 
 export const AssistantLedgerRow = memo(({ text }: { text: string }) => (
   <Box flexDirection="column" marginTop={1}>
-    <Text color={colors.cyan} bold>Kronos</Text>
+    <Text color={colors.cyan} bold>Kinthic</Text>
     <MarkdownText text={text} />
   </Box>
 ));
 
 export const StreamingLedgerRow = memo(({ text }: { text: string }) => (
   <Box flexDirection="column" marginTop={1}>
-    <Text color={colors.cyan} bold>Kronos</Text>
+    <Text color={colors.cyan} bold>Kinthic</Text>
     <MarkdownText text={text} />
     <Text color={colors.dimWhite}>▌</Text>
   </Box>
@@ -179,7 +179,7 @@ export const TurnSummaryLedgerRow = memo(({
 
 export const IdleLedgerHint = memo(() => (
   <Box flexDirection="column" marginTop={1}>
-    <Text color={colors.white}>Kronos is ready.</Text>
+    <Text color={colors.white}>Kinthic is ready.</Text>
     <Text color={colors.dimWhite}>Type a message or / for commands.</Text>
   </Box>
 ));

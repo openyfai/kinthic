@@ -57,7 +57,7 @@ class SpawnWorkerTool(BaseTool):
 
         lease = ActuationLease.issue(
             task_id=task_id,
-            agent_id="kronos_main",
+            agent_id="kinthic_main",
             ttl_seconds=float(timeout_seconds),
             allowed_tools=tools,
             network_allowed=network_allowed,

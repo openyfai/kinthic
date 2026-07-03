@@ -157,7 +157,7 @@ class McpServerManager:
         cfg = load_mcp_config()
         lines: list[str] = []
         if not cfg.servers:
-            lines.append("No MCP servers configured (~/.kronos/config/mcp.yaml)")
+            lines.append("No MCP servers configured (~/.kinthic/config/mcp.yaml)")
             return lines
         if not self._mcp_available():
             lines.append("MCP Python package not installed — run: pip install '.[mcp]'")

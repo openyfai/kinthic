@@ -24,9 +24,9 @@ except ImportError:
 log = logging.getLogger("agent.warm_pool")
 
 def _local_fallback_allowed() -> bool:
-    return os.environ.get("KRONOS_ALLOW_LOCAL_FALLBACK", "").lower() in (
+    return os.environ.get("KINTHIC_ALLOW_LOCAL_FALLBACK", "").lower() in (
         "1", "true", "yes", "on",
-    ) or os.environ.get("KRONOS_DEV_MODE", "").lower() in (
+    ) or os.environ.get("KINTHIC_DEV_MODE", "").lower() in (
         "1", "true", "yes", "on",
     )
 
@@ -176,7 +176,7 @@ class LocalFallbackSandbox(SandboxInstance):
         if not _local_fallback_allowed():
             return (
                 "Security Violation: Docker unavailable and local fallback is disabled. "
-                "Set KRONOS_ALLOW_LOCAL_FALLBACK=1 for dev mode only."
+                "Set KINTHIC_ALLOW_LOCAL_FALLBACK=1 for dev mode only."
             )
 
         try:
@@ -249,7 +249,7 @@ class DockerWarmPoolManager(IsolationProvider):
             try:
                 self.client = docker.from_env()
                 try:
-                    existing = self.client.containers.list(all=True, filters={"label": "kronos.managed=true"})
+                    existing = self.client.containers.list(all=True, filters={"label": "kinthic.managed=true"})
                     for c in existing:
                         log.info("Scavenging leaked container: %s", c.name)
                         try:
@@ -274,27 +274,27 @@ class DockerWarmPoolManager(IsolationProvider):
                 self.client.images.pull("python:3.11-alpine")
 
             try:
-                self.client.networks.get("kronos_sandbox")
+                self.client.networks.get("kinthic_sandbox")
             except Exception:
-                self.client.networks.create("kronos_sandbox", internal=True)
+                self.client.networks.create("kinthic_sandbox", internal=True)
 
             try:
-                proxy = self.client.containers.get("kronos_egress_proxy")
+                proxy = self.client.containers.get("kinthic_egress_proxy")
                 if proxy.status != "running":
                     proxy.start()
             except Exception:
                 self.client.containers.run(
                     image="python:3.11-alpine",
-                    name="kronos_egress_proxy",
+                    name="kinthic_egress_proxy",
                     command=["python", "-u", "/project/agent/security/network_proxy.py"],
                     volumes={
                         str(self.project_root.resolve()): {"bind": "/project", "mode": "ro"},
-                        str(Path.home() / ".kronos" / "workers"): {"bind": "/kronos/workers", "mode": "ro"},
+                        str(Path.home() / ".kinthic" / "workers"): {"bind": "/kinthic/workers", "mode": "ro"},
                     },
                     detach=True,
                 )
-                self.client.networks.get("kronos_sandbox").connect(
-                    self.client.containers.get("kronos_egress_proxy")
+                self.client.networks.get("kinthic_sandbox").connect(
+                    self.client.containers.get("kinthic_egress_proxy")
                 )
 
             self._replenish_task = asyncio.create_task(self._replenish_loop())
@@ -311,7 +311,7 @@ class DockerWarmPoolManager(IsolationProvider):
         workspace_dir = self.workspace_root / worker_id
         workspace_dir.mkdir(parents=True, exist_ok=True)
 
-        run_dir = Path.home() / ".kronos" / "run" / worker_id
+        run_dir = Path.home() / ".kinthic" / "run" / worker_id
         run_dir.mkdir(parents=True, exist_ok=True)
         try:
             run_dir.chmod(0o700)
@@ -326,16 +326,16 @@ class DockerWarmPoolManager(IsolationProvider):
             "GIT_WORK_TREE": "/workspace",
             "WORKSPACE_DIR": "/workspace",
             "PYTHONPATH": "/project",
-            "KRONOS_WORKER_ID": worker_id,
-            "KRONOS_WORKER_SESSION_KEY": session_key,
-            "KRONOS_SIDECAR_DEFAULT_TIMEOUT": str(int(timeout_seconds)),
+            "KINTHIC_WORKER_ID": worker_id,
+            "KINTHIC_WORKER_SESSION_KEY": session_key,
+            "KINTHIC_SIDECAR_DEFAULT_TIMEOUT": str(int(timeout_seconds)),
         }
         if not network_disabled:
             env.update({
-                "HTTP_PROXY": "http://kronos_egress_proxy:8080",
-                "HTTPS_PROXY": "http://kronos_egress_proxy:8080",
-                "http_proxy": "http://kronos_egress_proxy:8080",
-                "https_proxy": "http://kronos_egress_proxy:8080",
+                "HTTP_PROXY": "http://kinthic_egress_proxy:8080",
+                "HTTPS_PROXY": "http://kinthic_egress_proxy:8080",
+                "http_proxy": "http://kinthic_egress_proxy:8080",
+                "https_proxy": "http://kinthic_egress_proxy:8080",
             })
 
         try:
@@ -346,7 +346,7 @@ class DockerWarmPoolManager(IsolationProvider):
                 volumes={
                     str(self.project_root.resolve()): {"bind": "/project", "mode": "ro"},
                     str(workspace_dir.resolve()): {"bind": "/workspace", "mode": "rw"},
-                    str(run_dir.resolve()): {"bind": "/run/kronos_sockets", "mode": "rw"},
+                    str(run_dir.resolve()): {"bind": "/run/kinthic_sockets", "mode": "rw"},
                 },
                 environment=env,
                 working_dir="/workspace",
@@ -355,15 +355,15 @@ class DockerWarmPoolManager(IsolationProvider):
                 mem_limit="256m",
                 pids_limit=128,
                 labels={
-                    "kronos.managed": "true",
-                    "kronos.worker_id": worker_id,
+                    "kinthic.managed": "true",
+                    "kinthic.worker_id": worker_id,
                 },
-                network="kronos_sandbox",
+                network="kinthic_sandbox",
                 cap_drop=["ALL"],
                 security_opt=["no-new-privileges:true"],
                 network_disabled=network_disabled,
             )
-            socket_path = run_dir / f"kronos_{worker_id}.sock"
+            socket_path = run_dir / f"kinthic_{worker_id}.sock"
             return WarmDockerSandbox(
                 self.client,
                 container,
@@ -402,7 +402,7 @@ class DockerWarmPoolManager(IsolationProvider):
             if not _local_fallback_allowed():
                 raise RuntimeError(
                     "Docker unavailable and local fallback is disabled (fail-closed). "
-                    "Install Docker or set KRONOS_ALLOW_LOCAL_FALLBACK=1 for dev only."
+                    "Install Docker or set KINTHIC_ALLOW_LOCAL_FALLBACK=1 for dev only."
                 )
             log.warning("Docker not available, using LocalFallbackSandbox (dev mode).")
             worker_id = f"worker_{uuid.uuid4().hex[:8]}"

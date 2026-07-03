@@ -1,5 +1,5 @@
 """
-Audit Logger for Kronos Sandboxes.
+Audit Logger for Kinthic Sandboxes.
 Records execution commands, security events, and system anomalies into a local SQLite database.
 """
 
@@ -74,7 +74,7 @@ def get_audit_logger(workspace_root: Optional[Path] = None) -> AuditLogger:
     global _global_logger
     if _global_logger is None:
         if workspace_root is None:
-            workspace_root = Path.home() / ".kronos" / "workspace"
+            workspace_root = Path.home() / ".kinthic" / "workspace"
         db_path = workspace_root.parent / "audit.db"
         _global_logger = AuditLogger(db_path)
     return _global_logger

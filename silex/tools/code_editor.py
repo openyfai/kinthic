@@ -16,7 +16,7 @@ from pathlib import Path
 
 from silex.tools.base import BaseTool
 from silex.utils.logger import setup_logger
-from silex.utils.config import KRONOS_PENDING_EDITS
+from silex.utils.config import KINTHIC_PENDING_EDITS
 
 log = setup_logger("silex.tools.code_editor")
 
@@ -24,11 +24,11 @@ log = setup_logger("silex.tools.code_editor")
 # Security — sandbox boundary (matches file_reader.py)
 # ---------------------------------------------------------------------------
 
-# Sandbox root: resolved from config.py (KRONOS_WORKSPACE or env override).
+# Sandbox root: resolved from config.py (KINTHIC_WORKSPACE or env override).
 # This ensures pip-installed copies don't accidentally write to site-packages.
 from silex.utils.config import WORKSPACE_DIR as _WORKSPACE_ROOT  # noqa: E402
 
-PENDING_EDITS_FILE = KRONOS_PENDING_EDITS
+PENDING_EDITS_FILE = KINTHIC_PENDING_EDITS
 BLOCKED_FILE_PREFIXES = (".env",)
 BLOCKED_PATH_PARTS = {".git", "node_modules", ".venv", "venv", "__pycache__"}
 
@@ -151,7 +151,7 @@ class CodeEditorTool(BaseTool):
         """
         import shutil
         from datetime import datetime
-        from silex.utils.config import KRONOS_BACKUPS
+        from silex.utils.config import KINTHIC_BACKUPS
 
         full_path = _resolve_workspace_path(proposal["file_path"])
         full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -159,7 +159,7 @@ class CodeEditorTool(BaseTool):
         if full_path.exists():
             try:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                backup_path = KRONOS_BACKUPS / f"{full_path.name}_{timestamp}.bak"
+                backup_path = KINTHIC_BACKUPS / f"{full_path.name}_{timestamp}.bak"
                 shutil.copy2(full_path, backup_path)
                 log.info(f"Failsafe backup created: {backup_path}")
             except Exception as e:

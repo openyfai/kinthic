@@ -1,7 +1,7 @@
 [project]
-name = "openyfai-kronos"
+name = "openyfai-kinthic"
 version = "1.0.0"
-description = "Kronos — local-first AI operator powered by the Silex memory engine (OpenYF AI)."
+description = "Kinthic — local-first AI operator powered by the Silex memory engine (OpenYF AI)."
 readme = "README.md"
 license = {text = "AGPL-3.0-or-later"}
 requires-python = ">=3.11"
@@ -81,16 +81,16 @@ discord = [
 
 
 [project.scripts]
-kronos = "scripts.cli:main"
-kronos-telegram = "scripts.telegram_bot:main"
-kronos-discord = "scripts.discord_bot:main"
+kinthic = "scripts.cli:main"
+kinthic-telegram = "scripts.telegram_bot:main"
+kinthic-discord = "scripts.discord_bot:main"
 
 [project.urls]
-Homepage = "https://github.com/openyfai/kronos"
-Repository = "https://github.com/openyfai/kronos"
-Issues = "https://github.com/openyfai/kronos/issues"
-Changelog = "https://github.com/openyfai/kronos/blob/main/CHANGELOG.md"
-Documentation = "https://github.com/openyfai/kronos#readme"
+Homepage = "https://github.com/openyfai/kinthic"
+Repository = "https://github.com/openyfai/kinthic"
+Issues = "https://github.com/openyfai/kinthic/issues"
+Changelog = "https://github.com/openyfai/kinthic/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/openyfai/kinthic#readme"
 
 [build-system]
 requires = ["setuptools>=75.0"]
@@ -104,7 +104,7 @@ py-modules = []
 
 [tool.setuptools.packages.find]
 include = ["silex*", "scripts*", "plugins*"]
-exclude = ["kronos-ui*", "tests*", "scratch*", "workspace*"]
+exclude = ["kinthic-ui*", "tests*", "scratch*", "workspace*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

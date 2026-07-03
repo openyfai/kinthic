@@ -1,6 +1,6 @@
-# Kronos Plugin Development Guide
+# Kinthic Plugin Development Guide
 
-Build your own skills, tool plugins, and provider plugins for Kronos and share them with the community.
+Build your own skills, tool plugins, and provider plugins for Kinthic and share them with the community.
 
 ---
 
@@ -17,13 +17,13 @@ Build your own skills, tool plugins, and provider plugins for Kronos and share t
 
 ```
 Need reusable instructions for the LLM?
-  └─ skill (.md in ~/.kronos/skills/ or kronos skills install)
+  └─ skill (.md in ~/.kinthic/skills/ or kinthic skills install)
 
 Need Python code the agent calls directly?
-  └─ tool plugin (~/.kronos/plugins/tools/<name>/)
+  └─ tool plugin (~/.kinthic/plugins/tools/<name>/)
 
 Need an external service with its own process (GitHub, filesystem, fetch)?
-  └─ MCP server (kronos mcp add … — see docs/mcp.md)
+  └─ MCP server (kinthic mcp add … — see docs/mcp.md)
 
 Need a new LLM backend?
   └─ provider plugin (plugins/providers/)
@@ -33,14 +33,14 @@ Need a new LLM backend?
 
 ## Skills (Markdown)
 
-The simplest extension. Drop a `.md` file into `~/.kronos/skills/` and run `kronos skills reload` (or `:plugin reload` in-session).
+The simplest extension. Drop a `.md` file into `~/.kinthic/skills/` and run `kinthic skills reload` (or `:plugin reload` in-session).
 
 Skills appear as a **compact index** in the system prompt. The agent loads full instructions on demand with the `skill_view` tool. Mark `inline: true` in frontmatter or `skill.yaml` to inject the full body every turn.
 
 ### Flat skill (simplest)
 
 ```
-~/.kronos/skills/my_skill.md
+~/.kinthic/skills/my_skill.md
 ```
 
 Content format:
@@ -63,7 +63,7 @@ Describe the expected output format.
 ### Nested skill (with metadata)
 
 ```
-~/.kronos/skills/my_skill/
+~/.kinthic/skills/my_skill/
 ├── SKILL.md        ← the workflow (required)
 └── skill.yaml      ← metadata (optional)
 ```
@@ -83,17 +83,17 @@ trigger: "When user asks to summarize a meeting or document"
 
 ### Community plugin skills
 
-Place in `~/.kronos/plugins/skills/<skill_name>/` for skills distributed as packages.
+Place in `~/.kinthic/plugins/skills/<skill_name>/` for skills distributed as packages.
 
 To sign a community skill for `verified` trust level:
 
 ```bash
-# Generate HMAC signature (uses your local ~/.kronos/config/hmac_key.bin)
+# Generate HMAC signature (uses your local ~/.kinthic/config/hmac_key.bin)
 python - <<'EOF'
 import hashlib, hmac
 from pathlib import Path
 
-key = Path.home().joinpath(".kronos/config/hmac_key.bin").read_bytes()
+key = Path.home().joinpath(".kinthic/config/hmac_key.bin").read_bytes()
 content = Path("SKILL.md").read_bytes()
 sig = hmac.new(key, content, hashlib.sha256).hexdigest()
 print(f"signature: {sig}")
@@ -111,7 +111,7 @@ Adds a callable tool the agent can invoke with full ethics + approval gate enfor
 ### Directory layout
 
 ```
-~/.kronos/plugins/tools/<plugin_name>/
+~/.kinthic/plugins/tools/<plugin_name>/
 ├── plugin.yaml     ← required
 └── tool.py         ← required
 ```
@@ -161,7 +161,7 @@ Hot-reload without restart:
 
 Override or extend the built-in LLM provider catalog.
 
-Place in `~/.kronos/config/plugins/model-providers/<provider_name>/plugin.yaml`:
+Place in `~/.kinthic/config/plugins/model-providers/<provider_name>/plugin.yaml`:
 
 ```yaml
 name: my_provider
@@ -202,17 +202,17 @@ No Python code needed. The provider is available immediately in `/model` selecti
 
 | Level | Meaning |
 |---|---|
-| `core` | Bundled with Kronos — fully trusted |
+| `core` | Bundled with Kinthic — fully trusted |
 | `verified` | HMAC signature validated against publisher key |
 | `community` | No signature — shown with a warning in strict mode |
 
-Set `KRONOS_MEMORY_GUARD_STRICT=1` to block `community` plugins from loading.
+Set `KINTHIC_MEMORY_GUARD_STRICT=1` to block `community` plugins from loading.
 
 ---
 
-## Submitting to KronosHub
+## Submitting to KinthicHub
 
-1. Fork the registry repository at `https://github.com/openyfai/kronos-hub`
+1. Fork the registry repository at `https://github.com/openyfai/kinthic-hub`
 2. Add your entry to `catalog.yaml` in the `entries:` list
 3. Ensure `sha256` is set (run `sha256sum` on your file)
 4. Open a pull request — core team reviews and sets `trust_level: verified` after audit
@@ -222,9 +222,9 @@ Set `KRONOS_MEMORY_GUARD_STRICT=1` to block `community` plugins from loading.
 When submitting a skill for `verified` status, it undergoes the following audit workflow by the core team:
 
 1. **Submission Review**: The PR is reviewed for malicious intent, prompt injection attempts, or insecure tool usage.
-2. **Execution Test**: The skill is run in a strict `KRONOS_MEMORY_GUARD_STRICT=1` sandbox environment.
+2. **Execution Test**: The skill is run in a strict `KINTHIC_MEMORY_GUARD_STRICT=1` sandbox environment.
 3. **Approval Gating Check**: The skill is verified to ensure it doesn't try to bypass `approval_required` flags for sensitive MCP/tool calls.
-4. **HMAC Signing**: Once approved, the core team signs the `SKILL.md` file using the central KronosHub key and attaches the `signature` to the registry `catalog.yaml`. 
+4. **HMAC Signing**: Once approved, the core team signs the `SKILL.md` file using the central KinthicHub key and attaches the `signature` to the registry `catalog.yaml`. 
 5. **Distribution**: The skill is officially marked as `verified` and users can install it safely.
 
 ---
@@ -233,12 +233,12 @@ When submitting a skill for `verified` status, it undergoes the following audit 
 
 | Path | Purpose |
 |---|---|
-| `~/.kronos/skills/*.md` | Flat skill files |
-| `~/.kronos/skills/<name>/SKILL.md` | Nested skill |
-| `~/.kronos/plugins/skills/<name>/SKILL.md` | Community skill package |
-| `~/.kronos/plugins/tools/<name>/` | Tool plugin directory |
-| `~/.kronos/config/plugins/model-providers/<name>/` | Provider override |
-| `~/.kronos/registry/catalog.yaml` | Local registry catalog |
-| `https://kronos.openyf.dev/registry/catalog.yaml` | Remote KronosHub catalog |
-| `https://kronos.openyf.dev/install.sh` | One-line installer (WSL2/Linux/macOS) |
-| `~/.kronos/config/hmac_key.bin` | Local HMAC signing key |
+| `~/.kinthic/skills/*.md` | Flat skill files |
+| `~/.kinthic/skills/<name>/SKILL.md` | Nested skill |
+| `~/.kinthic/plugins/skills/<name>/SKILL.md` | Community skill package |
+| `~/.kinthic/plugins/tools/<name>/` | Tool plugin directory |
+| `~/.kinthic/config/plugins/model-providers/<name>/` | Provider override |
+| `~/.kinthic/registry/catalog.yaml` | Local registry catalog |
+| `https://kinthic.openyf.dev/registry/catalog.yaml` | Remote KinthicHub catalog |
+| `https://kinthic.openyf.dev/install.sh` | One-line installer (WSL2/Linux/macOS) |
+| `~/.kinthic/config/hmac_key.bin` | Local HMAC signing key |

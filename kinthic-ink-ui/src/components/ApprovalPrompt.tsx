@@ -19,7 +19,7 @@ function formatSummary(req: ApprovalRequest): string {
   const raw = req.reason.trim();
   const prefix = `Error: Approval required for ${req.tool_name}`;
   if (raw.startsWith(prefix)) {
-    return `Kronos wants to run this tool (${formatRisk(req.risk_level)} access).`;
+    return `Kinthic wants to run this tool (${formatRisk(req.risk_level)} access).`;
   }
   if (raw.startsWith('Error:')) {
     return raw.replace(/^Error:\s*/, '').slice(0, 100);

@@ -27,8 +27,8 @@ Usage (Python)::
 
 Usage (CLI)::
 
-    kronos export-trajectories --format grpo --output ~/train.jsonl
-    kronos export-trajectories --format sft --success-only --since 2026-01-01
+    kinthic export-trajectories --format grpo --output ~/train.jsonl
+    kinthic export-trajectories --format sft --success-only --since 2026-01-01
 """
 from __future__ import annotations
 
@@ -501,10 +501,10 @@ async def export_trajectories(
     written_path: Path | None = None
 
     if cfg.output_path is None:
-        from silex.utils.config import KRONOS_EXPORTS
+        from silex.utils.config import KINTHIC_EXPORTS
         ts = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         ext = "csv" if cfg.format == "csv" else "jsonl"
-        cfg.output_path = KRONOS_EXPORTS / f"trajectories_{cfg.format}_{ts}.{ext}"
+        cfg.output_path = KINTHIC_EXPORTS / f"trajectories_{cfg.format}_{ts}.{ext}"
 
     cfg.output_path.parent.mkdir(parents=True, exist_ok=True)
 

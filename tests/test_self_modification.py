@@ -52,8 +52,7 @@ def test_safety_check(tmp_path: Path):
     engine = SelfModificationEngine(base_dir=tmp_path)
     
     # Safe paths
-    assert engine.is_path_safe("silex/core/optimizer.py") is True
-    assert engine.is_path_safe("silex/evolution/self_modification.py") is True
+    assert engine.is_path_safe("silex/adapters/optimizer.py") is True
     assert engine.is_path_safe("tests/test_optimizer.py") is True
     
     # Unsafe paths

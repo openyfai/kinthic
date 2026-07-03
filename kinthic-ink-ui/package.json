@@ -1,11 +1,11 @@
 {
-  "name": "kronos-ink-ui",
+  "name": "kinthic-ink-ui",
   "version": "1.0.0",
-  "description": "Premium Ink/React terminal interface for the Kronos AI operator CLI.",
+  "description": "Premium Ink/React terminal interface for the Kinthic AI operator CLI.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "kronos-ink": "dist/index.js"
+    "kinthic-ink": "dist/index.js"
   },
   "scripts": {
     "build": "tsc --noEmit false",

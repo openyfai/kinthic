@@ -1,4 +1,4 @@
-"""Durable autonomy kernel for Kronos background goal execution."""
+"""Durable autonomy kernel for Kinthic background goal execution."""
 
 from silex.autonomy.lifecycle import JobStatus, DurableJob, JobEventKind
 from silex.autonomy.event_recorder import EventRecorder
