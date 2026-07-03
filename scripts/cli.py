@@ -1,28 +1,49 @@
 from __future__ import annotations
 
+# ── LOG SILENCE — must run before any silex import ───────────────────────────
+# silex modules call setup_logger() at import time, which attaches RichHandlers
+# to sys.stderr. This block installs a file-only root handler FIRST so those
+# calls find an existing handler and skip adding a stream handler (see
+# logger.py: `if not logger.handlers`). Result: zero log text on the terminal.
+import logging
+import os
+from pathlib import Path as _Path
+
+_log_dir = _Path.home() / ".kronos"
+_log_dir.mkdir(parents=True, exist_ok=True)
+_log_file = _log_dir / "kronos.log"
+
+# Set env var so silex/utils/logger.py setup_logger() picks file mode
+os.environ.setdefault("KRONOS_INK_ACTIVE", "1")
+
+_root = logging.getLogger()
+_root.handlers.clear()
+_root.setLevel(logging.DEBUG)
+_fh = logging.FileHandler(str(_log_file), encoding="utf-8", mode="a")
+_fh.setFormatter(logging.Formatter(
+    "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+))
+_root.addHandler(_fh)
+# ─────────────────────────────────────────────────────────────────────────────
+
 import argparse
 import asyncio
-import os
-from pathlib import Path
 
-import uvicorn
-
-from aria.llm.catalog import get_provider_defaults, list_providers
-from aria.runtime.settings import RuntimeSettingsStore
-from aria.utils.config import (
+from silex.llm.catalog import get_provider_defaults, list_providers
+from silex.runtime.settings import RuntimeSettingsStore
+from silex.utils.config import (
     browser_actions_enabled,
     code_apply_enabled,
-    get_web_host,
-    get_web_port,
     terminal_execution_enabled,
 )
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="vyn", description="VYN local operator CLI")
+    parser = argparse.ArgumentParser(prog="kronos", description="Kronos local operator CLI")
     subparsers = parser.add_subparsers(dest="command")
 
-    subparsers.add_parser("setup", help="Run interactive local setup")
+    subparsers.add_parser("init", help="First-run wizard: provider, skills, Telegram, MCP")
     doctor_parser = subparsers.add_parser("doctor", help="Show local setup and security status")
     doctor_parser.add_argument(
         "--ping",
@@ -30,16 +51,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run a tiny live API call to verify configured provider credentials",
     )
     subparsers.add_parser("models", help="List supported providers and models")
-    subparsers.add_parser("web", help="Run the VYN web server")
+    subparsers.add_parser("web", help="Launch the local Kronos web dashboard")
+    subparsers.add_parser("usage", help="View usage and token costs")
 
-    telegram_parser = subparsers.add_parser("telegram", help="Telegram utilities")
-    telegram_sub = telegram_parser.add_subparsers(dest="telegram_command")
+    daemon_parser = subparsers.add_parser("daemon", help="Manage the background supervisor daemon")
+    daemon_sub = daemon_parser.add_subparsers(dest="daemon_command")
+    daemon_sub.add_parser("start", help="Start the supervisor in the background")
+    daemon_sub.add_parser("stop", help="Stop the background supervisor")
+    daemon_sub.add_parser("status", help="Check if the daemon is running")
+    daemon_sub.add_parser("logs", help="Tail the daemon logs")
+    daemon_sub.add_parser("run", help="Run the supervisor in the foreground")
+
+    data_parser = subparsers.add_parser("data", help="Manage memories, backups, and exports")
+    data_sub = data_parser.add_subparsers(dest="data_command")
+    backup_p = data_sub.add_parser("backup", help="Export data to zip")
+    backup_p.add_argument("--output", default="kronos-backup.zip", help="Output zip file")
+    export_p = data_sub.add_parser("export", help="Export training trajectories (SFT / GRPO / CSV)")
+    export_p.add_argument("--format", choices=["sft", "grpo", "csv"], default="grpo", help="Output format (default: grpo)")
+    export_p.add_argument("--output", default=None, help="Output file path")
+    export_p.add_argument("--success-only", action="store_true", help="Only include successful trajectories")
+    export_p.add_argument("--since", default=None, metavar="YYYY-MM-DD", help="Lower date bound (UTC)")
+    export_p.add_argument("--until", default=None, metavar="YYYY-MM-DD", help="Upper date bound (UTC)")
+    export_p.add_argument("--max", type=int, default=10_000, dest="max_traj", help="Maximum number of trajectories to export")
+    migrate_scan = data_sub.add_parser("migrate", help="Scan and import migratable data from legacy agents")
+    migrate_scan.add_argument("--from", dest="source", choices=["hermes", "openclaw"], required=True)
+    migrate_scan.add_argument("--path", default=None, help="Custom path to target")
+    migrate_group = migrate_scan.add_mutually_exclusive_group()
+    migrate_group.add_argument("--scan-only", action="store_true", help="Only scan without importing")
+    migrate_group.add_argument("--dry-run", action="store_true", help="Report what would be migrated without copying")
+    migrate_group.add_argument("--apply", action="store_true", help="Execute the migration")
+
+    channels_parser = subparsers.add_parser("channels", help="Manage connected messaging channels")
+    channels_sub = channels_parser.add_subparsers(dest="channel_app")
+    telegram_parser = channels_sub.add_parser("telegram", help="Telegram integration")
+    telegram_sub = telegram_parser.add_subparsers(dest="channel_cmd")
     telegram_sub.add_parser("run", help="Run the Telegram bot")
     telegram_sub.add_parser("pair", help="Generate a Telegram pairing code")
-
-    subparsers.add_parser("start", help="Start VYN daemon in the background")
-    subparsers.add_parser("stop", help="Stop the VYN daemon")
-    subparsers.add_parser("daemon", help="Run the V3 Watchdog Supervisor (Foreground)")
+    discord_parser = channels_sub.add_parser("discord", help="Discord integration")
+    discord_sub = discord_parser.add_subparsers(dest="channel_cmd")
+    discord_sub.add_parser("run", help="Run the Discord bot")
 
     proposals_parser = subparsers.add_parser("proposals", help="Manage self-improvement proposals")
     proposals_sub = proposals_parser.add_subparsers(dest="proposals_command")
@@ -49,157 +99,470 @@ def build_parser() -> argparse.ArgumentParser:
     reject_p = proposals_sub.add_parser("reject", help="Reject a proposal by ID prefix")
     reject_p.add_argument("proposal_id", help="Proposal ID or prefix")
 
+    skills_parser = subparsers.add_parser("skills", help="Manage Kronos skills")
+    skills_sub = skills_parser.add_subparsers(dest="skills_command")
+    skills_sub.add_parser("list", help="List installed and catalog skills")
+    skills_search = skills_sub.add_parser("search", help="Search the skill catalog")
+    skills_search.add_argument("query", help="Search query")
+    skills_install = skills_sub.add_parser("install", help="Install a skill by name or URL")
+    skills_install.add_argument("name", help="Skill name or https:// URL")
+    skills_sub.add_parser("reload", help="Reload skills from disk")
+
+    mcp_parser = subparsers.add_parser("mcp", help="Manage MCP server integrations")
+    mcp_sub = mcp_parser.add_subparsers(dest="mcp_command")
+    mcp_sub.add_parser("list", help="List configured MCP servers")
+    mcp_add = mcp_sub.add_parser("add", help="Add an MCP server")
+    mcp_add.add_argument("name", help="Server name")
+    mcp_add.add_argument("--preset", choices=["filesystem", "fetch", "github"], help="Use a bundled preset")
+    mcp_add.add_argument("--exec", dest="mcp_exec", help="Executable command (with --args)")
+    mcp_add.add_argument("--args", nargs="*", default=[], dest="mcp_args", help="Command arguments")
+    mcp_enable = mcp_sub.add_parser("enable", help="Enable an MCP server")
+    mcp_enable.add_argument("name", help="Server name")
+    mcp_disable = mcp_sub.add_parser("disable", help="Disable an MCP server")
+    mcp_disable.add_argument("name", help="Server name")
+    mcp_test = mcp_sub.add_parser("test", help="Test connectivity to an MCP server")
+    mcp_test.add_argument("name", help="Server name")
+    mcp_tools = mcp_sub.add_parser("tools", help="List tools exposed by MCP servers")
+    mcp_tools.add_argument("--server", default=None, help="Filter by server name")
+
     return parser
 
 
-async def run_interactive_setup() -> None:
-    """The minimalist 'Apple Slab' interactive setup wizard."""
-    from aria.ui.onboarding import OnboardingUI
-    from rich.table import Table
-    from rich.text import Text
+def detect_local_ollama_models(base_url: str) -> list[str]:
+    """Auto-detect installed models from local Ollama tags API."""
+    import httpx
+    try:
+        url = base_url.rstrip("/").replace("/v1", "") + "/api/tags"
+        resp = httpx.get(url, timeout=1.5)
+        if resp.status_code == 200:
+            data = resp.json()
+            return [m["name"] for m in data.get("models", [])]
+    except Exception:
+        pass
+    return []
+
+
+def detect_local_lmstudio_models(base_url: str) -> list[str]:
+    """Auto-detect loaded models from local LM Studio models API."""
+    import httpx
+    try:
+        url = base_url.rstrip("/") + "/models"
+        resp = httpx.get(url, timeout=1.5)
+        if resp.status_code == 200:
+            data = resp.json()
+            return [m["id"] for m in data.get("data", [])]
+    except Exception:
+        pass
+    return []
+
+
+async def run_interactive_setup(*, onboard: bool = False) -> None:
+    """The premium interactive setup wizard with dynamically detected local models."""
+    from silex.ui.onboarding import OnboardingUI
+    from silex.llm.registry import get_provider_profile
+    import logging
+
+    # Silence internal warnings and client initialization logs during the setup TUI
+    logging.getLogger("silex").setLevel(logging.ERROR)
+    logging.getLogger("kronos").setLevel(logging.ERROR)
 
     ui = OnboardingUI()
+    ui.clear()  # Clear any initial warning logs printed during imports/startup
     store = RuntimeSettingsStore()
-    providers = list_providers()
 
-    # 1. Provider Selection
-    table = Table(show_header=False, box=None, padding=(0, 2))
-    for i, p in enumerate(providers, 1):
-        table.add_row(Text(f"{i}.", style="dim"), Text(p["label"], style="bold white"))
-    
-    ui.render_step("Intelligence Core", table, subtitle="Choose your primary LLM provider")
-    choice = ui.prompt(f"Select Provider [1-{len(providers)}]", default="1")
-    provider = providers[max(0, min(len(providers) - 1, int(choice) - 1))]
+    if onboard:
+        from silex.utils.config import KRONOS_HOME, KRONOS_SKILLS, WORKSPACE_DIR
+        ui.render_step(
+            "Welcome to Kronos",
+            f"Home: {KRONOS_HOME}\nSkills: {KRONOS_SKILLS}\nWorkspace: {WORKSPACE_DIR}",
+            subtitle="This wizard configures your provider, skills, and optional channels",
+        )
+        ui.prompt("Press Enter to continue")
+
+    providers = list_providers()  # Returns list of dicts: {id, label, env_key, base_url, models}
+
+    # Sort: gemini first, anthropic second, then cloud, then local, custom last
+    def provider_sort_key(p):
+        p_id = p["id"]
+        if p_id == "gemini":    return 0
+        if p_id == "anthropic": return 1
+        if p_id == "openai":    return 2
+        if p_id == "azure":     return 3
+        if p_id == "deepseek":  return 4
+        if p_id == "custom":    return 99
+        return 10
+    providers = sorted(providers, key=provider_sort_key)
+
+    # 1. Provider Selection — build labels with descriptions
+    provider_labels = []
+    for p in providers:
+        profile = get_provider_profile(p["id"])
+        desc = profile.description if profile else ""
+        label = p["label"]
+        if desc:
+            label += f" ({desc})"
+        provider_labels.append(label)
+
+    provider_idx = ui.prompt_choice(
+        "provider",
+        provider_labels,
+        default_idx=0,
+        subtitle="Choose your primary LLM provider",
+    )
+    provider = providers[provider_idx]
 
     custom_base_url = ""
     custom_label = ""
-    
+    detected_models: list[str] = []
+
+    if provider["id"] == "ollama":
+        base_url = provider.get("base_url", "http://127.0.0.1:11434/v1")
+        ui.render_step("Local Core", "Auto-detecting installed Ollama models...")
+        detected_models = detect_local_ollama_models(base_url)
+    elif provider["id"] == "lm_studio":
+        base_url = provider.get("base_url", "http://127.0.0.1:1234/v1")
+        ui.render_step("Local Core", "Auto-detecting loaded LM Studio models...")
+        detected_models = detect_local_lmstudio_models(base_url)
+
     if provider["id"] == "custom":
-        ui.render_step(
-            "Universal Provider", 
-            Text("Configure your custom endpoint.", justify="center"),
-            subtitle="Display Name (e.g. My Private Llama)"
-        )
+        ui.render_step("Universal Provider", "Configure your custom endpoint.",
+                       subtitle="Display Name (e.g. My Private Llama)")
         custom_label = ui.prompt("Display Name", default="Custom Model")
-        
-        ui.render_step(
-            "Universal Provider", 
-            Text(f"Configuring '{custom_label}'", justify="center"),
-            subtitle="Base URL (e.g. https://api.proxy.com/v1)"
-        )
+
+        ui.render_step("Universal Provider", f"Configuring '{custom_label}'",
+                       subtitle="Base URL (e.g. https://api.proxy.com/v1)")
         custom_base_url = ""
         while not custom_base_url:
             custom_base_url = ui.prompt("Base URL").strip()
-        
-        ui.render_step(
-            "Universal Provider", 
-            Text(f"Configuring '{custom_label}'", justify="center"),
-            subtitle="Exact Model ID (e.g. mixtral-8x7b-instruct)"
-        )
-        model_id = ""
-        while not model_id:
-            model_id = ui.prompt("Model ID").strip()
-            
+
+        ui.render_step("Universal Provider", "Auto-detecting available models...")
+        detected_models = detect_local_lmstudio_models(custom_base_url)
+
+        if detected_models:
+            model_choices = [f"{m} (detected)" for m in detected_models] + ["Enter custom model ID manually..."]
+            m_idx = ui.prompt_choice(
+                "model",
+                model_choices,
+                default_idx=0,
+                subtitle=f"Select the model for {custom_label}",
+            )
+            if m_idx < len(detected_models):
+                model_id = detected_models[m_idx]
+            else:
+                ui.render_step("Universal Provider", f"Configuring '{custom_label}'",
+                               subtitle="Exact Model ID (e.g. mixtral-8x7b-instruct)")
+                model_id = ""
+                while not model_id:
+                    model_id = ui.prompt("Model ID").strip()
+        else:
+            ui.render_step("Universal Provider", f"Configuring '{custom_label}'",
+                           subtitle="Exact Model ID (e.g. mixtral-8x7b-instruct)")
+            model_id = ""
+            while not model_id:
+                model_id = ui.prompt("Model ID").strip()
+
         model = {"id": model_id, "label": custom_label}
         defaults = {"fast_model": model_id, "reasoning_model": model_id}
+
+    elif provider["id"] == "azure":
+        ui.render_step("Azure OpenAI", "Configure your Azure OpenAI resource.",
+                       subtitle="Endpoint URL (e.g. https://my-resource.openai.azure.com)")
+        custom_base_url = ""
+        while not custom_base_url:
+            custom_base_url = ui.prompt("Endpoint URL").strip()
+
+        ui.render_step("Azure OpenAI", "Configure your Azure OpenAI deployment.",
+                       subtitle="Deployment Name / Model ID (e.g. gpt-4o)")
+        model_id = ""
+        while not model_id:
+            model_id = ui.prompt("Deployment Name").strip()
+        model = {"id": model_id, "label": model_id}
+        defaults = {"fast_model": model_id, "reasoning_model": model_id}
+
+    elif provider["id"] in ("ollama", "lm_studio"):
+        if detected_models:
+            model_choices = [f"{m} (installed)" for m in detected_models] + ["Enter custom model ID manually..."]
+            m_idx = ui.prompt_choice(
+                "model",
+                model_choices,
+                default_idx=0,
+                subtitle=f"Select from your locally installed {provider['label']} models",
+            )
+            if m_idx < len(detected_models):
+                model_id = detected_models[m_idx]
+                model = {"id": model_id, "label": model_id}
+            else:
+                ui.render_step(provider["label"], f"Configuring '{provider['label']}'",
+                               subtitle="Enter custom model ID manually (e.g. llama3:8b)")
+                model_id = ""
+                while not model_id:
+                    model_id = ui.prompt("Model ID").strip()
+                model = {"id": model_id, "label": model_id}
+        else:
+            # Fallback to curated catalog
+            models = provider["models"]
+            model_labels = [
+                f"{m['label']} ({m.get('tier')})" if m.get("tier") else m["label"]
+                for m in models
+            ] + ["Enter custom model ID manually..."]
+            m_idx = ui.prompt_choice(
+                "model",
+                model_labels,
+                default_idx=0,
+                subtitle="Select model (no running local models detected)",
+            )
+            if m_idx < len(models):
+                model = models[m_idx]
+            else:
+                ui.render_step(provider["label"], f"Configuring '{provider['label']}'",
+                               subtitle="Enter model ID (e.g. llama3)")
+                model_id = ""
+                while not model_id:
+                    model_id = ui.prompt("Model ID").strip()
+                model = {"id": model_id, "label": model_id}
+        defaults = get_provider_defaults(provider["id"])
+
     else:
-        # 2. Model Selection
+        # 2. Model Selection — cloud provider
         models = provider["models"]
-        table = Table(show_header=False, box=None, padding=(0, 2))
-        for i, m in enumerate(models, 1):
-            tier = f"({m.get('tier')})" if m.get("tier") else ""
-            table.add_row(Text(f"{i}.", style="dim"), Text(f"{m['label']} {tier}", style="bold white"))
-        
-        ui.render_step(provider["label"], table, subtitle=f"Select the active model for {provider['label']}")
-        m_choice = ui.prompt(f"Select Model [1-{len(models)}]", default="1")
-        model = models[max(0, min(len(models) - 1, int(m_choice) - 1))]
+        model_labels = [
+            f"{m['label']} ({m.get('tier')})" if m.get("tier") else m["label"]
+            for m in models
+        ] + ["Enter custom model ID manually..."]
+        m_idx = ui.prompt_choice(
+            "model",
+            model_labels,
+            default_idx=0,
+            subtitle=f"Select the active model for {provider['label']}",
+        )
+        if m_idx < len(models):
+            model = models[m_idx]
+        else:
+            ui.render_step(provider["label"], f"Configuring '{provider['label']}'",
+                           subtitle="Enter custom model ID manually")
+            model_id = ""
+            while not model_id:
+                model_id = ui.prompt("Model ID").strip()
+            model = {"id": model_id, "label": model_id}
         defaults = get_provider_defaults(provider["id"])
 
     # 3. API Key Verification
     api_key = ""
-    if provider["id"] != "ollama":
+    if provider["id"] not in ("ollama", "lm_studio"):
         while True:
             ui.render_step(
-                "Authentication", 
-                Text(f"Identity verification for {provider['label']}.", justify="center"),
-                subtitle="Paste your API key below"
+                "Authentication",
+                f"Identity verification for {provider['label']}.",
+                subtitle="Paste your API key below",
             )
             api_key = ui.prompt("API Key", password=True)
             if not api_key:
                 break
-            
-            ui.render_step("Authentication", Text("Verifying connectivity...", style="dim", justify="center"))
-            from aria.llm.provider_test import ping_provider
+
+            ui.render_step("Authentication", "Verifying connectivity...")
+            from silex.llm.provider_test import ping_provider
             result = await ping_provider(
-                provider["id"], 
-                api_key, 
-                model["id"], 
-                base_url=custom_base_url if provider["id"] == "custom" else None
+                provider["id"],
+                api_key,
+                model["id"],
+                base_url=custom_base_url if provider["id"] in ("custom", "azure") else None,
             )
-            
+
             if result.get("ok"):
                 store.set_provider_secret(provider["id"], api_key)
                 break
             else:
                 ui.render_step(
-                    "Authentication", 
-                    Text("Invalid API key or connectivity failure.", style="bold red", justify="center"),
-                    subtitle=result.get("message", "Check your key and try again.")
+                    "Authentication",
+                    "Invalid API key or connectivity failure.",
+                    subtitle=result.get("message", "Check your key and try again."),
                 )
                 ui.prompt("Press Enter to retry")
     else:
-        # Ollama check
-        ui.render_step("Local Core", Text("Verifying local Ollama endpoint...", style="dim", justify="center"))
-        from aria.llm.provider_test import ping_provider
-        result = await ping_provider("ollama", "", model["id"])
+        # Ollama / LM Studio connectivity check
+        ui.render_step("Local Core", "Verifying local core endpoint...")
+        from silex.llm.provider_test import ping_provider
+        result = await ping_provider(provider["id"], "", model["id"])
         if not result.get("ok"):
             ui.render_step(
-                "Local Core", 
-                Text("Ollama unreachable.", style="bold red", justify="center"),
-                subtitle=result.get("hint", "Ensure Ollama is running.")
+                "Local Core",
+                f"{provider['label']} unreachable.",
+                subtitle=result.get("hint", f"Ensure {provider['label']} is running and the model is loaded/pulled."),
             )
             ui.prompt("Press Enter to continue anyway")
 
-    # 4. Telegram Pairing (The Magic Handshake)
-    ui.render_step(
-        "Telegram Link", 
-        Text("Would you like to link VYN to your Telegram account?", justify="center"),
-        subtitle="Recommended for remote access"
-    )
-    wants_telegram = ui.prompt("Link Telegram? (y/n)", default="n").lower() == "y"
-    
-    if wants_telegram:
+    if onboard:
+        ui.render_step("Live verify", "Running provider health check...")
+        from silex.llm.provider_test import ping_provider
+        from silex.utils.config import get_provider_secret
+
+        while True:
+            key = (get_provider_secret(provider["id"], settings_store=store) or "").strip()
+            result = await ping_provider(
+                provider["id"],
+                key,
+                model["id"],
+                base_url=custom_base_url if provider["id"] in ("custom", "azure") else None,
+            )
+            if result.get("ok"):
+                ui.render_step("Live verify", "✓ Provider responded successfully.")
+                break
+            ui.render_step(
+                "Live verify",
+                "Provider check failed.",
+                subtitle=result.get("message", "Fix your API key or model and retry."),
+            )
+            retry = ui.prompt_choice(
+                "Retry",
+                ["Retry ping", "Continue anyway (not recommended)"],
+                default_idx=0,
+            )
+            if retry == 1:
+                break
+
+        ui.render_step("Core skills", "Installing bundled workflow skills...")
+        from silex.plugins.registry import get_registry
+        installed = get_registry().install_core_skills()
         ui.render_step(
-            "Telegram Link", 
-            Text("Enter your Telegram Bot Token.", justify="center"),
-            subtitle="Get this from @BotFather"
+            "Core skills",
+            f"Installed {len(installed)} skills: {', '.join(installed) or 'none'}",
         )
+        await asyncio.sleep(0.8)
+
+    # 4. Telegram Pairing
+    telegram_idx = ui.prompt_choice(
+        "Telegram link",
+        ["Yes (recommended for remote access)", "No"],
+        default_idx=1,
+        subtitle="Would you like to link Kronos to your Telegram account?",
+    )
+    wants_telegram = (telegram_idx == 0)
+
+    if wants_telegram:
+        ui.render_step("Telegram Link", "Enter your Telegram Bot Token.",
+                       subtitle="Get this from @BotFather")
         bot_token = ui.prompt("Bot Token", password=True)
         if bot_token:
-            from aria.utils.telegram_pairing import TelegramPairingSession
+            from silex.utils.telegram_pairing import TelegramPairingSession
             session = TelegramPairingSession(bot_token)
             try:
                 await session.get_bot_info()
                 deep_link = session.get_deep_link()
-                
+
                 ui.render_step(
-                    "Telegram Link", 
-                    Text(f"Open this link in Telegram and click 'Start':\n\n{deep_link}", justify="center", style="bold white"),
-                    subtitle="Waiting for handshake..."
+                    "Telegram Link",
+                    f"Open this link in Telegram and click 'Start':\n\n  {deep_link}",
+                    subtitle="Waiting for handshake...",
                 )
-                
-                # Background wait for the user to click Start
+
                 chat_id = await session.wait_for_handshake(timeout_s=120)
-                
-                # Save telegram settings
+
                 store.set_provider_secret("telegram", bot_token)
                 store.add_paired_telegram_user(chat_id)
+
+                # Write to .env to allow kronos telegram run to work out of the box
+                from silex.utils.config import KRONOS_HOME
+                env_path = KRONOS_HOME / ".env"
+                env_lines = []
+                if env_path.exists():
+                    env_lines = env_path.read_text(encoding="utf-8").splitlines()
                 
-                ui.render_step("Telegram Link", Text("✓ Identity Verified. Account Linked.", style="bold white", justify="center"))
+                # Replace existing token or append
+                new_lines = [line for line in env_lines if not line.startswith("TELEGRAM_BOT_TOKEN=")]
+                new_lines.append(f"TELEGRAM_BOT_TOKEN={bot_token}")
+                env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+
+                ui.render_step("Telegram Link", "✓ Identity Verified. Account Linked and .env updated.")
                 await asyncio.sleep(1.5)
             except Exception as e:
-                ui.render_step("Telegram Link", Text(f"Pairing failed: {str(e)}", style="bold red", justify="center"))
+                ui.render_step("Telegram Link", f"Pairing failed: {e}")
                 ui.prompt("Press Enter to skip")
+
+    # 4.2. Search Configuration
+    search_idx = ui.prompt_choice(
+        "Search Setup",
+        ["Keep using free DuckDuckGo (zero config)", "Configure paid Search APIs (Tavily, Brave)"],
+        default_idx=0,
+        subtitle="Would you like to set up high-reliability Search APIs for internet searches?",
+    )
+    
+    if search_idx == 1:
+        prov_idx = ui.prompt_choice(
+            "Search API Provider",
+            ["Configure Tavily API (Agent-optimized search)", "Configure Brave Search API", "Configure Both (Tavily + Brave)"],
+            default_idx=0,
+            subtitle="Choose which Search API you want to configure:",
+        )
+        
+        if prov_idx in (0, 2):
+            ui.render_step("Search Setup", "Configure Tavily API.", subtitle="Enter your Tavily API Key (or press enter to skip)")
+            tavily_key = ui.prompt("Tavily API Key", password=True).strip()
+            if tavily_key:
+                store.set_provider_secret("tavily", tavily_key)
+                ui.render_step("Search Setup", "✓ Tavily API Key saved.")
+                await asyncio.sleep(0.8)
+                
+        if prov_idx in (1, 2):
+            ui.render_step("Search Setup", "Configure Brave Search API.", subtitle="Enter your Brave Search API Key (or press enter to skip)")
+            brave_key = ui.prompt("Brave Search API Key", password=True).strip()
+            if brave_key:
+                store.set_provider_secret("brave", brave_key)
+                ui.render_step("Search Setup", "✓ Brave Search API Key saved.")
+                await asyncio.sleep(0.8)
+
+    if onboard:
+        mcp_idx = ui.prompt_choice(
+            "MCP servers",
+            [
+                "Skip for now (configure later with kronos mcp add)",
+                "Enable filesystem MCP (read-only workspace)",
+                "Enable fetch MCP",
+                "Enable both filesystem + fetch",
+            ],
+            default_idx=0,
+            subtitle="Optional Model Context Protocol integrations",
+        )
+        if mcp_idx in (1, 3):
+            _onboard_enable_mcp_preset(ui, "filesystem")
+        if mcp_idx in (2, 3):
+            _onboard_enable_mcp_preset(ui, "fetch")
+
+    # 4.5. Configure Agent Persona
+    ui.render_step("Configure Agent Persona", "Choose the identity and name of your local agent.")
+    agent_name_input = ui.prompt("Name your specific agent instance (Default: Kronos)", default="Kronos").strip()
+    
+    from silex.utils.config import KRONOS_PERSONA
+    import yaml
+    
+    persona_data = {
+        "agent_name": "Kronos",
+        "engine_name": "SILEX",
+        "primary_brand": "Kronos (λ)",
+        "personality_archetype": "Sovereign CLI Development Engine",
+        "tone_modifiers": [
+            "Direct, sharp, and technically flawless.",
+            "Gives raw engineering facts, completely avoiding polite fluff."
+        ],
+        "custom_greeting": "🧠 SILEX memory core active. Kronos CLI operational. Systems are 100% green."
+    }
+    
+    if KRONOS_PERSONA.exists():
+        try:
+            with open(KRONOS_PERSONA, "r", encoding="utf-8") as f:
+                loaded = yaml.safe_load(f)
+                if isinstance(loaded, dict):
+                    persona_data.update(loaded)
+        except Exception:
+            pass
+            
+    if agent_name_input:
+        persona_data["agent_name"] = agent_name_input
+        
+    try:
+        with open(KRONOS_PERSONA, "w", encoding="utf-8") as f:
+            yaml.safe_dump(persona_data, f, sort_keys=False, allow_unicode=True)
+    except Exception as e:
+        logging.getLogger("kronos.cli").error("Failed to save persona name in setup: %s", e)
 
     # 5. Finalize
     settings_payload = {
@@ -209,38 +572,63 @@ async def run_interactive_setup() -> None:
         "fast_model": defaults["fast_model"],
         "reasoning_model": defaults["reasoning_model"],
     }
-    
+
     if custom_base_url:
         settings_payload["base_url"] = custom_base_url
     if custom_label:
         settings_payload["custom_label"] = custom_label
 
     store.save_settings(settings_payload)
-    
-    ui.render_step(
-        "Activation Complete", 
-        Text("VYN cognitive core is now active.", justify="center"),
-        subtitle="You can now run 'aria web' or 'aria telegram run'"
-    )
-    
-    # Windows PATH check (Legacy)
-    if os.name == "nt":
-        import shutil
-        import sys
-        if not shutil.which("aria"):
-            Path(sys.executable).parent / "Scripts"
-            from rich.panel import Panel
-            ui.console.print(Panel(
-                Text(f"⚠️  'aria' is not on your PATH.\nFallback: {sys.executable} -m scripts.cli web", justify="center"),
-                border_style="yellow"
-            ))
-            
+
+    if onboard:
+        ui.render_step(
+            "You're ready",
+            "Next steps:\n\n"
+            "  kronos              — interactive terminal agent\n"
+            "  kronos telegram run — messaging bot (if paired)\n"
+            "  kronos skills list  — browse installed skills\n"
+            "  kronos mcp list     — MCP server status",
+            subtitle="Run kronos doctor --ping anytime to verify connectivity",
+        )
+    else:
+        greeting = persona_data.get("custom_greeting", "🧠 SILEX memory core active. Kronos CLI operational. Systems are 100% green.")
+        ui.render_step(
+            "Activation Complete",
+            f"Kronos cognitive core is now active.\n\n  {greeting}",
+            subtitle="Run 'kronos onboard' for the full first-run path, or 'kronos' to start",
+        )
     ui.prompt("Press Enter to exit")
     ui.clear()
 
 
+def _onboard_enable_mcp_preset(ui, preset_name: str) -> None:
+    """Write mcp.yaml preset and run a connectivity test."""
+    from silex.mcp.presets import get_preset
+    from silex.mcp.config import write_server
+    from silex.mcp.manager import get_mcp_manager
+
+    preset = get_preset(preset_name)
+    if not preset:
+        ui.render_step("MCP", f"Unknown preset: {preset_name}")
+        return
+    preset = dict(preset)
+    preset["enabled"] = True
+    write_server(preset_name, preset)
+    ui.render_step("MCP", f"Testing {preset_name} MCP server...")
+    ok, msg = asyncio.run(get_mcp_manager().test_server(preset_name))
+    status = "✓" if ok else "✗"
+    ui.render_step("MCP", f"{status} {preset_name}: {msg}")
+
+
+def run_onboard() -> None:
+    asyncio.run(run_interactive_setup(onboard=True))
+
+
 def run_setup() -> None:
+    print("Tip: use 'kronos onboard' for the full first-run wizard (provider, skills, Telegram, MCP).")
     asyncio.run(run_interactive_setup())
+
+
 
 
 def run_doctor(*, ping: bool = False) -> None:
@@ -252,21 +640,58 @@ def run_doctor(*, ping: bool = False) -> None:
     if status['provider'] == 'custom':
         provider_label = f"Custom ({settings.get('custom_label', 'Unknown')})"
 
-    print("\nVYN doctor\n")
+    print("\nKronos doctor\n")
     print(f"Setup complete: {status['setup_completed']}")
     print(f"Provider: {provider_label}")
     print(f"Model: {status['model']}")
     print(f"Provider key configured: {status['provider_configured']}")
     print(f"Web API key configured: {status['web_api_key_configured']}")
+    
+    from silex.utils.config import get_search_secret
+    has_tavily = bool(get_search_secret("tavily", settings_store=store))
+    has_brave = bool(get_search_secret("brave", settings_store=store))
+    print(f"Tavily Search API Key configured: {has_tavily}")
+    print(f"Brave Search API Key configured: {has_brave}")
+    
     print(f"Paired Telegram users: {status['paired_telegram_users']}")
     print(f"Approvals required: {settings.get('security', {}).get('require_tool_approvals', True)}")
     print(f"Browser actions enabled: {browser_actions_enabled()}")
-    print(f"Terminal execution enabled: {terminal_execution_enabled()}")
-    print(f"Direct code apply enabled: {code_apply_enabled()}")
+    terminal_enabled = terminal_execution_enabled()
+    code_enabled = code_apply_enabled()
+    print(f"Terminal execution enabled: {terminal_enabled}")
+    print(f"Direct code apply enabled: {code_enabled}")
+
+    import os
+    public_mode = os.environ.get("TELEGRAM_PUBLIC_MODE", "false").lower() == "true"
+    print(f"Telegram Public Mode: {public_mode}")
+    
+    warnings = []
+    if public_mode and (terminal_enabled or code_enabled):
+        warnings.append("⚠️ RISKY CONFIG: Telegram Public Mode is ON while Terminal/Code Apply is enabled. Unpaired users could execute arbitrary code!")
+    if not settings.get('security', {}).get('require_tool_approvals', True):
+        warnings.append("⚠️ RISKY CONFIG: require_tool_approvals is FALSE. The agent can take irreversible actions without operator consent.")
+        
+    if warnings:
+        print("\n--- SECURITY WARNINGS ---")
+        for w in warnings:
+            print(w)
+        print("-------------------------\n")
+
+    try:
+        from silex.mcp.manager import get_mcp_manager
+        from silex.mcp.config import load_mcp_config
+
+        mcp_cfg = load_mcp_config()
+        enabled = [n for n, s in mcp_cfg.servers.items() if s.get("enabled", True)]
+        print(f"MCP servers configured: {len(mcp_cfg.servers)} ({len(enabled)} enabled)")
+        for line in get_mcp_manager().status_report():
+            print(line)
+    except Exception as exc:
+        print(f"MCP status unavailable: {exc}")
     
     warnings = []
     if os.name == "nt":
-        warnings.append("Windows detected: ~/.vyn/secrets.json has no OS-level file permission protection. (Prefer Env Vars)")
+        warnings.append("Windows detected: ~/.kronos/secrets.json has no OS-level file permission protection. (Prefer Env Vars)")
 
     if warnings:
         print("\nWarnings:")
@@ -275,8 +700,8 @@ def run_doctor(*, ping: bool = False) -> None:
 
     if ping:
         import asyncio
-        from aria.llm.provider_test import ping_provider
-        from aria.utils.config import get_provider_secret
+        from silex.llm.provider_test import ping_provider
+        from silex.utils.config import get_provider_secret
 
         provider = str(settings.get("provider", "") or status.get("provider") or "gemini").strip()
         model = settings.get("model")
@@ -289,7 +714,7 @@ def run_doctor(*, ping: bool = False) -> None:
             print(f"  [{'ok' if result.get('ok') else 'fail'}] {result.get('message')}")
 
 def run_models() -> None:
-    print("\nVYN supported providers\n")
+    print("\nKronos supported providers\n")
     for provider in list_providers():
         print(f"{provider['label']} ({provider['id']})")
         for model in provider["models"]:
@@ -298,39 +723,52 @@ def run_models() -> None:
         print()
 
 
-def run_web() -> None:
-    import webbrowser
-    import json
-    import aria
-    from aria.utils.config import VYN_DAEMON_LOCK
-
-    package_dir = Path(aria.__file__).parent
-    web_dist = package_dir / "web_dist" / "index.html"
-    if not web_dist.exists():
-        print("Web dashboard missing. Run 'pip install --upgrade openyfai-vyn'.")
-        return
-
-    # Duplicate Process Check
-    lock_path = VYN_DAEMON_LOCK
-    if lock_path.exists():
-        try:
-            lock_data = json.loads(lock_path.read_text(encoding="utf-8").strip())
-            pid = lock_data.get("pid")
-            if pid:
-                os.kill(pid, 0)
-                print(f"\n⚡ VYN is already running (PID {pid}). Opening dashboard...")
-                webbrowser.open(f"http://{get_web_host()}:{get_web_port()}")
-                return
-        except OSError:
-            pass
-
-    from scripts import web_server
-    uvicorn.run(web_server.app, host=get_web_host(), port=get_web_port())
-
-
 def run_telegram() -> None:
-    from scripts.telegram_bot import main as telegram_main
-    telegram_main()
+    from silex.adapters.telegram import TelegramAdapter
+    TelegramAdapter().run()
+
+
+def run_discord() -> None:
+    from silex.adapters.discord import DiscordAdapter
+    DiscordAdapter().run()
+
+
+def _run_export_trajectories(args) -> None:
+    """Async wrapper for trajectory export called from CLI."""
+    import asyncio
+    from pathlib import Path
+    from silex.storage.database import Database
+    from silex.utils.config import SILEX_DB
+    from silex.autonomy.export import export_trajectories
+
+    fmt    = getattr(args, "format", "grpo")
+    out    = getattr(args, "output", None)
+    s_only = getattr(args, "success_only", False)
+    since  = getattr(args, "since", None)
+    until  = getattr(args, "until", None)
+    max_t  = getattr(args, "max_traj", 10_000)
+
+    async def _run() -> None:
+        db = Database(str(SILEX_DB))
+        await db.connect()
+        try:
+            records, path = await export_trajectories(
+                db,
+                format=fmt,
+                output_path=Path(out) if out else None,
+                success_only=s_only,
+                since=since,
+                until=until,
+                max_trajectories=max_t,
+            )
+            if path:
+                print(f"\n✅  Exported {len(records)} trajectories ({fmt.upper()}) → {path}")
+            else:
+                print("\n⚠️  No trajectories matched the filter criteria.")
+        finally:
+            await db.close()
+
+    asyncio.run(_run())
 
 
 def generate_pair_code() -> None:
@@ -339,22 +777,183 @@ def generate_pair_code() -> None:
     print(f"\nTelegram pairing code: {code}")
 
 
-def run_start() -> None:
-    import sys
-    import subprocess
-    if sys.platform == "win32":
-        print("Use 'vyn web' on Windows.")
-        return
-    subprocess.Popen([sys.executable, "-m", "scripts.cli", "web"], start_new_session=True)
+def run_skills(command: str, name: str | None = None) -> None:
+    from silex.plugins.registry import get_registry
+    from silex.core.skills import SkillLoader
 
+    registry = get_registry()
+    if command == "list":
+        entries = registry.get_all(type_filter="skill")
+        print("\nKronos skills\n")
+        print(registry.format_list(entries))
+        loader = SkillLoader()
+        count = loader.load_all()
+        print(f"\nLoaded locally: {count} skill(s)")
+    elif command == "search":
+        results = registry.search(name or "", type_filter="skill")
+        print(registry.format_list(results))
+    elif command == "install":
+        ok, msg = registry.install(name or "")
+        print(msg if ok else f"Failed: {msg}")
+    elif command == "reload":
+        loader = SkillLoader()
+        count = loader.load_all()
+        print(f"Reloaded {count} skill(s) from ~/.kronos/skills/")
+
+
+def run_mcp(command: str, name: str | None = None, **kwargs) -> None:
+    from silex.mcp.config import load_mcp_config, write_server, set_server_enabled
+    from silex.mcp.presets import get_preset
+    from silex.mcp.manager import get_mcp_manager
+
+    mgr = get_mcp_manager()
+    if command == "list":
+        cfg = load_mcp_config()
+        print("\nMCP servers (~/.kronos/config/mcp.yaml)\n")
+        if not cfg.servers:
+            print("  (none — run: kronos mcp add filesystem --preset filesystem)")
+        for srv_name, srv in cfg.servers.items():
+            state = "enabled" if srv.get("enabled", True) else "disabled"
+            desc = srv.get("description", "")
+            print(f"  {srv_name}: {state} — {desc}")
+        print()
+        for line in mgr.status_report():
+            print(line)
+    elif command == "add":
+        preset = kwargs.get("preset")
+        cmd = kwargs.get("command")
+        args = kwargs.get("args") or []
+        if preset:
+            preset_cfg = get_preset(preset)
+            if not preset_cfg:
+                print(f"Unknown preset: {preset}")
+                return
+            write_server(name or preset, dict(preset_cfg))
+            print(f"Added MCP server '{name or preset}' from preset '{preset}'")
+        elif cmd:
+            write_server(name or "custom", {"command": cmd, "args": args, "enabled": False})
+            print(f"Added MCP server '{name or 'custom'}'")
+        else:
+            print("Use --preset or --command")
+    elif command == "enable":
+        if set_server_enabled(name or "", True):
+            print(f"Enabled MCP server '{name}'")
+        else:
+            print(f"Server '{name}' not found")
+    elif command == "disable":
+        if set_server_enabled(name or "", False):
+            print(f"Disabled MCP server '{name}'")
+        else:
+            print(f"Server '{name}' not found")
+    elif command == "test":
+        ok, msg = asyncio.run(mgr.test_server(name or ""))
+        print(f"[{'ok' if ok else 'fail'}] {msg}")
+    elif command == "tools":
+        tools = asyncio.run(mgr.discover_tools())
+        server_filter = kwargs.get("server")
+        for tool in tools:
+            if server_filter and tool.server_name != server_filter:
+                continue
+            print(f"  {tool.name}: {tool.description[:80]}")
+
+
+def run_usage() -> None:
+    from silex.storage.database import Database
+    from silex.runtime.usage import UsageTracker
+    from silex.utils.config import SILEX_DB
+    
+    async def _run():
+        db = Database(str(SILEX_DB))
+        await db.connect()
+        try:
+            tracker = UsageTracker(db)
+            summary = await tracker.summary()
+            
+            totals = summary.get("totals", {})
+            models = summary.get("models", [])
+            
+            print("\n📊 Usage & Cost Report\n")
+            print(f"Total Requests: {totals.get('requests', 0)}")
+            print(f"Total Tokens In: {totals.get('input_tokens', 0):,}")
+            print(f"Total Tokens Out: {totals.get('output_tokens', 0):,}")
+            print(f"Estimated Cost: ${totals.get('estimated_cost_usd', 0.0):.4f}\n")
+            
+            if models:
+                print("Top Models:")
+                for m in models:
+                    print(f"  {m['model']} (${m.get('estimated_cost_usd', 0.0):.4f})")
+            print()
+        finally:
+            await db.close()
+            
+    asyncio.run(_run())
+
+def run_backup(command: str, output: str) -> None:
+    if command == "export":
+        from silex.ops.backup import export_backup
+        export_backup(output)
+    else:
+        print("Usage: kronos backup export [--output filename.zip]")
+
+def run_migrate(command: str, source: str, path: str | None, dry_run: bool) -> None:
+    if source == "hermes":
+        from silex.migrate.hermes import scan_hermes, import_hermes
+        if command == "scan":
+            report = scan_hermes(path)
+            print("Hermes Migration Scan Report:")
+            import json
+            print(json.dumps(report, indent=2))
+        elif command == "import":
+            logs = import_hermes(path, dry_run=dry_run)
+            print("\n".join(logs))
+    elif source == "openclaw":
+        from silex.migrate.openclaw import scan_openclaw, import_openclaw
+        if command == "scan":
+            report = scan_openclaw(path)
+            print("OpenClaw Migration Scan Report:")
+            import json
+            print(json.dumps(report, indent=2))
+        elif command == "import":
+            logs = import_openclaw(path, dry_run=dry_run)
+            print("\n".join(logs))
+    else:
+        print("Unknown source for migration.")
+
+def run_start() -> None:
+    import subprocess
+    import sys
+    import os
+    import json
+    from silex.utils.config import KRONOS_DAEMON_LOCK
+    
+    if KRONOS_DAEMON_LOCK.exists():
+        try:
+            lock_data = json.loads(KRONOS_DAEMON_LOCK.read_text(encoding="utf-8").strip())
+            pid = lock_data.get("pid")
+            if pid:
+                os.kill(pid, 0)
+                print(f"Kronos daemon is already running (PID {pid}).")
+                return
+        except Exception:
+            pass
+
+    print("Starting Kronos daemon in the background...")
+    
+    if os.name == 'nt':
+        CREATE_NO_WINDOW = 0x08000000
+        subprocess.Popen([sys.executable, sys.argv[0], "daemon"], creationflags=CREATE_NO_WINDOW)
+    else:
+        subprocess.Popen([sys.executable, sys.argv[0], "daemon"], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+    print("Daemon started.")
 
 def run_stop() -> None:
     import json
     import signal
-    from aria.utils.config import VYN_DAEMON_LOCK
-    lock_path = VYN_DAEMON_LOCK
+    from silex.utils.config import KRONOS_DAEMON_LOCK
+    lock_path = KRONOS_DAEMON_LOCK
     if not lock_path.exists():
-        print("VYN is not running (no daemon.lock found).")
+        print("Kronos is not running (no daemon.lock found).")
         return
     try:
         lock_data = json.loads(lock_path.read_text(encoding="utf-8").strip())
@@ -373,29 +972,146 @@ def run_stop() -> None:
 
     try:
         os.kill(pid, signal.SIGTERM)
-        print(f"Stopped VYN (PID {pid}).")
+        print(f"Stopped Kronos (PID {pid}).")
     except OSError as e:
-        print(f"Failed to stop VYN: {e}")
+        print(f"Failed to stop Kronos: {e}")
     lock_path.unlink(missing_ok=True)
 
 
 def run_proposals(command: str, proposal_id: str | None = None) -> None:
-    from aria.storage.database import Database
-    from aria.core.meta_reasoning import MetaReasoningEngine
-    from aria.utils.config import VYN_DB
+    from silex.storage.database import Database
+    from silex.core.meta_reasoning import MetaReasoningEngine
+    from silex.utils.config import SILEX_DB
 
     async def _run():
-        db = Database(str(VYN_DB))
+        db = Database(str(SILEX_DB))
         await db.connect()
-        engine = MetaReasoningEngine(None, db) # type: ignore
-        if command == "list":
-            proposals = await engine.get_pending_proposals()
-            for p in proposals:
-                print(f"{p.id[:8]} {p.target_system} {p.description}")
-        elif command in {"approve", "reject"}:
-            await engine.update_status(proposal_id, command + "d") # type: ignore
+        try:
+            engine = MetaReasoningEngine(None, db) # type: ignore
+            if command == "list":
+                proposals = await engine.get_pending_proposals()
+                for p in proposals:
+                    print(f"{p.id[:8]} {p.target_system} {p.description}")
+            elif command in {"approve", "reject"}:
+                await engine.update_status(proposal_id, command + "d") # type: ignore
+        finally:
+            await db.close()
     asyncio.run(_run())
 
+
+def run_web() -> None:
+    import subprocess
+    import sys
+    import os
+    from silex.utils.config import PROJECT_ROOT
+    
+    dashboard_path = PROJECT_ROOT / "kronos-dashboard"
+    if not dashboard_path.exists():
+        print("Dashboard not found. Run the setup or check installation.")
+        return
+        
+    print("Starting Kronos Dashboard (Backend + Frontend)...")
+    api_proc = None
+    ui_proc = None
+    try:
+        api_proc = subprocess.Popen([sys.executable, str(PROJECT_ROOT / "scripts" / "dashboard_api.py")])
+        npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
+        ui_proc = subprocess.Popen([npm_cmd, "run", "dev"], cwd=str(dashboard_path))
+        
+        print("\n[+] Dashboard is running! Press Ctrl+C to stop.")
+        ui_proc.wait()
+    except KeyboardInterrupt:
+        print("\nStopping dashboard...")
+    finally:
+        if api_proc: api_proc.terminate()
+        if ui_proc: ui_proc.terminate()
+
+
+def run_daemon_status() -> None:
+    import json
+    import os
+    from silex.utils.config import KRONOS_DAEMON_LOCK
+    lock_path = KRONOS_DAEMON_LOCK
+    if not lock_path.exists():
+        print("Kronos daemon is NOT running.")
+        return
+    try:
+        lock_data = json.loads(lock_path.read_text(encoding="utf-8").strip())
+        pid = lock_data.get("pid")
+        if pid:
+            os.kill(pid, 0)
+            print(f"Kronos daemon is RUNNING (PID {pid}).")
+            return
+    except OSError:
+        pass
+    except Exception:
+        pass
+    print("Kronos daemon is NOT running (stale lockfile).")
+    lock_path.unlink(missing_ok=True)
+
+def run_daemon_logs() -> None:
+    from silex.utils.config import KRONOS_DAEMON_LOG
+    import subprocess
+    import os
+    if not KRONOS_DAEMON_LOG.exists():
+        print("No daemon logs found.")
+        return
+    print(f"Tailing {KRONOS_DAEMON_LOG}...")
+    if os.name == "nt":
+        subprocess.run(["powershell", "-c", f"Get-Content '{KRONOS_DAEMON_LOG}' -Wait"])
+    else:
+        subprocess.run(["tail", "-f", str(KRONOS_DAEMON_LOG)])
+
+def run_daemon_foreground() -> None:
+    import json
+    import os
+    from silex.utils.config import KRONOS_DAEMON_LOCK
+    lock_path = KRONOS_DAEMON_LOCK
+    if lock_path.exists():
+        try:
+            lock_data = json.loads(lock_path.read_text(encoding="utf-8").strip())
+            pid = lock_data.get("pid")
+            if pid:
+                os.kill(pid, 0)
+                print(f"Kronos daemon is already running (PID {pid}).")
+                return
+        except OSError:
+            lock_path.unlink(missing_ok=True)
+        except Exception:
+            lock_path.unlink(missing_ok=True)
+            
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path.write_text(json.dumps({"pid": os.getpid()}), encoding="utf-8")
+
+    def setup_daemon_logging():
+        from silex.utils.config import KRONOS_DAEMON_LOG
+        import os
+        if KRONOS_DAEMON_LOG.exists() and KRONOS_DAEMON_LOG.stat().st_size > 10 * 1024 * 1024:
+            for i in range(2, 0, -1):
+                old = KRONOS_DAEMON_LOG.with_name(f"daemon.log.{i}")
+                new = KRONOS_DAEMON_LOG.with_name(f"daemon.log.{i+1}")
+                if old.exists():
+                    try:
+                        old.replace(new)
+                    except OSError:
+                        pass
+            try:
+                KRONOS_DAEMON_LOG.replace(KRONOS_DAEMON_LOG.with_name("daemon.log.1"))
+            except OSError:
+                pass
+        log_file = open(KRONOS_DAEMON_LOG, "a", buffering=1, encoding="utf-8")
+        try:
+            os.dup2(log_file.fileno(), 1)
+            os.dup2(log_file.fileno(), 2)
+        except Exception:
+            pass
+    
+    setup_daemon_logging()
+    try:
+        from scripts.daemon import main as daemon_main
+        daemon_main()
+    finally:
+        lock_path.unlink(missing_ok=True)
 
 def main() -> None:
     parser = build_parser()
@@ -406,75 +1122,65 @@ def main() -> None:
         run_main()
         return
 
-    if args.command == "setup":
-        run_setup()
+    if args.command == "init":
+        run_onboard()
     elif args.command == "doctor":
         run_doctor(ping=getattr(args, "ping", False))
     elif args.command == "models":
         run_models()
     elif args.command == "web":
         run_web()
-    elif args.command == "telegram":
-        if args.telegram_command == "pair":
-            generate_pair_code()
+    elif args.command == "usage":
+        run_usage()
+    elif args.command == "daemon":
+        if args.daemon_command == "start":
+            run_start()
+        elif args.daemon_command == "stop":
+            run_stop()
+        elif args.daemon_command == "status":
+            run_daemon_status()
+        elif args.daemon_command == "logs":
+            run_daemon_logs()
+        elif args.daemon_command == "run":
+            run_daemon_foreground()
         else:
-            run_telegram()
-    elif args.command == "start":
-        run_start()
-    elif args.command == "stop":
-        run_stop()
+            print("Unknown daemon command")
+    elif args.command == "data":
+        if args.data_command == "backup":
+            run_backup("export", getattr(args, "output", "kronos-backup.zip"))
+        elif args.data_command == "export":
+            _run_export_trajectories(args)
+        elif args.data_command == "migrate":
+            if getattr(args, "scan_only", False):
+                run_migrate("scan", getattr(args, "source", ""), getattr(args, "path", None), True)
+            else:
+                run_migrate("import", getattr(args, "source", ""), getattr(args, "path", None), getattr(args, "dry_run", True))
+        else:
+            print("Unknown data command")
+    elif args.command == "channels":
+        if args.channel_app == "telegram":
+            if getattr(args, "channel_cmd", None) == "pair":
+                generate_pair_code()
+            else:
+                run_telegram()
+        elif args.channel_app == "discord":
+            run_discord()
     elif args.command == "proposals":
         run_proposals(getattr(args, "proposals_command", "list"), getattr(args, "proposal_id", None))
-    elif args.command == "daemon":
-        import json
-        import os
-        from aria.utils.config import VYN_DAEMON_LOCK
-        lock_path = VYN_DAEMON_LOCK
-        if lock_path.exists():
-            try:
-                lock_data = json.loads(lock_path.read_text(encoding="utf-8").strip())
-                pid = lock_data.get("pid")
-                if pid:
-                    os.kill(pid, 0)
-                    print(f"VYN daemon is already running (PID {pid}).")
-                    return
-            except OSError:
-                lock_path.unlink(missing_ok=True)
-            except Exception:
-                lock_path.unlink(missing_ok=True)
-                
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_path.write_text(json.dumps({"pid": os.getpid()}), encoding="utf-8")
-
-        def setup_daemon_logging():
-            from aria.utils.config import VYN_DAEMON_LOG
-            import os
-            if VYN_DAEMON_LOG.exists() and VYN_DAEMON_LOG.stat().st_size > 10 * 1024 * 1024:
-                for i in range(2, 0, -1):
-                    old = VYN_DAEMON_LOG.with_name(f"daemon.log.{i}")
-                    new = VYN_DAEMON_LOG.with_name(f"daemon.log.{i+1}")
-                    if old.exists():
-                        try:
-                            old.replace(new)
-                        except OSError:
-                            pass
-                try:
-                    VYN_DAEMON_LOG.replace(VYN_DAEMON_LOG.with_name("daemon.log.1"))
-                except OSError:
-                    pass
-            log_file = open(VYN_DAEMON_LOG, "a", buffering=1, encoding="utf-8")
-            try:
-                os.dup2(log_file.fileno(), 1)
-                os.dup2(log_file.fileno(), 2)
-            except Exception:
-                pass
-        
-        setup_daemon_logging()
-        try:
-            from scripts.daemon import main as daemon_main
-            daemon_main()
-        finally:
-            lock_path.unlink(missing_ok=True)
+    elif args.command == "skills":
+        run_skills(
+            getattr(args, "skills_command", "list") or "list",
+            getattr(args, "name", None) or getattr(args, "query", None),
+        )
+    elif args.command == "mcp":
+        run_mcp(
+            getattr(args, "mcp_command", "list") or "list",
+            getattr(args, "name", None),
+            preset=getattr(args, "preset", None),
+            command=getattr(args, "mcp_exec", None),
+            args=getattr(args, "mcp_args", None),
+            server=getattr(args, "server", None),
+        )
 
 
 if __name__ == "__main__":

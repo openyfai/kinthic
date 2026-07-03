@@ -1,27 +1,31 @@
-# Beginner-Friendly Launch Issue Backlog
+# Launch Issue Backlog (Good First Issues)
 
-**Published on 2026-05-08.**  
-See the open issues [here on GitHub](https://github.com/openyfai/aria/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+Welcome to Kronos! If you are looking to contribute to the project during our launch window, the following 20 issues are great places to start. They are scoped to be approachable for new contributors.
 
-Seed these as `good first issue` items before public launch.
+## Tool & Plugin Ecosystem
+1. **[Tool] Jira MCP Integration**: Create an MCP preset for querying and updating Jira tickets.
+2. **[Tool] Slack Adapter**: Build an alternative to the Telegram adapter for Slack workspaces.
+3. **[Tool] AWS CLI Wrapper Tool**: Add a tool plugin that allows the agent to securely list EC2 instances.
+4. **[Provider] Groq Support**: Add a `plugins/providers/groq` preset for fast inference.
+5. **[Skill] Code Reviewer Pro**: Expand the bundled code_reviewer skill to specifically check for OWASP top 10 vulnerabilities.
 
-1. Add another Ollama model preset to the catalog.
-2. Add another Groq reasoning preset to the catalog.
-3. Add provider-specific key help text in onboarding.
-4. Improve onboarding field validation copy.
-5. Add copy-to-clipboard for Telegram pairing codes.
-6. Add empty-state illustrations for graph and operator views.
-7. Add provenance badges to graph nodes.
-8. Add a skill for changelog drafting.
-9. Add a skill for issue triage.
-10. Add a skill for repo release prep.
-11. Add more README screenshots and GIFs.
-12. Add Windows-specific install notes.
-13. Add Linux-specific install notes.
-14. Add macOS-specific install notes.
-15. Add more usage charts to the operator panel.
-16. Add a safe-mode preset in settings.
-17. Add a graph search input in the web UI.
-18. Add a Telegram troubleshooting guide.
-19. Add a docs page for provider environment variables.
-20. Add benchmark examples for new contributors.
+## Core Framework
+6. **[Memory] Prune TTL**: Implement a TTL (Time To Live) feature in the `sqlite` graph for ephemeral memories.
+7. **[Memory] Vector Fallback**: Add basic cosine similarity search using `sqlite-vss` for when keyword search fails.
+8. **[CLI] Colorful output**: Add `rich` syntax highlighting to `kronos doctor` output.
+9. **[CLI] Setup retry**: Allow users to retry entering their API key in `kronos onboard` if the validation ping fails.
+10. **[Router] Token Thresholds**: Allow configuring a max token threshold in SmartRouter before forcing the fallback model.
+
+## UI / UX (Telegram)
+11. **[UX] Typing Indicator**: Send a `sendChatAction(TYPING)` to Telegram while the agent is "thinking".
+12. **[UX] Markdown parsing**: Fix Telegram parse mode edge cases where nested markdown blocks cause API errors.
+13. **[UX] Pagination**: Add pagination to `/usage` command output if it exceeds message limits.
+14. **[UX] Inline Buttons**: Replace text-based `/approve` and `/reject` commands with Telegram InlineKeyboardButtons.
+15. **[UX] Goal Progress**: Send a periodic status message when a background goal takes longer than 5 minutes.
+
+## Documentation & Testing
+16. **[Docs] WSL2 Guide**: Write a detailed step-by-step guide for Windows users installing via WSL2.
+17. **[Docs] MCP Examples**: Document 3 complete examples of connecting to community MCP servers.
+18. **[Test] SQLite Graph**: Increase test coverage of edge creation and deletion in `silex.memory.graph`.
+19. **[Test] Telegram Mock**: Add a mocked update test for the Telegram rate limiter.
+20. **[Test] Migration Scripts**: Add more robust JSON5 parsing tests for the OpenClaw migration script.

@@ -1,0 +1,40 @@
+name: "anthropic"
+display_name: "Anthropic"
+env_vars:
+  - "ANTHROPIC_API_KEY"
+api_mode: "anthropic_native"
+description: "Anthropic Claude Models"
+signup_url: "https://console.anthropic.com/"
+fallback_models:
+  - id: "claude-sonnet-5"
+    label: "Claude Sonnet 5 (Fennec)"
+    tier: "fast"
+    supports_images: true
+    supports_structured_json: true
+    context_window: 1000000
+    recommended_for: "top-tier coding and speed"
+    estimated_cost: "high"
+  - id: "claude-opus-4.7"
+    label: "Claude Opus 4.7"
+    tier: "reasoning"
+    supports_images: true
+    supports_structured_json: true
+    context_window: 1000000
+    recommended_for: "hard analysis and judgment"
+    estimated_cost: "high"
+  - id: "claude-haiku-4.5"
+    label: "Claude Haiku 4.5"
+    tier: "fast"
+    supports_images: true
+    supports_structured_json: true
+    context_window: 1000000
+    recommended_for: "fast automation and categorization"
+    estimated_cost: "low"
+  - id: "claude-sonnet-4.6"
+    label: "Claude Sonnet 4.6"
+    tier: "fast"
+    supports_images: true
+    supports_structured_json: true
+    context_window: 1000000
+    recommended_for: "stable general reasoning"
+    estimated_cost: "medium"

@@ -1,12 +1,11 @@
 import pytest
-from pathlib import Path
-from aria.tools.code_editor import CodeEditorTool
-from aria.utils.config import VYN_BACKUPS, WORKSPACE_DIR, ensure_vyn_home
+from silex.tools.code_editor import CodeEditorTool
+from silex.utils.config import KRONOS_BACKUPS, WORKSPACE_DIR, ensure_kronos_home
 
 @pytest.mark.asyncio
 async def test_failsafe_backup_for_edits(tmp_path):
     # Ensure VYN HOME structures are created
-    ensure_vyn_home()
+    ensure_kronos_home()
 
     # Create a mock file in the workspace
     file_name = "test_failsafe_backup.txt"
@@ -25,7 +24,7 @@ async def test_failsafe_backup_for_edits(tmp_path):
     }
 
     # Verify backups directory exists
-    assert VYN_BACKUPS.exists()
+    assert KRONOS_BACKUPS.exists()
 
     # Apply the edit
     tool = CodeEditorTool()
@@ -36,8 +35,8 @@ async def test_failsafe_backup_for_edits(tmp_path):
     assert "edited line 1" in updated_content
     assert "original line 1" not in updated_content
 
-    # 2. Verify a backup file was created in VYN_BACKUPS
-    backups = list(VYN_BACKUPS.glob("test_failsafe_backup.txt_*.bak"))
+    # 2. Verify a backup file was created in KRONOS_BACKUPS
+    backups = list(KRONOS_BACKUPS.glob("test_failsafe_backup.txt_*.bak"))
     assert len(backups) >= 1
 
     # Get the latest backup file

@@ -1,7 +1,7 @@
 [project]
-name = "openyfai-vyn"
-version = "1.2.1"
-description = "VYN — local-first AI operator powered by the ARIA memory engine (OpenYF AI)."
+name = "openyfai-kronos"
+version = "1.0.0"
+description = "Kronos — local-first AI operator powered by the Silex memory engine (OpenYF AI)."
 readme = "README.md"
 license = {text = "AGPL-3.0-or-later"}
 requires-python = ">=3.11"
@@ -34,8 +34,6 @@ dependencies = [
     "python-telegram-bot>=21.0",
     "openai>=1.79.0",
     "anthropic>=0.52.0",
-    "fastapi>=0.111",
-    "uvicorn>=0.30",
     "playwright>=1.45",
     "playwright-stealth>=1.0",
     "html2text>=2024.2.26",
@@ -45,9 +43,14 @@ dependencies = [
     "watchdog>=4.0",
     "opentelemetry-api>=1.20.0",
     "opentelemetry-sdk>=1.20.0",
+    "psutil>=5.9.0",
 ]
 
 [project.optional-dependencies]
+mcp = [
+    "mcp>=1.0",
+    "pyyaml>=6.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
@@ -65,19 +68,29 @@ vector = [
 local = [
     "httpx>=0.27",
 ]
+voice = [
+    "faster-whisper>=1.0.0",
+    "sounddevice>=0.4.6",
+    "numpy>=1.24.0",
+    "pyttsx3>=2.90",
+]
+discord = [
+    "discord.py>=2.3",
+]
+
 
 
 [project.scripts]
-vyn = "scripts.cli:main"
-vyn-web = "scripts.cli:run_web"
-vyn-telegram = "scripts.telegram_bot:main"
+kronos = "scripts.cli:main"
+kronos-telegram = "scripts.telegram_bot:main"
+kronos-discord = "scripts.discord_bot:main"
 
 [project.urls]
-Homepage = "https://github.com/openyfai/vyn"
-Repository = "https://github.com/openyfai/vyn"
-Issues = "https://github.com/openyfai/vyn/issues"
-Changelog = "https://github.com/openyfai/vyn/blob/main/CHANGELOG.md"
-Documentation = "https://github.com/openyfai/vyn#readme"
+Homepage = "https://github.com/openyfai/kronos"
+Repository = "https://github.com/openyfai/kronos"
+Issues = "https://github.com/openyfai/kronos/issues"
+Changelog = "https://github.com/openyfai/kronos/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/openyfai/kronos#readme"
 
 [build-system]
 requires = ["setuptools>=75.0"]
@@ -88,20 +101,10 @@ include-package-data = true
 py-modules = []
 
 [tool.setuptools.package-data]
-# web_dist is populated by CI before the wheel is built (see .github/workflows/release.yml).
-# Patterns are explicit at every depth because setuptools **/* has known
-# recursion gaps on some versions when directory structures are deep.
-aria = [
-    "web_dist/*",
-    "web_dist/**/*",
-    "web_dist/**/**/*",
-    "web_dist/**/**/**/*",
-    "web_dist/**/**/**/**/*",
-]
 
 [tool.setuptools.packages.find]
-include = ["aria*", "scripts*"]
-exclude = ["aria-ui*", "tests*", "scratch*", "workspace*"]
+include = ["silex*", "scripts*", "plugins*"]
+exclude = ["kronos-ui*", "tests*", "scratch*", "workspace*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

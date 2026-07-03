@@ -1,0 +1,61 @@
+name: "gemini"
+display_name: "Google Gemini"
+env_vars:
+  - "GEMINI_API_KEY"
+api_mode: "gemini_native"
+aliases:
+  - "google"
+  - "google-gemini"
+description: "Google AI Studio Gemini Models"
+signup_url: "https://aistudio.google.com/"
+base_url: "https://generativelanguage.googleapis.com/v1beta"
+fallback_models:
+  - id: "gemini-2.5-flash"
+    label: "Gemini 2.5 Flash"
+    tier: "fast"
+    supports_images: true
+    supports_structured_json: true
+    context_window: 1000000
+    recommended_for: "default fast chat and lightweight tool planning"
+    estimated_cost: "low"
+  - id: "gemini-2.5-pro"
+    label: "Gemini 2.5 Pro"
+    tier: "reasoning"
+    supports_images: true
+    supports_structured_json: true
+    context_window: 1000000
+    recommended_for: "frontier reasoning and complex coding tasks"
+    estimated_cost: "medium"
+  - id: "gemini-2.0-flash"
+    label: "Gemini 2.0 Flash"
+    tier: "fast"
+    supports_images: true
+    supports_structured_json: true
+    context_window: 1000000
+    recommended_for: "low-latency interactive chat"
+    estimated_cost: "low"
+  - id: "gemini-2.0-pro-exp-02-05"
+    label: "Gemini 2.0 Pro Experimental"
+    tier: "reasoning"
+    supports_images: true
+    supports_structured_json: true
+    context_window: 2000000
+    recommended_for: "highest intelligence reasoning trials"
+    estimated_cost: "medium"
+  - id: "gemini-1.5-pro"
+    label: "Gemini 1.5 Pro"
+    tier: "reasoning"
+    supports_images: true
+    supports_structured_json: true
+    context_window: 2000000
+    recommended_for: "large context reasoning and stable tasks"
+    estimated_cost: "medium"
+  - id: "gemini-1.5-flash"
+    label: "Gemini 1.5 Flash"
+    tier: "fast"
+    supports_images: true
+    supports_structured_json: true
+    context_window: 1000000
+    recommended_for: "high-speed large context tasks"
+    estimated_cost: "low"
+

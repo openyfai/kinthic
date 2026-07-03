@@ -1,0 +1,172 @@
+version: "1.0"
+generated_at: "2026-06-27T00:00:00Z"
+entries:
+  - name: tell_joke
+    type: skill
+    version: "1.0.0"
+    description: Multi-step dry/sarcastic joke delivery workflow
+    tags: [bundled, humor]
+    trust_level: core
+    source: bundled
+    entry_file: tell_joke.md
+    installed: false
+
+  - name: repo_researcher
+    type: skill
+    version: "1.0.0"
+    description: Structured repository research and architecture summary
+    tags: [bundled, code, research]
+    trust_level: core
+    source: bundled
+    entry_file: repo_researcher.md
+    installed: false
+
+  - name: write_release_notes
+    type: skill
+    version: "1.0.0"
+    description: Generate release notes from git history and changelogs
+    tags: [bundled, writing]
+    trust_level: core
+    source: bundled
+    entry_file: write_release_notes.md
+    installed: false
+
+  - name: summarize_meeting
+    type: skill
+    version: "1.0.0"
+    description: Summarize meeting notes into action items and decisions
+    tags: [bundled, writing]
+    trust_level: core
+    source: bundled
+    entry_file: summarize_meeting.md
+    installed: false
+
+  - name: telegram_setup
+    type: skill
+    version: "1.0.0"
+    description: Pair Telegram bot, configure allowlist, and run daemon
+    tags: [bundled, telegram, messaging]
+    trust_level: core
+    source: bundled
+    entry_file: telegram_setup.md
+    installed: false
+
+  - name: daily_briefing
+    type: skill
+    version: "1.0.0"
+    description: Morning-style briefing template for goals, calendar, and news
+    tags: [bundled, productivity]
+    trust_level: core
+    source: bundled
+    entry_file: daily_briefing.md
+    installed: false
+
+  - name: repo_onboard
+    type: skill
+    version: "1.0.0"
+    description: First-run repository analysis and knowledge graph bootstrap
+    tags: [bundled, code, onboarding]
+    trust_level: core
+    source: bundled
+    entry_file: repo_onboard.md
+    installed: false
+
+  - name: mcp_filesystem
+    type: mcp_preset
+    version: "1.0.0"
+    description: Read-only filesystem MCP for workspace files
+    tags: [mcp, filesystem]
+    trust_level: core
+    source: bundled
+    preset: filesystem
+    installed: false
+
+  - name: mcp_fetch
+    type: mcp_preset
+    version: "1.0.0"
+    description: Fetch URL content via MCP server
+    tags: [mcp, network]
+    trust_level: core
+    source: bundled
+    preset: fetch
+    installed: false
+
+  - name: security_audit
+    type: skill
+    version: "1.0.0"
+    description: Workflow for auditing code for security vulnerabilities
+    tags: [bundled, security, code]
+    trust_level: core
+    source: bundled
+    entry_file: security_audit.md
+    installed: false
+
+  - name: code_reviewer
+    type: skill
+    version: "1.0.0"
+    description: Analyze code changes and PRs for best practices
+    tags: [bundled, review, code]
+    trust_level: core
+    source: bundled
+    entry_file: code_reviewer.md
+    installed: false
+
+  - name: triage_issues
+    type: skill
+    version: "1.0.0"
+    description: Triage GitHub issues and assign labels
+    tags: [bundled, planning, triage]
+    trust_level: core
+    source: bundled
+    entry_file: triage_issues.md
+    installed: false
+
+  - name: draft_blog_post
+    type: skill
+    version: "1.0.0"
+    description: Draft a well-structured technical blog post
+    tags: [bundled, writing, marketing]
+    trust_level: core
+    source: bundled
+    entry_file: draft_blog_post.md
+    installed: false
+
+  - name: generate_tests
+    type: skill
+    version: "1.0.0"
+    description: Write unit and integration tests using pytest
+    tags: [bundled, testing, code]
+    trust_level: core
+    source: bundled
+    entry_file: generate_tests.md
+    installed: false
+
+  - name: refactor_code
+    type: skill
+    version: "1.0.0"
+    description: Safely refactor code to improve maintainability
+    tags: [bundled, refactor, code]
+    trust_level: core
+    source: bundled
+    entry_file: refactor_code.md
+    installed: false
+
+  - name: analyze_logs
+    type: skill
+    version: "1.0.0"
+    description: Investigate stack traces and server error logs
+    tags: [bundled, debugging, ops]
+    trust_level: core
+    source: bundled
+    entry_file: analyze_logs.md
+    installed: false
+
+  - name: debug_error
+    type: skill
+    version: "1.0.0"
+    description: Root-cause and fix specific codebase errors
+    tags: [bundled, debugging, code]
+    trust_level: core
+    source: bundled
+    entry_file: debug_error.md
+    installed: false

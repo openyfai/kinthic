@@ -1,33 +1,38 @@
 version: '3.8'
 
 services:
-  aria-graph:
-    profiles:
-      - web
+  kronos-api:
     build: .
-    container_name: aria-graph
+    container_name: kronos-api
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/app/data
-      - ./.env:/app/.env
-      - ./skills:/app/skills
+      - kronos-data:/home/kronos/.kronos
     restart: unless-stopped
-    environment:
-      - ARIA_PROCESS_ROLE=web
-      - ARIA_WEB_HOST=0.0.0.0
-    command: python scripts/web_server.py
+    command: python -m uvicorn silex.api.server:app --host 0.0.0.0 --port 8000
 
-  aria-telegram:
+  kronos-dashboard:
+    build: 
+      context: ./kronos-dashboard
+      dockerfile: Dockerfile
+    container_name: kronos-dashboard
+    ports:
+      - "3000:3000"
+    depends_on:
+      - kronos-api
+    restart: unless-stopped
+    # Depending on how the dashboard is built, it might run via npm run start
+    command: npm run start
+
+  kronos-telegram:
     profiles:
       - telegram
     build: .
-    container_name: aria-telegram
+    container_name: kronos-telegram
     volumes:
-      - ./data:/app/data
-      - ./.env:/app/.env
-      - ./skills:/app/skills
+      - kronos-data:/home/kronos/.kronos
     restart: unless-stopped
-    environment:
-      - ARIA_PROCESS_ROLE=telegram
-    command: python scripts/telegram_bot.py
+    command: kronos telegram run
+
+volumes:
+  kronos-data:

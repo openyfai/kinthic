@@ -1,20 +1,35 @@
-# 30-Second Demo Script
+# Kronos Demo Video Script
 
-Positioning: **the local AI agent with a visible brain**
+**Target Length:** 3 Minutes
+**Goal:** Show the ease of installation, Telegram pairing, and the `/approve` loop.
 
-## Scene order
+## Scene 1: The One-Line Install
+**Visual:** A clean macOS/Ubuntu terminal.
+**Action:**
+1. User runs `curl -fsSL https://kronos.openyf.dev/install.sh | bash`
+2. Fast-forward through dependency installation (uv fetching packages).
+3. Success message: "Kronos installed. Run `kronos onboard` to begin."
 
-1. Open the protected or local web UI and show the setup gate or provider chooser.
-2. Choose a provider and model with approvals enabled.
-3. Paste this prompt:
-   `Analyze this repo and build a knowledge graph of the architecture. Then find one risk and ask before acting.`
-4. Cut to the monologue panel while ARIA reasons.
-5. Switch to the graph view as nodes appear.
-6. Show the operator panel with a pending approval and usage counters.
-7. End on the message: "Visible reasoning. Governed autonomy. Hackable skills."
+## Scene 2: Onboarding & Pairing
+**Visual:** Terminal on the left, Telegram Desktop on the right.
+**Action:**
+1. User types `kronos onboard`.
+2. Selects "Anthropic" and pastes an API key.
+3. Selects "Telegram" as the interface and pastes a Bot Token.
+4. The terminal displays a pairing code: `Pairing Code: 8492-4912`
+5. User switches to Telegram, opens the bot, and types `/pair 8492-4912`.
+6. Bot replies: "✅ Device paired successfully! You are now the operator."
+7. Terminal says "Daemon starting..."
 
-## Recording notes
+## Scene 3: The `/approve` Flow
+**Visual:** Full screen Telegram.
+**Action:**
+1. User sends: "Write a python script that prints hello world and save it to `hello.py`"
+2. Bot replies: "I've drafted the script. Requesting permission to write to `hello.py`."
+3. An Inline Keyboard appears with "✅ Approve" and "❌ Reject".
+4. User clicks "Approve".
+5. Bot replies: "Saved to `hello.py`!"
 
-- Keep the graph and operator panel visible for proof, not just chat text.
-- Use one deterministic repo and one deterministic prompt.
-- Capture a version with real screenshots or GIFs before public launch.
+## Scene 4: Conclusion
+**Visual:** Split screen, Telegram and the generated `hello.py` file.
+**Voiceover/Text:** "Kronos. The open-source cognitive agent that respects your boundaries. Try it today."

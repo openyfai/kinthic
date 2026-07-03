@@ -1,92 +1,74 @@
-name: Release to PyPI
+name: Release TUI Binaries
 
 on:
   push:
     tags:
-      - "v*"
-
-# OIDC Trusted Publishing — no PYPI_TOKEN secret needed.
-# Configure this repo in PyPI under: Project Settings → Publishing → Trusted Publishers.
-permissions:
-  contents: read
-  id-token: write
+      - 'v*'
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  build-ui:
+    name: Build TUI Binaries
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: node-linux-x64
+            outfile: kronos-ui-linux-x64
+          - os: macos-13
+            target: node-darwin-x64
+            outfile: kronos-ui-darwin-x64
+          - os: macos-latest
+            target: node-darwin-arm64
+            outfile: kronos-ui-darwin-arm64
 
     steps:
-      - name: Checkout code
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      # ── Node / UI build ────────────────────────────────────────────
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun Environment
+        uses: oven-sh/setup-bun@v1
         with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: aria-ui/package-lock.json
+          bun-version: latest
 
-      - name: Build Next.js UI
-        working-directory: aria-ui
-        # Add NEXT_PUBLIC_* build-time env vars here if needed, e.g.:
-        # env:
-        #   NEXT_PUBLIC_API_URL: ""
+      - name: Install Project Dependencies
         run: |
-          npm ci
-          npm run build
+          cd kronos-ink-ui
+          bun install
 
-      - name: Verify UI build output exists
+      - name: Compile Standalone UI Binary
         run: |
-          if [ ! -f aria-ui/out/index.html ]; then
-            echo "ERROR: aria-ui/out/index.html not found — Next.js build did not produce a static export."
-            echo "Check that next.config.ts has output: 'export' and the build succeeded."
-            exit 1
-          fi
-          echo "UI build verified. Files in aria-ui/out/:"
-          find aria-ui/out -type f | head -20
+          cd kronos-ink-ui
+          bun build --compile --minify --target=${{ matrix.target }} src/index.tsx --outfile dist/${{ matrix.outfile }}
 
-      - name: Copy built UI into package
-        run: |
-          # Ensure the destination exists (CI starts from a clean checkout,
-          # web_dist/ may only contain __init__.py from git, or nothing at all)
-          mkdir -p aria/web_dist
-          # Remove everything except __init__.py so stale files never persist
-          find aria/web_dist -mindepth 1 -maxdepth 1 ! -name '__init__.py' -exec rm -rf {} +
-          # Copy the static export
-          cp -r aria-ui/out/. aria/web_dist/
-          # Hard verification — wheel must have index.html or it's broken
-          if [ ! -f aria/web_dist/index.html ]; then
-            echo "ERROR: aria/web_dist/index.html missing after copy — aborting."
-            exit 1
-          fi
-          echo "web_dist contents (top level):"
-          ls -la aria/web_dist/
-
-      # ── Python build ───────────────────────────────────────────────
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          python-version: "3.12"
+          name: ${{ matrix.outfile }}
+          path: kronos-ink-ui/dist/${{ matrix.outfile }}
 
-      - name: Install build tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install build
+  publish-release:
+    name: Create GitHub Release
+    needs: build-ui
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
 
-      - name: Build Python wheel and sdist
-        run: python -m build
+      - name: Download Built Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-binaries/
+          merge-multiple: true
 
-      - name: Verify wheel contains UI assets
-        run: |
-          # Unzip the wheel and check that _next/static exists inside
-          WHEEL=$(ls dist/*.whl | head -1)
-          echo "Inspecting wheel: $WHEEL"
-          python -m zipfile -l "$WHEEL" | grep "web_dist/index.html" || {
-            echo "ERROR: web_dist/index.html not found inside the wheel. Distribution is broken."
-            exit 1
-          }
-          echo "Wheel verification passed."
-
-      - name: Publish to PyPI (Trusted Publisher / OIDC)
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Generate Release Notes & Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist-binaries/kronos-ui-linux-x64
+            dist-binaries/kronos-ui-darwin-x64
+            dist-binaries/kronos-ui-darwin-arm64
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

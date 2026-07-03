@@ -1,13 +1,13 @@
 # Launch Checklist
 
-This checklist is the pre-public-release gate for ARIA packaging.
+This checklist is the pre-public-release gate for Silex packaging.
 
 ## Product gates
 
 - [x] Fresh local install path documented for Python `>=3.12`.
 - [x] `pip install -e ".[full,dev]"` path documented.
-- [x] `aria setup` and `aria web` are part of the primary quickstart.
-- [x] Docker web path documents `.env`, `ARIA_WEB_HOST=0.0.0.0`, and `ARIA_WEB_API_KEY`.
+- [x] `silex setup` and `silex web` are part of the primary quickstart.
+- [x] Docker web path documents `.env`, `SILEX_WEB_HOST=0.0.0.0`, and `SILEX_WEB_API_KEY`.
 - [x] Web bootstrap includes an API key gate before protected setup calls.
 - [x] One flagship demo prompt is documented and wired into the empty chat state.
 
@@ -16,7 +16,7 @@ This checklist is the pre-public-release gate for ARIA packaging.
 - [x] README communicates safe defaults clearly.
 - [x] Security docs are linked from the README.
 - [x] Contribution docs are linked from the README.
-- [x] `aria doctor` warns about risky settings.
+- [x] `silex doctor` warns about risky settings.
 - [x] Telegram public mode is visibly flagged in operator-facing surfaces.
 
 ## Release gates

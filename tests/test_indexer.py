@@ -1,4 +1,4 @@
-from aria.memory.indexer import WorkspaceIndexer
+from silex.memory.indexer import WorkspaceIndexer
 
 
 class FakeVectorStore:

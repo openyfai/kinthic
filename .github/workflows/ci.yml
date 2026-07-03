@@ -22,7 +22,7 @@ jobs:
         run: ruff check .
       - name: Optional mypy
         continue-on-error: true
-        run: mypy aria scripts
+        run: mypy silex scripts
       - name: Run tests
         run: python -m pytest tests
       - name: Package build smoke test
@@ -32,24 +32,26 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: aria-ui
+        working-directory: kronos-ink-ui
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: aria-ui/package-lock.json
+          cache-dependency-path: kronos-ink-ui/package-lock.json
       - name: Install UI dependencies
         run: npm ci
-      - name: Lint UI
-        run: npm run lint
       - name: Build UI
         run: npm run build
+      - name: Typecheck UI
+        run: npm run typecheck
+      - name: Test UI reducer
+        run: npm test
 
   docker:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Build Docker image
-        run: docker build -t aria-ci .
+        run: docker build -t kronos-ci .

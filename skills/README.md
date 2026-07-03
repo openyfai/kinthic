@@ -1,8 +1,8 @@
-# VYN Skills
+# Kronos Skills
 
-Skills are the fastest way to extend VYN's capabilities.
+Skills are the fastest way to extend Kronos's capabilities.
 
-Drop a Markdown file into `~/.vyn/skills/`, restart VYN, and the agent can use that workflow guidance during reasoning.
+Drop a Markdown file into `~/.kronos/skills/`, restart Kronos, and the agent can use that workflow guidance during reasoning.
 
 This **`README.md` is contributor documentation only**—the loader skips files whose stem is `README`, so this page is never injected into the agent prompt as a skill.
 
@@ -39,5 +39,5 @@ When asked to research a repository:
 1. Copy one of the existing skills in your skills directory.
 2. Rename it for the workflow you want to add.
 3. Rewrite the title and numbered steps.
-4. Test it locally with `vyn` or `vyn web`.
+4. Test it locally with `kronos` or `kronos web`.
 5. Open a PR or use the `Skill request` issue template if you want feedback first.

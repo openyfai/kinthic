@@ -1,6 +1,6 @@
 # Repo Researcher
 
-Use this skill when the user asks ARIA to understand a codebase, explain architecture, or surface a risk before taking action.
+Use this skill when the user asks Silex to understand a codebase, explain architecture, or surface a risk before taking action.
 
 1. Start by identifying the main subsystems, entrypoints, and data flow.
 2. Summarize the architecture in simple language before diving into details.

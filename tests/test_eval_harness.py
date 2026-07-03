@@ -3,16 +3,21 @@ import pytest
 from unittest.mock import patch, AsyncMock
 from types import SimpleNamespace
 
-from aria.core.cognitive_loop import CognitiveLoop
-from aria.models.schemas import CognitiveResponse, ToolCall, ToolResult
-from aria.utils.config import WORKSPACE_DIR
+from silex.core.cognitive_loop import CognitiveLoop
+from silex.models.schemas import CognitiveResponse, ToolCall, ToolResult
+from silex.utils.config import WORKSPACE_DIR
 
 class FakeCritic:
     async def critique(self, **kwargs):
         return SimpleNamespace(
             is_acceptable=True,
-            scores=SimpleNamespace(accuracy=1.0, depth=1.0, honesty=1.0)
+            scores=SimpleNamespace(accuracy=1.0, depth=1.0, honesty=1.0),
+            feedback="Great work."
         )
+
+    @staticmethod
+    def geometric_score(accuracy: float, depth: float, honesty: float) -> float:
+        return (accuracy * depth * honesty) ** (1.0 / 3.0)
 
 class FakeToolUsingGemini:
     def __init__(self):
@@ -20,6 +25,14 @@ class FakeToolUsingGemini:
 
     def connect(self):
         return None
+
+    async def complete_json(self, *args, **kwargs):
+        from silex.core.taste import TasteResponse, TasteScores
+        return TasteResponse(
+            scores=TasteScores(simplicity=1.0, performance=1.0, robustness=1.0, security=1.0),
+            feedback="Tasteful design.",
+            is_tasteful=True,
+        )
 
     async def think(self, system_prompt, user_input, **kwargs):
         if "Fast Intent Router" in system_prompt:
@@ -68,8 +81,8 @@ class FakeToolUsingGemini:
         else:
             # Pass 2: Final response incorporating tool results
             return CognitiveResponse(
-                reasoning="Based on the search results, the latest version is 1.2.1.",
-                response="The latest version is 1.2.1.",
+                reasoning="Based on the search results, the latest version is 1.0.0.",
+                response="The latest version is 1.0.0.",
                 new_memories=[],
                 goal_updates=[],
                 self_reflection="No issues.",
@@ -81,7 +94,7 @@ class FakeToolUsingGemini:
                 hypotheses=[],
                 hypothesis_resolutions=[],
                 tool_calls=[],
-                working_scratchpad="Search finished. Returning 1.2.1."
+                working_scratchpad="Search finished. Returning 1.0.0."
             )
 
 @pytest.mark.asyncio
@@ -98,10 +111,10 @@ async def test_agentic_eval_harness_simulation(tmp_path):
         except Exception:
             pass
 
-    with patch("aria.utils.config.VYN_VECTOR_DB", vector_path):
+    with patch("silex.utils.config.SILEX_VECTOR_DB", vector_path):
         loop = CognitiveLoop()
         loop.db.db_path = str(db_path)
-        loop.gemini = FakeToolUsingGemini()
+        loop.llm = FakeToolUsingGemini()
         loop.critic = FakeCritic()
         
         # De-active chroma and complex components for fast test run
@@ -112,7 +125,7 @@ async def test_agentic_eval_harness_simulation(tmp_path):
         # Setup mock tool execution output
         mock_execute = AsyncMock(return_value=ToolResult(
             tool_name="web_search",
-            actual_outcome="Version 1.2.1 is available.",
+            actual_outcome="Version 1.0.0 is available.",
             success=True
         ))
         loop.tool_registry.execute = mock_execute
@@ -127,7 +140,7 @@ async def test_agentic_eval_harness_simulation(tmp_path):
             response = await loop.process("Check the latest OpenYF version info.")
             
             # Assertions on cognitive loop response
-            assert response.response == "The latest version is 1.2.1."
+            assert response.response == "The latest version is 1.0.0."
             assert loop.session.current.turn_count == 1
 
             # Assert tool execution was invoked correctly
@@ -137,7 +150,7 @@ async def test_agentic_eval_harness_simulation(tmp_path):
             # 1. Turn registered in turns table
             turn_rows = await loop.db.fetch_all("SELECT * FROM turns WHERE session_id = ?", (loop.session.current.id,))
             assert len(turn_rows) == 1
-            assert turn_rows[0]["response"] == "The latest version is 1.2.1."
+            assert turn_rows[0]["response"] == "The latest version is 1.0.0."
             
             # 2. Checkpoints are successfully cleaned up/deleted
             checkpoint_rows = await loop.db.fetch_all("SELECT * FROM turn_checkpoints WHERE session_id = ?", (loop.session.current.id,))

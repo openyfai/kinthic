@@ -1,126 +1,111 @@
-# VYN quick start
+# Kronos quick start
 
-This guide expands on the [README](../README.md) with concrete commands and optional paths.
+This guide is the **single golden path** from zero to a working agent.
 
-## Golden path (recommended) — install from PyPI
+**Pre-launch gate (Telegram-first):** [telegram-launch-checklist.md](telegram-launch-checklist.md)
 
-You need **Python 3.11+** (latest stable 3.x is fine). For a normal **PyPI** install you do **not** need Node; the published wheel includes a pre-built dashboard from the release pipeline.
+## Prerequisites
 
-```bash
-pip install openyfai-vyn
-```
+- **Linux / macOS**, or **WSL2 on Windows** ([WSL setup guide](wsl-setup.md))
+- Python 3.11+ and Git (the installer can install these on Ubuntu)
 
-**Browser onboarding:**
-
-```bash
-vyn web
-```
-
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000), complete provider, model, API keys, and safety toggles in the UI.
-
-**Or terminal-only setup first:**
+## Step 1 — Install
 
 ```bash
-vyn setup
+curl -fsSL https://kronos.openyf.dev/install.sh | bash
+source ~/.bashrc   # or ~/.zshrc
 ```
 
-Then run **`vyn web`** or the terminal agent with **`vyn`**.
+## Step 2 — Onboard
 
-**Finish setup entirely in the browser** if you use `vyn web` first: you do **not** need `vyn setup` unless you prefer the CLI wizard.
+```bash
+kronos onboard
+```
 
-Try a first prompt such as: *Analyze this repo and build a knowledge graph of the architecture.*
+The wizard walks through:
 
-Demo scripts: [`scripts/demo.py`](../scripts/demo.py), recording outline: [`docs/demo-script.md`](demo-script.md).
+1. LLM provider + API key (with live ping)
+2. Core skills (jokes, repo research, release notes, Telegram setup, daily briefing)
+3. Optional Telegram pairing
+4. Optional MCP servers (filesystem / fetch)
 
----
+## Step 3 — Run
+
+```bash
+kronos
+```
+
+Try: *Analyze this repo and summarize the architecture.*
+
+For Telegram:
+
+```bash
+kronos telegram run
+```
+
+## Skills CLI
+
+```bash
+kronos skills list
+kronos skills search docker
+kronos skills install repo_onboard
+kronos skills reload
+```
+
+Inside a session: `:skills` and use the `skill_view` tool for full instructions.
+
+## MCP
+
+```bash
+kronos mcp add filesystem --preset filesystem
+kronos mcp enable filesystem
+kronos mcp test filesystem
+```
+
+Details: [mcp.md](mcp.md). In-session: `:mcp list`, `:mcp reload`.
+
+## Verify
+
+```bash
+kronos doctor
+kronos doctor --ping
+```
 
 ## Developing from source
 
-If you are **contributing** or running from a **git clone**, use an editable install and (when you change the frontend) rebuild `aria-ui`:
-
 ```bash
-git clone https://github.com/openyfai/vyn.git
-cd vyn
-pip install -e ".[dev]"
-cd aria-ui && npm install && npm run build && cd ..
-vyn web
+git clone https://github.com/openyfai/kronos.git
+cd kronos
+pip install -e ".[dev,mcp]"
+kronos onboard
+kronos
 ```
 
-PyPI releases run CI that copies **`aria-ui/out`** into **`aria/web_dist/`** before building the wheel. To mirror that locally before `python -m build`, see [`CONTRIBUTING.md`](../CONTRIBUTING.md).
+## Demo script
 
----
+Record a golden-path demo:
 
-## One-line mental model
+1. `curl -fsSL …/install.sh | bash`
+2. `kronos onboard` (pick Gemini + skip Telegram or pair live)
+3. `kronos` → ask *tell me a joke* (uses `tell_joke` skill via `skill_view`)
+4. `kronos skills list`
+5. `kronos doctor --ping`
 
-1. Run **`vyn web`** (or **`vyn setup`** then **`vyn web`**)
-2. Complete **setup**
-3. Use **Chat** (and **Graph**, **Operator**, **Settings** when you want more)
+Outline: [demo-script.md](demo-script.md)
 
-Optional later: **Telegram** from **Operator** (pairing code), Docker for a server, or **`vyn doctor --ping`** if the model connection fails.
-
----
-
-## Terminal agent (no web)
-
-After install and `vyn setup` (or after web setup wrote data to `~/.vyn/`):
-
-```bash
-vyn
-```
-
----
-
-## Deploy / server (Docker)
-
-For remote access you should set a **web API key** and read [`SECURITY.md`](../SECURITY.md).
-
-1. Copy `.env.example` to `.env`.
-2. Set at least:
-   - `ARIA_WEB_HOST=0.0.0.0`
-   - `ARIA_WEB_API_KEY=<long-random-secret>`
-   - One provider key, e.g. `GEMINI_API_KEY`
-3. Run:
-
-```bash
-docker compose --profile web up --build
-```
-
-Open `http://localhost:8000`, paste the **web API key**, then complete setup.
-
----
-
-## Power user / troubleshooting commands
-
-Use these **after** the basics work, or when something breaks.
+## Troubleshooting
 
 | Command | Purpose |
-|--------|---------|
-| `vyn doctor` | Local settings and security summary |
-| `vyn doctor --ping` | Live check that the configured provider responds |
-| `vyn models` | List providers and model ids |
-| `vyn telegram pair` | Create a Telegram pairing code (then `/start CODE` with your bot) |
-| `vyn telegram run` | Run the Telegram bot (separate process) |
-| `python -m build` | Smoke-test the Python package build |
+|---------|---------|
+| `kronos doctor --ping` | Live API check |
+| `kronos skills reload` | Reload skills without restart |
+| `kronos mcp test <name>` | Test MCP server |
+| `kronos setup` | Legacy wizard (prefer `onboard`) |
 
----
+## Docker (Telegram daemon)
 
-## Requirements summary
-
-- **Python** `>=3.11`
-- **Node 20+** — only when building `aria-ui/` from source (contributors).
-- **Docker** — optional
-
----
-
-## Identity & Tone
-
-You can customize how VYN speaks to you. 
-Open the **Settings** view in the web UI to change the **Assistant name** or define a custom **Persona** (e.g. "Speak like a senior research engineer: high signal-to-noise ratio, zero fluff"). This overrides the default helpful tone but retains all cognitive and safety guardrails.
-
----
-
-## Where to read next
-
-- [`SECURITY.md`](../SECURITY.md) — before exposing VYN beyond localhost  
-- [`CONTRIBUTING.md`](../CONTRIBUTING.md) — develop, test, and release  
-- [`skills/README.md`](../skills/README.md) — Markdown skills
+```bash
+cp .env.example .env
+# Set TELEGRAM_BOT_TOKEN, ALLOWED_TELEGRAM_USERS, GEMINI_API_KEY
+docker compose --profile telegram up --build
+```

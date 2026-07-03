@@ -33,15 +33,15 @@ build/
 .eggs/
 
 # Frontend — dependencies & build output (never push)
-aria-ui/node_modules/
-aria-ui/.next/
-aria-ui/out/
-aria-ui/dist/
-aria-ui/huge*.txt
+*/node_modules/
+*/.next/
+*/out/
+*/dist/
+*/huge*.txt
 
 # Packaged web UI: only __init__.py is tracked; release CI copies Next export here
-aria/web_dist/*
-!aria/web_dist/__init__.py
+silex/web_dist/*
+!silex/web_dist/__init__.py
 
 # IDE
 .vscode/
@@ -59,3 +59,15 @@ Thumbs.db
 htmlcov/
 
 audit_scratch/
+
+# Environments
+.venv/
+venvTEST/
+env/
+
+# Databases
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal

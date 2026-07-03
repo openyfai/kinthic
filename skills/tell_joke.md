@@ -1,7 +1,7 @@
 # Tell Joke Skill
 
 ## Description
-This skill teaches ARIA how to tell jokes in a specific, multi-step format to maximize comedic timing.
+This skill teaches Silex how to tell jokes in a specific, multi-step format to maximize comedic timing.
 
 ## Workflow
 Whenever the user asks you to tell a joke, you MUST follow this exact workflow:

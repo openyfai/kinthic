@@ -1,6 +1,6 @@
-# Contributing To ARIA
+# Contributing To Silex
 
-Thanks for helping improve ARIA.
+Thanks for helping improve Silex.
 
 ## Good First Contributions
 
@@ -14,7 +14,7 @@ Thanks for helping improve ARIA.
 
 ```bash
 pip install -e ".[dev]"
-cd aria-ui
+cd kronos-ink-ui
 npm install
 cd ..
 ```
@@ -23,27 +23,26 @@ Run checks:
 
 ```bash
 pytest
-cd aria-ui && npm run lint && npm run build
+cd kronos-ink-ui && npm run build
 ```
 
-## PyPI release (maintainers)
+## Release packaging (maintainers)
 
-Published wheels embed the **built** dashboard under `aria/web_dist/`. CI runs on each **published GitHub Release** (see `.github/workflows/publish-pypi.yml`): ensure **`version` in `pyproject.toml` and `aria/__init__.py`** match the release tag before publishing.
+Kronos distributes precompiled standalone TUI binaries (`kronos-ui-linux-x64`, `kronos-ui-darwin-x64`, `kronos-ui-darwin-arm64`) via GitHub Releases. The Python backend reasoning engine is installed directly from the GitHub repository during the installer execution.
 
-1. Build `aria-ui` (`npm ci` + `npm run build`).
-2. Copy `aria-ui/out/*` into `aria/web_dist/` (keeping tracked `__init__.py`).
-3. Run `python -m build` and upload with **PyPI Trusted Publishing** (configure the GitHub repo as a trusted publisher for project `openyfai-vyn` in PyPI settings).
+CI builds and uploads these compiled binaries automatically when a new release tag is pushed (see `.github/workflows/release.yml`).
 
-**Manual wheel (optional):** after a local `aria-ui` build:
-
-```bash
-# bash (Git Bash / WSL / macOS / Linux)
-find aria/web_dist -mindepth 1 -maxdepth 1 ! -name '__init__.py' -exec rm -rf {} +
-cp -r aria-ui/out/. aria/web_dist/
-python -m build
-```
-
-On Windows PowerShell, use Explorer or equivalent `robocopy` / manual copy instead of `cp`.
+To trigger a release build:
+1. Ensure the version string is bumped to the target version (e.g., `1.0.0`) in:
+   - [pyproject.toml](file:///E:/AGI/pyproject.toml)
+   - [__init__.py](file:///E:/AGI/silex/__init__.py)
+   - [package.json](file:///E:/AGI/kronos-ink-ui/package.json)
+2. Create and push a new git tag matching the version prefix:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+3. The GitHub release workflow will compile the TUI binary for all three supported platforms and attach the executable binaries directly to the GitHub release.
 
 ## Clean-Room Install Checklist
 
@@ -51,7 +50,7 @@ Use this before merging onboarding, packaging, or release changes:
 
 1. Start from a fresh checkout on Python `3.11+`.
 2. Run `pip install -e ".[dev]"`.
-3. Confirm `vyn models`, `vyn doctor`, `vyn setup`, and `vyn web` work.
+3. Confirm `kronos models`, `kronos doctor`, `kronos setup`, and `kronos web` work.
 4. Run the web UI once with a new browser profile or cleared local storage.
 5. If Docker behavior changed, verify `docker compose --profile web up --build`.
 6. Confirm secrets stay write-only in API responses and UI state.

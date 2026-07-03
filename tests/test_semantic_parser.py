@@ -1,6 +1,6 @@
-from aria.core.context_builder import ContextBuilder
-from aria.core.semantic_parser import SemanticParser
-from aria.knowledge_graph.ontology import Ontology
+from silex.core.context_builder import ContextBuilder
+from silex.core.semantic_parser import SemanticParser
+from silex.knowledge_graph.ontology import Ontology
 
 
 def test_ontology_bootstraps_human_concepts_and_alias_matching():

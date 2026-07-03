@@ -1,9 +1,8 @@
 import pytest
-import asyncio
 from datetime import datetime, timedelta, timezone
-from aria.llm.base import BaseLLMProvider, CognitiveResponse
-from aria.runtime.usage import UsageTracker
-from aria.storage.database import Database
+from silex.llm.base import BaseLLMProvider, CognitiveResponse
+from silex.runtime.usage import UsageTracker
+from silex.storage.database import Database
 
 class MockProvider(BaseLLMProvider):
     def __init__(self, usage_tracker=None):

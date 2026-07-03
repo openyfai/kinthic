@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-from aria.models.schemas import ToolCall
-from aria.tools.base import BaseTool
-from aria.tools.registry import ToolRegistry
+from silex.models.schemas import ToolCall
+from silex.tools.base import BaseTool
+from silex.tools.registry import ToolRegistry
 
 
 class EchoTool(BaseTool):
@@ -103,7 +103,7 @@ async def test_semantic_search_omitted_when_vector_inactive():
 
 @pytest.mark.asyncio
 async def test_semantic_search_execute_explains_when_inactive():
-    from aria.tools.search import SemanticSearchTool
+    from silex.tools.search import SemanticSearchTool
 
     class InactiveVS:
         is_active = False

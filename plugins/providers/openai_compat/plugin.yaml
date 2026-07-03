@@ -1,0 +1,341 @@
+profiles:
+  - name: "openai"
+    display_name: "OpenAI"
+    env_vars:
+      - "OPENAI_API_KEY"
+    api_mode: "chat_completions"
+    base_url: "https://api.openai.com/v1"
+    fallback_models:
+      - id: "gpt-4o-mini"
+        label: "GPT-4o Mini"
+        tier: "fast"
+        supports_images: true
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "fast chat and lightweight planning"
+        estimated_cost: "low"
+
+      - id: "gpt-4o"
+        label: "GPT-4o"
+        tier: "reasoning"
+        supports_images: true
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "frontier agentic reasoning"
+        estimated_cost: "medium"
+      - id: "o3-mini"
+        label: "o3-mini"
+        tier: "fast"
+        supports_images: false
+        supports_structured_json: true
+        context_window: 200000
+        recommended_for: "high-speed reasoning and tool use"
+        estimated_cost: "medium"
+      - id: "o1"
+        label: "o1"
+        tier: "reasoning"
+        supports_images: true
+        supports_structured_json: true
+        context_window: 200000
+        recommended_for: "deep complex reasoning"
+        estimated_cost: "high"
+
+  - name: "azure"
+    display_name: "Azure OpenAI"
+    env_vars:
+      - "AZURE_OPENAI_API_KEY"
+    api_mode: "chat_completions"
+    base_url: ""
+    description: "Microsoft Azure OpenAI Service"
+    fallback_models:
+      - id: "gpt-4o-mini"
+        label: "GPT-4o Mini (Azure)"
+        tier: "fast"
+        supports_images: true
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "Azure high-performance chat"
+        estimated_cost: "variable"
+      - id: "gpt-4o"
+        label: "GPT-4o (Azure)"
+        tier: "reasoning"
+        supports_images: true
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "Azure complex reasoning"
+        estimated_cost: "variable"
+
+
+  - name: "deepseek"
+    display_name: "DeepSeek"
+    env_vars:
+      - "DEEPSEEK_API_KEY"
+    api_mode: "chat_completions"
+    base_url: "https://api.deepseek.com/v1"
+    fallback_models:
+      - id: "deepseek-v4-flash"
+        label: "DeepSeek V4 Flash"
+        tier: "fast"
+        supports_images: false
+        supports_structured_json: true
+        context_window: 1000000
+        recommended_for: "economical high-throughput chat"
+        estimated_cost: "low"
+      - id: "deepseek-v4-pro"
+        label: "DeepSeek V4 Pro"
+        tier: "reasoning"
+        supports_images: false
+        supports_structured_json: true
+        context_window: 1000000
+        recommended_for: "complex reasoning and agentic logic"
+        estimated_cost: "medium"
+      - id: "deepseek-r1"
+        label: "DeepSeek R1"
+        tier: "reasoning"
+        supports_images: false
+        supports_structured_json: true
+        context_window: 64000
+        recommended_for: "reinforcement learning reasoning"
+        estimated_cost: "medium"
+
+  - name: "mistral"
+    display_name: "Mistral"
+    env_vars:
+      - "MISTRAL_API_KEY"
+    api_mode: "chat_completions"
+    base_url: "https://api.mistral.ai/v1"
+    fallback_models:
+      - id: "mistral-large-3"
+        label: "Mistral Large 3"
+        tier: "reasoning"
+        supports_images: true
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "higher quality reasoning and vision"
+        estimated_cost: "medium"
+      - id: "mistral-small-4"
+        label: "Mistral Small 4"
+        tier: "fast"
+        supports_images: true
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "unified fast chat and agentic tasks"
+        estimated_cost: "low"
+
+  - name: "xai"
+    display_name: "xAI (Grok)"
+    env_vars:
+      - "XAI_API_KEY"
+    api_mode: "chat_completions"
+    base_url: "https://api.x.ai/v1"
+    fallback_models:
+      - id: "grok-4-mini"
+        label: "Grok 4 Mini"
+        tier: "fast"
+        supports_images: true
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "fast real-time intelligence"
+        estimated_cost: "medium"
+      - id: "grok-4.3"
+        label: "Grok 4.3"
+        tier: "reasoning"
+        supports_images: true
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "deep logic and real-time reasoning"
+        estimated_cost: "high"
+
+  - name: "cohere"
+    display_name: "Cohere"
+    env_vars:
+      - "COHERE_API_KEY"
+    api_mode: "chat_completions"
+    base_url: "https://api.cohere.ai/compatibility/v1"
+    fallback_models:
+      - id: "command-r-7b"
+        label: "Command R (7B)"
+        tier: "fast"
+        supports_images: false
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "fast RAG and tool use"
+        estimated_cost: "low"
+      - id: "command-r-plus"
+        label: "Command R+"
+        tier: "reasoning"
+        supports_images: false
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "advanced enterprise RAG and tools"
+        estimated_cost: "medium"
+
+  - name: "perplexity"
+    display_name: "Perplexity"
+    env_vars:
+      - "PERPLEXITY_API_KEY"
+    api_mode: "chat_completions"
+    base_url: "https://api.perplexity.ai"
+    fallback_models:
+      - id: "sonar-pro"
+        label: "Sonar Pro"
+        tier: "fast"
+        supports_images: false
+        supports_structured_json: true
+        context_window: 32000
+        recommended_for: "search-grounded chat"
+        estimated_cost: "medium"
+      - id: "sonar-reasoning-pro"
+        label: "Sonar Reasoning Pro"
+        tier: "reasoning"
+        supports_images: false
+        supports_structured_json: true
+        context_window: 32000
+        recommended_for: "search-grounded deep analysis"
+        estimated_cost: "high"
+      - id: "sonar-deep-research"
+        label: "Sonar Deep Research"
+        tier: "reasoning"
+        supports_images: false
+        supports_structured_json: true
+        context_window: 64000
+        recommended_for: "exhaustive web research and reports"
+        estimated_cost: "high"
+
+  - name: "together"
+    display_name: "Together AI"
+    env_vars:
+      - "TOGETHER_API_KEY"
+    api_mode: "chat_completions"
+    base_url: "https://api.together.xyz/v1"
+    fallback_models:
+      - id: "meta-llama/llama-4-70b"
+        label: "Llama 4 (70B)"
+        tier: "fast"
+        supports_images: true
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "state-of-the-art open chat"
+        estimated_cost: "medium"
+      - id: "meta-llama/llama-4-405b"
+        label: "Llama 4 (405B)"
+        tier: "reasoning"
+        supports_images: true
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "maximum open intelligence"
+        estimated_cost: "high"
+
+  - name: "fireworks"
+    display_name: "Fireworks AI"
+    env_vars:
+      - "FIREWORKS_API_KEY"
+    api_mode: "chat_completions"
+    base_url: "https://api.fireworks.ai/inference/v1"
+    fallback_models:
+      - id: "kimi-k2"
+        label: "Kimi K2"
+        tier: "fast"
+        supports_images: false
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "ultra-fast production chat"
+        estimated_cost: "low"
+      - id: "deepseek-v3.2"
+        label: "DeepSeek V3.2"
+        tier: "reasoning"
+        supports_images: false
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "high-speed reasoning"
+        estimated_cost: "low"
+
+  - name: "groq"
+    display_name: "Groq"
+    env_vars:
+      - "GROQ_API_KEY"
+    api_mode: "chat_completions"
+    base_url: "https://api.groq.com/openai/v1"
+    fallback_models:
+      - id: "llama-3.3-70b-versatile"
+        label: "Llama 3.3 70B Versatile"
+        tier: "fast"
+        supports_images: false
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "low-latency reasoning"
+        estimated_cost: "low"
+
+  - name: "openrouter"
+    display_name: "OpenRouter"
+    env_vars:
+      - "OPENROUTER_API_KEY"
+    api_mode: "chat_completions"
+    base_url: "https://openrouter.ai/api/v1"
+    models_url: "https://openrouter.ai/api/v1/models"
+    fallback_models:
+      - id: "openai/gpt-5.5"
+        label: "OpenRouter GPT-5.5"
+        tier: "fast"
+        supports_images: true
+        supports_structured_json: true
+        context_window: 1000000
+        recommended_for: "broad provider routing"
+        estimated_cost: "variable"
+      - id: "anthropic/claude-opus-4.7"
+        label: "OpenRouter Claude Opus 4.7"
+        tier: "reasoning"
+        supports_images: true
+        supports_structured_json: true
+        context_window: 1000000
+        recommended_for: "quality reasoning via a single gateway"
+        estimated_cost: "variable"
+    default_headers:
+      HTTP-Referer: "https://github.com/openyfai/kronos"
+      X-Title: "Kronos"
+
+  - name: "ollama"
+    display_name: "Ollama"
+    env_vars: []
+    api_mode: "chat_completions"
+    base_url: "http://127.0.0.1:11434/v1"
+    fallback_models:
+      - id: "llama4"
+        label: "Llama 4"
+        tier: "fast"
+        supports_images: false
+        supports_structured_json: true
+        context_window: 32000
+        recommended_for: "local-first fallback"
+        estimated_cost: "local"
+
+  - name: "lm_studio"
+    display_name: "LM Studio"
+    env_vars: []
+    api_mode: "chat_completions"
+    base_url: "http://127.0.0.1:1234/v1"
+    fallback_models:
+      - id: "meta-llama-3-8b-instruct"
+        label: "Llama 3 8B Instruct"
+        tier: "fast"
+        supports_images: false
+        supports_structured_json: true
+        context_window: 8000
+        recommended_for: "local-first development"
+        estimated_cost: "local"
+
+  - name: "custom"
+    display_name: "Custom Provider"
+    env_vars:
+      - "CUSTOM_API_KEY"
+    api_mode: "chat_completions"
+    base_url: ""
+    fallback_models:
+      - id: "custom-model"
+        label: "Custom Model"
+        tier: "fast"
+        supports_images: true
+        supports_structured_json: true
+        context_window: 128000
+        recommended_for: "any OpenAI-compatible endpoint"
+        estimated_cost: "variable"

@@ -2,7 +2,7 @@
 
 ## Our Standard
 
-We want ARIA to be an open-source project where people can collaborate on ambitious ideas without hostility, contempt, or exclusion.
+We want Kronos to be an open-source project where people can collaborate on ambitious ideas without hostility, contempt, or exclusion.
 
 Please:
 
@@ -22,7 +22,7 @@ Please:
 
 ## Scope
 
-This applies to project discussions, issues, pull requests, reviews, and community spaces associated with ARIA.
+This applies to project discussions, issues, pull requests, reviews, and community spaces associated with Kronos.
 
 ## Enforcement
 

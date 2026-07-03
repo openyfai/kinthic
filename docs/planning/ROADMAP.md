@@ -1,16 +1,16 @@
-# ARIA Roadmap
+# Silex Roadmap
 
 ## Launch-Ready MVP — complete
 
 - [x] Multi-provider architecture: Gemini, OpenAI, Anthropic, OpenRouter, DeepSeek, Mistral, Groq, Ollama.
-- [x] Provider and model selection from CLI (`aria setup`) and web onboarding without code edits.
+- [x] Provider and model selection from CLI (`silex setup`) and web onboarding without code edits.
 - [x] Runtime settings and secrets store backed by local JSON files.
 - [x] First-run setup wizard in the web UI with provider key testing.
 - [x] Web API key bootstrap gate for remote and Docker deployments.
 - [x] Operator panel: approvals, usage monitor, Telegram pairing.
 - [x] Tool approval queue with execution on approval and stored result.
 - [x] Telegram deny-by-default with short-lived pairing codes.
-- [x] `aria doctor` with risky-setting warnings.
+- [x] `silex doctor` with risky-setting warnings.
 - [x] Markdown skills ecosystem with contribution docs and flagship demo skill.
 - [x] Accurate install docs for terminal, web, and Docker paths.
 - [x] CI: Python tests, ruff, mypy, package build, UI lint/build, Docker build.
@@ -34,7 +34,7 @@ The focus is depth over breadth: make the existing surfaces faster, safer, and m
 - Source/provenance badges on graph nodes and memories.
 - Mark a memory as wrong or stale from the web UI.
 - Export and import the knowledge graph.
-- "What changed in ARIA's understanding today?" summary command.
+- "What changed in Silex's understanding today?" summary command.
 
 **Approval and audit**
 - Approval result replay: re-show what happened after a tool was approved.

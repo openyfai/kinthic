@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from aria.runtime.settings import RuntimeSettingsStore
+from silex.runtime.settings import RuntimeSettingsStore
 
 
 def test_runtime_settings_store_persists_setup_and_pairing(tmp_path: Path):

@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from aria.tools.base import BaseTool
-from aria.tools.registry import ToolRegistry
+from silex.tools.base import BaseTool
+from silex.tools.registry import ToolRegistry
 
 
 class ApprovalTool(BaseTool):

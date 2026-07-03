@@ -1,6 +1,6 @@
 """Unit tests for provider connectivity error mapping."""
 
-from aria.llm.provider_test import humanize_llm_error
+from silex.llm.provider_test import humanize_llm_error
 
 
 def test_humanize_invalid_key() -> None:

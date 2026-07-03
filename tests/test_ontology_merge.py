@@ -2,7 +2,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from aria.knowledge_graph.ontology import Ontology
+from silex.knowledge_graph.ontology import Ontology
 
 
 def test_merge_from_json_file_adds_concept():

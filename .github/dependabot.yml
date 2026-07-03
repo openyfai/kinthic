@@ -7,7 +7,7 @@ updates:
     open-pull-requests-limit: 10
 
   - package-ecosystem: "npm"
-    directory: "/aria-ui"
+    directory: "/kronos-ink-ui"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
