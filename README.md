@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/assets/banner.png" alt="kinthic" width="100%" />
+  <img src="docs/assets/banner.svg" alt="kinthic" width="100%" />
 </div>
 
 > **kinthic — the agent that knows how things connect.**
