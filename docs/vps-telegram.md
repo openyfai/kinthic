@@ -67,12 +67,36 @@ To stop Kinthic:
 docker compose --profile telegram down
 ```
 
-To backup your Kinthic data, run the `backup export` command using `docker exec`:
+To backup your Kinthic data, run the `data backup` command using `docker exec`:
 ```bash
-docker exec -it kinthic-telegram kinthic backup export
+docker exec -it kinthic-telegram kinthic data backup --output /app/kinthic-backup.zip
 ```
 Then copy the zip file out of the container to your host system:
 ```bash
 docker cp kinthic-telegram:/app/kinthic-backup.zip ./kinthic-backup.zip
 ```
 *(Note: `secrets.json` is safely excluded from backups to prevent credential leakage).*
+
+To restore from a backup, stop the container first, then restore on the host or inside the container:
+
+```bash
+# On host (after copying the zip in), with Kinthic stopped:
+kinthic stop
+kinthic data restore ./kinthic-backup.zip --apply
+kinthic start
+```
+
+Or inside the container:
+
+```bash
+docker exec -it kinthic-telegram kinthic stop
+docker cp ./kinthic-backup.zip kinthic-telegram:/app/kinthic-backup.zip
+docker exec -it kinthic-telegram kinthic data restore /app/kinthic-backup.zip --apply
+docker compose --profile telegram up -d
+```
+
+Preview changes without applying:
+
+```bash
+kinthic data restore ./kinthic-backup.zip
+```

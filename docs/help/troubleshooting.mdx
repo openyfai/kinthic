@@ -1,0 +1,106 @@
+---
+title: Troubleshooting
+description: Common install failures, doctor checks, and fixes.
+---
+
+## Install failures
+
+### `BASH_SOURCE[0]: unbound variable`
+
+You ran an older installer via `curl | bash`. Re-run with the latest script:
+
+```bash
+curl -fsSL https://kinthic.openyf.dev/install.sh | bash
+```
+
+### `No virtual environment found` (uv pip)
+
+The installer must target the venv explicitly. Ensure you use the current installer from `kinthic.openyf.dev`, not a cached copy.
+
+### `$'\r': command not found` (Windows)
+
+The script has Windows CRLF line endings. Run from **WSL Ubuntu**, not PowerShell. If developing locally, ensure shell scripts use LF line endings.
+
+### `kinthic: command not found`
+
+```bash
+source ~/.bashrc   # or ~/.zshrc
+# or open a new terminal tab
+```
+
+Verify PATH includes `~/.kinthic/bin`:
+
+```bash
+echo $PATH | grep kinthic
+```
+
+### Release UI download failed
+
+The TUI binary requires a GitHub release. CLI install still succeeds — build UI locally if needed:
+
+```bash
+cd kinthic-ink-ui && npm install && npm run build
+```
+
+## Diagnostic commands
+
+| Command | Purpose |
+|---------|---------|
+| `kinthic doctor` | Full local status (security, MCP, paths) |
+| `kinthic doctor --ping` | Live API credential check |
+| `kinthic daemon status` | Is the background service running? |
+| `kinthic daemon logs` | Recent supervisor output |
+| `kinthic mcp test <name>` | MCP server connectivity |
+| `kinthic skills reload` | Reload skills without restart |
+
+## Provider and API issues
+
+| Symptom | Fix |
+|---------|-----|
+| `doctor --ping` fails | Check API key in `~/.kinthic/.env`; re-run `kinthic init` |
+| Wrong model | `kinthic models` to list options; update config in wizard |
+| Rate limits | Check `kinthic usage`; switch provider or model |
+
+## Daemon and gateway
+
+| Symptom | Fix |
+|---------|-----|
+| Port 8000 in use | Set `KINTHIC_GATEWAY_PORT` in `.env` |
+| Daemon won't start | `kinthic daemon logs`; check for SQLite lock |
+| Multiple writers | Stop extra instances — one daemon per `~/.kinthic` |
+
+## Telegram
+
+| Symptom | Fix |
+|---------|-----|
+| No bot response | Run `kinthic channels telegram run` or start daemon |
+| Access denied | Pair account — [Telegram guide](/guides/telegram) |
+| Approval timeout | Respond within 120 seconds |
+
+## MCP
+
+| Symptom | Fix |
+|---------|-----|
+| `npx` not found | Install Node.js 18+ |
+| Filesystem MCP fails | Check workspace path in `mcp.yaml` |
+| Memory MCP 401 | Set API key; use `kinthic mcp print-config` |
+
+## Data and memory
+
+| Symptom | Fix |
+|---------|-----|
+| Agent "forgets" within session | Check context limits; verify memories admitted (A-MAC may reject low-quality candidates) |
+| Vector/SQLite drift | Restart daemon — reconciliation runs on startup |
+| Corrupt database | Restore from backup: `kinthic data restore archive.zip --dry-run` then `--apply` |
+
+## Getting help
+
+1. Run `kinthic doctor` and save the output
+2. Check [GitHub Issues](https://github.com/openyfai/kinthic/issues)
+3. Security issues: `security@openyf.dev` — see [Security model](/concepts/security)
+
+## Related
+
+- [WSL setup](/start/wsl)
+- [Getting started](/start/getting-started)
+- [CLI reference](/reference/cli)

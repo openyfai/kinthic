@@ -132,16 +132,33 @@ class DiscordAdapter(MessageAdapter):
         async def on_message(message: discord.Message) -> None:
             if message.author.bot:
                 return
-            await bot.process_commands(message)
 
-            if message.content.startswith("!"):
+            # Gate BEFORE dispatching to any command handler. Previously
+            # `process_commands` ran unconditionally first and each command
+            # did its own internal allow-check — correct today, but fragile:
+            # any future `@bot.command` added without that check would be
+            # silently exposed to unauthorized users. `!start` is the one
+            # deliberate exception (its only purpose is letting a new user
+            # discover their own Discord ID for onboarding).
+            content = message.content.strip()
+            is_start_command = content.split()[0].lower() == "!start" if content else False
+
+            if not discord_user_allowed(message.author.id) and not is_start_command:
+                if content.startswith("!"):
+                    await message.reply(
+                        f"🚫 Access denied. Your Discord ID is `{message.author.id}`. "
+                        "Ask the operator to add it to ALLOWED_DISCORD_USERS, or run `!start`."
+                    )
+                else:
+                    await message.reply(
+                        f"🚫 Access denied. Your Discord ID is `{message.author.id}`. "
+                        "Ask the operator to add it to ALLOWED_DISCORD_USERS."
+                    )
                 return
 
-            if not discord_user_allowed(message.author.id):
-                await message.reply(
-                    f"🚫 Access denied. Your Discord ID is `{message.author.id}`. "
-                    "Ask the operator to add it to ALLOWED_DISCORD_USERS."
-                )
+            await bot.process_commands(message)
+
+            if content.startswith("!"):
                 return
 
             loop = get_active_loop()

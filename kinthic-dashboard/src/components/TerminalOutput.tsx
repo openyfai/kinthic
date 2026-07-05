@@ -7,6 +7,7 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { atomDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import TextareaAutosize from "react-textarea-autosize";
+import { apiFetch } from "@/lib/api";
 
 type Turn = {
   id: string;
@@ -181,11 +182,16 @@ export default function TerminalOutput() {
     setAttachments([]);
 
     try {
-      const res = await fetch("http://localhost:8000/api/chat/stream", {
+      const res = await apiFetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: cmd, images: imagesPayload.length > 0 ? imagesPayload : undefined }),
       });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.detail || `HTTP Error ${res.status}`);
+      }
 
       const reqId = res.headers.get("X-Request-Id");
       if (reqId) setCurrentRequestId(reqId);
@@ -226,7 +232,7 @@ export default function TerminalOutput() {
 
   const handlePause = async () => {
     if (currentRequestId) {
-      await fetch("http://localhost:8000/api/chat/cancel", {
+      await apiFetch("/api/chat/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ request_id: currentRequestId }),
@@ -235,7 +241,7 @@ export default function TerminalOutput() {
   };
 
   const handleApprove = async (approvalId: string, approved: boolean) => {
-    await fetch("http://localhost:8000/api/chat/approve", {
+    await apiFetch("/api/chat/approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ approval_id: approvalId, approved }),
@@ -269,7 +275,7 @@ export default function TerminalOutput() {
   return (
     <div className="flex flex-col h-full bg-black/40 text-neutral-300 font-mono text-sm p-4">
       <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-2">
-        <div className="flex items-center gap-3 text-[#F5A623]">
+        <div className="flex items-center gap-3 text-[#312E81]">
           <ComputerTerminal01Icon className="w-6 h-6" />
           <h2 className="font-bold tracking-widest uppercase">Direct Neural Interface</h2>
         </div>
@@ -298,7 +304,7 @@ export default function TerminalOutput() {
                 }`}
               >
                 <div className="flex justify-between items-center mb-2">
-                  <div className="text-xs font-bold tracking-wider opacity-60 text-[#F5A623]">
+                  <div className="text-xs font-bold tracking-wider opacity-60 text-[#312E81]">
                     {msg.role === "user" ? "USER" : "KINTHIC"}
                   </div>
                   {msg.cost && (
@@ -352,7 +358,7 @@ export default function TerminalOutput() {
                         <NeuralNetworkIcon className="w-4 h-4 text-[#5E5CE6]" />
                         <span>Cognitive Process ({msg.processSteps.length} steps)</span>
                         {msg.thinking && !msg.content && !msg.approval && (
-                          <span className="text-[#F5A623] animate-pulse italic ml-2 text-[10px]">
+                          <span className="text-[#312E81] animate-pulse italic ml-2 text-[10px]">
                             {msg.thinking}
                           </span>
                         )}
@@ -365,7 +371,7 @@ export default function TerminalOutput() {
                           <span className={`px-1.5 py-0.5 rounded uppercase font-bold tracking-wider ${
                             step.type === 'routing' ? 'bg-[#5E5CE6]/20 text-[#5E5CE6]' :
                             step.type === 'context' ? 'bg-[#32ADE6]/20 text-[#32ADE6]' :
-                            'bg-[#F5A623]/20 text-[#F5A623]'
+                            'bg-[#312E81]/20 text-[#312E81]'
                           }`}>
                             {step.type}
                           </span>
@@ -378,7 +384,7 @@ export default function TerminalOutput() {
 
                 {/* Thinking state fallback if no process steps */}
                 {msg.thinking && !msg.processSteps?.length && !msg.approval?.resolved && (
-                  <div className="text-[#F5A623] animate-pulse italic text-xs mb-2">
+                  <div className="text-[#312E81] animate-pulse italic text-xs mb-2">
                     {msg.thinking}
                   </div>
                 )}
@@ -413,7 +419,7 @@ export default function TerminalOutput() {
                               PreTag="div"
                             />
                           ) : (
-                            <code {...props} className={className + " bg-white/10 px-1 py-0.5 rounded text-[#F5A623]"}>
+                            <code {...props} className={className + " bg-white/10 px-1 py-0.5 rounded text-[#312E81]"}>
                               {children}
                             </code>
                           )
@@ -476,7 +482,7 @@ export default function TerminalOutput() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Enter command or query (↑↓ for history, Shift+Enter for new line)..."
-            className="w-full bg-black/60 border border-white/20 rounded-lg py-3 pl-12 pr-12 text-white focus:outline-none focus:border-[#F5A623] transition-colors resize-none custom-scrollbar"
+            className="w-full bg-black/60 border border-white/20 rounded-lg py-3 pl-12 pr-12 text-white focus:outline-none focus:border-[#312E81] transition-colors resize-none custom-scrollbar"
             minRows={1}
             maxRows={10}
             autoFocus

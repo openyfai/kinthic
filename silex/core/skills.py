@@ -19,8 +19,10 @@ _SKIP_SKILL_NAMES = frozenset({"readme", "plugin_development"})
 
 class SkillMeta:
     """Lightweight metadata record for a loaded skill."""
-    __slots__ = ("name", "source_path", "description", "version", "author",
-                 "tags", "trust_level", "trigger", "inline")
+    __slots__ = (
+        "name", "source_path", "description", "version", "author",
+        "tags", "trust_level", "trigger", "inline", "source",
+    )
 
     def __init__(
         self,
@@ -33,6 +35,7 @@ class SkillMeta:
         trust_level: str = "community",
         trigger: str = "",
         inline: bool = False,
+        source: str = "",
     ) -> None:
         self.name = name
         self.source_path = source_path
@@ -43,6 +46,7 @@ class SkillMeta:
         self.trust_level = trust_level  # core | verified | community
         self.trigger = trigger
         self.inline = inline
+        self.source = source  # bundled | genesis | evolution | user | community
 
 
 class SkillLoader:
@@ -88,11 +92,11 @@ class SkillLoader:
 
         sources: list[tuple[Path, str]] = []  # (md_file, trust_level)
 
-        # 1. Flat files in ~/.kinthic/skills/*.md  (core user-managed)
+        # 1. Flat files in ~/.kinthic/skills/*.md (user-managed; trust from frontmatter/sidecar)
         if self.skills_dir.exists():
             for fp in sorted(self.skills_dir.glob("*.md")):
                 if fp.stem.lower() not in _SKIP_SKILL_NAMES:
-                    sources.append((fp, "core"))
+                    sources.append((fp, "community"))
 
         # 2. Nested folders in ~/.kinthic/skills/<name>/SKILL.md
         if self.skills_dir.exists():
@@ -102,7 +106,7 @@ class SkillLoader:
                     if not skill_md.exists():
                         skill_md = next(sub.glob("*.md"), None)  # type: ignore[arg-type]
                     if skill_md and skill_md.stem.lower() not in _SKIP_SKILL_NAMES:
-                        sources.append((skill_md, "core"))
+                        sources.append((skill_md, "community"))
 
         # 3. Community plugin skills in ~/.kinthic/plugins/skills/<name>/
         if self.plugins_skills_dir.exists():
@@ -155,6 +159,10 @@ class SkillLoader:
                  count, sum(1 for s in self.skill_meta.values() if s.trust_level == "core"),
                  sum(1 for s in self.skill_meta.values() if s.trust_level != "core"))
         return count
+
+    def reload(self) -> int:
+        """Alias for load_all() — used by skill_manage and hot-reload callers."""
+        return self.load_all()
 
     # ------------------------------------------------------------------
     # Metadata helpers
@@ -226,7 +234,8 @@ class SkillLoader:
         if isinstance(inline_val, str):
             inline_val = inline_val.lower() in ("true", "1", "yes")
 
-        return SkillMeta(
+        declared_source = str(manifest.get("source", "")).strip()
+        meta = SkillMeta(
             name=str(manifest.get("name", skill_name)),
             source_path=md_path,
             description=description[:120],
@@ -236,7 +245,35 @@ class SkillLoader:
             trust_level=str(manifest.get("trust_level", default_trust)),
             trigger=str(manifest.get("trigger", "")),
             inline=bool(inline_val),
+            source=declared_source,
         )
+        if not meta.source:
+            meta.source = self._infer_source(meta)
+        return meta
+
+    def _infer_layout(self, meta: SkillMeta) -> str:
+        path = meta.source_path
+        parts = path.parts
+        if "plugins" in parts and "skills" in parts:
+            return "plugin"
+        if path.name.upper() == "SKILL.MD" or path.parent != self.skills_dir:
+            return "nested"
+        return "flat"
+
+    def _infer_source(self, meta: SkillMeta) -> str:
+        if "bundled" in meta.tags or (
+            meta.trust_level == "core" and meta.author.lower() == "openyf"
+        ):
+            return "bundled"
+        author = meta.author.lower()
+        if author in ("genesis", "evolution"):
+            return author
+        parts = meta.source_path.parts
+        if "plugins" in parts and "skills" in parts:
+            return "community"
+        if meta.source_path.parent == self.skills_dir:
+            return "user"
+        return "user"
 
     def _resolve_trust(self, plugin_dir: Path) -> str:
         """Determine trust level for a plugin-skills folder; validate HMAC if signed."""
@@ -268,9 +305,11 @@ class SkillLoader:
                     expected = hmac.new(key, content, hashlib.sha256).hexdigest()
                     if hmac.compare_digest(expected, signature):
                         return "verified"
-                    else:
-                        log.warning("Skill %s has an invalid HMAC signature — treating as community",
-                                    plugin_dir.name)
+                    log.warning(
+                        "Skill %s has an invalid HMAC signature — treating as community",
+                        plugin_dir.name,
+                    )
+                    return "community"
             except Exception as exc:
                 log.debug("Signature check failed for %s: %s", plugin_dir.name, exc)
 
@@ -368,8 +407,16 @@ class SkillLoader:
 
     def list_skills(self) -> list[dict]:
         """Return a list of loaded skill metadata dicts for the :skills command."""
+        return self.list_skills_detailed()
+
+    def list_skills_detailed(self) -> list[dict]:
+        """Return loaded skill metadata for API, CLI, and Telegram surfaces."""
         rows = []
         for name, meta in self.skill_meta.items():
+            try:
+                size_bytes = meta.source_path.stat().st_size
+            except OSError:
+                size_bytes = len(self.skills.get(name, ""))
             rows.append({
                 "name": name,
                 "description": meta.description,
@@ -378,7 +425,10 @@ class SkillLoader:
                 "tags": meta.tags,
                 "trust_level": meta.trust_level,
                 "trigger": meta.trigger,
+                "source": meta.source,
+                "layout": self._infer_layout(meta),
                 "source_path": str(meta.source_path),
+                "size_bytes": size_bytes,
             })
         rows.sort(key=lambda r: (r["trust_level"] != "core", r["name"]))
         return rows

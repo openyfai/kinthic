@@ -1,0 +1,1166 @@
+{
+  "benchmark": "memory_recall",
+  "suite_version": 1,
+  "seed": 42,
+  "noise_count": 500,
+  "needle_count": 12,
+  "vector_active": true,
+  "generated_at": "2026-07-05T17:35:27.076388+00:00",
+  "conditions": [
+    {
+      "name": "fresh",
+      "baselines": {
+        "none": {
+          "queries": 12,
+          "mrr": 0.0,
+          "false_positive_rate_top1": 0.0,
+          "latency_ms_p50": 0.0,
+          "latency_ms_p95": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_12": 0.0,
+          "per_needle": [
+            {
+              "id": "deploy_window",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "staging_db",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "project_codename",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "oncall_rotation",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "api_key_vault",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "user_preference_theme",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "release_branch",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "dog_name",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "paraphrase_deploy",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "low_signal_fact",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "unique_token_only",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "semantic_paraphrase",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            }
+          ]
+        },
+        "keyword": {
+          "queries": 12,
+          "mrr": 0.2824,
+          "false_positive_rate_top1": 0.0833,
+          "latency_ms_p50": 1.44,
+          "latency_ms_p95": 1.66,
+          "hit_at_5": 0.4167,
+          "hit_at_12": 0.6667,
+          "per_needle": [
+            {
+              "id": "deploy_window",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "staging_db",
+              "hit_at_5": false,
+              "hit_at_12": true,
+              "rank": 9,
+              "mrr": 0.1111111111111111
+            },
+            {
+              "id": "project_codename",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 3,
+              "mrr": 0.3333333333333333
+            },
+            {
+              "id": "oncall_rotation",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 3,
+              "mrr": 0.3333333333333333
+            },
+            {
+              "id": "api_key_vault",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "user_preference_theme",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "release_branch",
+              "hit_at_5": false,
+              "hit_at_12": true,
+              "rank": 9,
+              "mrr": 0.1111111111111111
+            },
+            {
+              "id": "dog_name",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "paraphrase_deploy",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 3,
+              "mrr": 0.3333333333333333
+            },
+            {
+              "id": "low_signal_fact",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "unique_token_only",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "semantic_paraphrase",
+              "hit_at_5": false,
+              "hit_at_12": true,
+              "rank": 6,
+              "mrr": 0.16666666666666666
+            }
+          ]
+        },
+        "vector": {
+          "queries": 12,
+          "mrr": 0.875,
+          "false_positive_rate_top1": 0.0833,
+          "latency_ms_p50": 145.55,
+          "latency_ms_p95": 148.01,
+          "hit_at_5": 0.9167,
+          "hit_at_12": 0.9167,
+          "per_needle": [
+            {
+              "id": "deploy_window",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "staging_db",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "project_codename",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "oncall_rotation",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "api_key_vault",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "user_preference_theme",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "release_branch",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "dog_name",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "paraphrase_deploy",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 2,
+              "mrr": 0.5
+            },
+            {
+              "id": "low_signal_fact",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "unique_token_only",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "semantic_paraphrase",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            }
+          ]
+        },
+        "hybrid": {
+          "queries": 12,
+          "mrr": 0.4972,
+          "false_positive_rate_top1": 0.0833,
+          "latency_ms_p50": 148.8,
+          "latency_ms_p95": 152.65,
+          "hit_at_5": 0.8333,
+          "hit_at_12": 0.9167,
+          "per_needle": [
+            {
+              "id": "deploy_window",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "staging_db",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "project_codename",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 2,
+              "mrr": 0.5
+            },
+            {
+              "id": "oncall_rotation",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 4,
+              "mrr": 0.25
+            },
+            {
+              "id": "api_key_vault",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "user_preference_theme",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "release_branch",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "dog_name",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 4,
+              "mrr": 0.25
+            },
+            {
+              "id": "paraphrase_deploy",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 3,
+              "mrr": 0.3333333333333333
+            },
+            {
+              "id": "low_signal_fact",
+              "hit_at_5": false,
+              "hit_at_12": true,
+              "rank": 10,
+              "mrr": 0.1
+            },
+            {
+              "id": "unique_token_only",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 5,
+              "mrr": 0.2
+            },
+            {
+              "id": "semantic_paraphrase",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 3,
+              "mrr": 0.3333333333333333
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "aged_21d",
+      "baselines": {
+        "none": {
+          "queries": 12,
+          "mrr": 0.0,
+          "false_positive_rate_top1": 0.0,
+          "latency_ms_p50": 0.0,
+          "latency_ms_p95": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_12": 0.0,
+          "per_needle": [
+            {
+              "id": "deploy_window",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "staging_db",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "project_codename",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "oncall_rotation",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "api_key_vault",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "user_preference_theme",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "release_branch",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "dog_name",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "paraphrase_deploy",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "low_signal_fact",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "unique_token_only",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "semantic_paraphrase",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            }
+          ]
+        },
+        "keyword": {
+          "queries": 12,
+          "mrr": 0.2778,
+          "false_positive_rate_top1": 0.0833,
+          "latency_ms_p50": 1.52,
+          "latency_ms_p95": 1.62,
+          "hit_at_5": 0.4167,
+          "hit_at_12": 0.5,
+          "per_needle": [
+            {
+              "id": "deploy_window",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "staging_db",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "project_codename",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 2,
+              "mrr": 0.5
+            },
+            {
+              "id": "oncall_rotation",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 3,
+              "mrr": 0.3333333333333333
+            },
+            {
+              "id": "api_key_vault",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "user_preference_theme",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "release_branch",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "dog_name",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "paraphrase_deploy",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 3,
+              "mrr": 0.3333333333333333
+            },
+            {
+              "id": "low_signal_fact",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "unique_token_only",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "semantic_paraphrase",
+              "hit_at_5": false,
+              "hit_at_12": true,
+              "rank": 6,
+              "mrr": 0.16666666666666666
+            }
+          ]
+        },
+        "vector": {
+          "queries": 12,
+          "mrr": 0.875,
+          "false_positive_rate_top1": 0.0833,
+          "latency_ms_p50": 146.57,
+          "latency_ms_p95": 147.76,
+          "hit_at_5": 0.9167,
+          "hit_at_12": 0.9167,
+          "per_needle": [
+            {
+              "id": "deploy_window",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "staging_db",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "project_codename",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "oncall_rotation",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "api_key_vault",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "user_preference_theme",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "release_branch",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "dog_name",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "paraphrase_deploy",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 2,
+              "mrr": 0.5
+            },
+            {
+              "id": "low_signal_fact",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "unique_token_only",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "semantic_paraphrase",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            }
+          ]
+        },
+        "hybrid": {
+          "queries": 12,
+          "mrr": 0.33,
+          "false_positive_rate_top1": 0.0833,
+          "latency_ms_p50": 148.88,
+          "latency_ms_p95": 149.32,
+          "hit_at_5": 0.6667,
+          "hit_at_12": 0.9167,
+          "per_needle": [
+            {
+              "id": "deploy_window",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "staging_db",
+              "hit_at_5": false,
+              "hit_at_12": true,
+              "rank": 7,
+              "mrr": 0.14285714285714285
+            },
+            {
+              "id": "project_codename",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 3,
+              "mrr": 0.3333333333333333
+            },
+            {
+              "id": "oncall_rotation",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 3,
+              "mrr": 0.3333333333333333
+            },
+            {
+              "id": "api_key_vault",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "user_preference_theme",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "release_branch",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 5,
+              "mrr": 0.2
+            },
+            {
+              "id": "dog_name",
+              "hit_at_5": false,
+              "hit_at_12": true,
+              "rank": 6,
+              "mrr": 0.16666666666666666
+            },
+            {
+              "id": "paraphrase_deploy",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 4,
+              "mrr": 0.25
+            },
+            {
+              "id": "low_signal_fact",
+              "hit_at_5": false,
+              "hit_at_12": true,
+              "rank": 12,
+              "mrr": 0.08333333333333333
+            },
+            {
+              "id": "unique_token_only",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 5,
+              "mrr": 0.2
+            },
+            {
+              "id": "semantic_paraphrase",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 4,
+              "mrr": 0.25
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "aged_21d_low_importance",
+      "baselines": {
+        "none": {
+          "queries": 12,
+          "mrr": 0.0,
+          "false_positive_rate_top1": 0.0,
+          "latency_ms_p50": 0.0,
+          "latency_ms_p95": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_12": 0.0,
+          "per_needle": [
+            {
+              "id": "deploy_window",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "staging_db",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "project_codename",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "oncall_rotation",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "api_key_vault",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "user_preference_theme",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "release_branch",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "dog_name",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "paraphrase_deploy",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "low_signal_fact",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "unique_token_only",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "semantic_paraphrase",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            }
+          ]
+        },
+        "keyword": {
+          "queries": 12,
+          "mrr": 0.1667,
+          "false_positive_rate_top1": 0.0,
+          "latency_ms_p50": 1.44,
+          "latency_ms_p95": 1.68,
+          "hit_at_5": 0.1667,
+          "hit_at_12": 0.1667,
+          "per_needle": [
+            {
+              "id": "deploy_window",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "staging_db",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "project_codename",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "oncall_rotation",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "api_key_vault",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "user_preference_theme",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "release_branch",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "dog_name",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "paraphrase_deploy",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "low_signal_fact",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "unique_token_only",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "semantic_paraphrase",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            }
+          ]
+        },
+        "vector": {
+          "queries": 12,
+          "mrr": 0.875,
+          "false_positive_rate_top1": 0.0833,
+          "latency_ms_p50": 144.12,
+          "latency_ms_p95": 146.39,
+          "hit_at_5": 0.9167,
+          "hit_at_12": 0.9167,
+          "per_needle": [
+            {
+              "id": "deploy_window",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "staging_db",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "project_codename",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "oncall_rotation",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "api_key_vault",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "user_preference_theme",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "release_branch",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "dog_name",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "paraphrase_deploy",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 2,
+              "mrr": 0.5
+            },
+            {
+              "id": "low_signal_fact",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "unique_token_only",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            },
+            {
+              "id": "semantic_paraphrase",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 1,
+              "mrr": 1.0
+            }
+          ]
+        },
+        "hybrid": {
+          "queries": 12,
+          "mrr": 0.0624,
+          "false_positive_rate_top1": 0.0,
+          "latency_ms_p50": 144.88,
+          "latency_ms_p95": 146.95,
+          "hit_at_5": 0.1667,
+          "hit_at_12": 0.5,
+          "per_needle": [
+            {
+              "id": "deploy_window",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 5,
+              "mrr": 0.2
+            },
+            {
+              "id": "staging_db",
+              "hit_at_5": false,
+              "hit_at_12": true,
+              "rank": 11,
+              "mrr": 0.09090909090909091
+            },
+            {
+              "id": "project_codename",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "oncall_rotation",
+              "hit_at_5": true,
+              "hit_at_12": true,
+              "rank": 5,
+              "mrr": 0.2
+            },
+            {
+              "id": "api_key_vault",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "user_preference_theme",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "release_branch",
+              "hit_at_5": false,
+              "hit_at_12": true,
+              "rank": 11,
+              "mrr": 0.09090909090909091
+            },
+            {
+              "id": "dog_name",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "paraphrase_deploy",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            },
+            {
+              "id": "low_signal_fact",
+              "hit_at_5": false,
+              "hit_at_12": true,
+              "rank": 12,
+              "mrr": 0.08333333333333333
+            },
+            {
+              "id": "unique_token_only",
+              "hit_at_5": false,
+              "hit_at_12": true,
+              "rank": 12,
+              "mrr": 0.08333333333333333
+            },
+            {
+              "id": "semantic_paraphrase",
+              "hit_at_5": false,
+              "hit_at_12": false,
+              "rank": null,
+              "mrr": 0.0
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

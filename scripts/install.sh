@@ -67,8 +67,10 @@ fi
 KINTHIC_DIR="$HOME/.kinthic"
 KINTHIC_BIN="$KINTHIC_DIR/bin"
 KINTHIC_VENV="$KINTHIC_DIR/runtime/venv"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PYTHON_VERSION="3.12"
+REPO="openyfai/kinthic"
 
 echo -e "Initializing installer paths..."
 mkdir -p "$KINTHIC_BIN"
@@ -83,86 +85,77 @@ mkdir -p "$KINTHIC_DIR/plugins/skills"
 mkdir -p "$KINTHIC_DIR/registry"
 mkdir -p "$KINTHIC_DIR/logs/traces"
 
-# ── 3. Check for core package requirements ──────────────────────────────────
-PACKAGES_TO_INSTALL=()
-if ! command -v python3 &>/dev/null; then
-    PACKAGES_TO_INSTALL+=("python3" "python3-venv" "python3-pip")
+# ── 3. Minimal host requirements (curl + git only) ───────────────────────────
+MISSING=()
+if ! command -v curl &>/dev/null; then
+    MISSING+=("curl")
 fi
 if ! command -v git &>/dev/null; then
-    PACKAGES_TO_INSTALL+=("git")
+    MISSING+=("git")
+fi
+if [ ${#MISSING[@]} -ne 0 ]; then
+    echo -e "${RED}❌ Missing required tools: ${MISSING[*]}${NC}"
+    echo -e "Install them with your package manager, then rerun this script."
+    exit 1
 fi
 
-if [ ${#PACKAGES_TO_INSTALL[@]} -ne 0 ]; then
-    echo -e "${YELLOW}⚠️ Notice: Missing required system dependencies: ${PACKAGES_TO_INSTALL[*]}${NC}"
-    if command -v apt-get &>/dev/null; then
-        read -rp "Would you like to install them via apt-get now? (Requires sudo) [Y/n] " prompt
-        if [[ $prompt =~ ^[Yy]$ || -z $prompt ]]; then
-            echo -e "${BLUE}Updating package catalogs...${NC}"
-            sudo apt-get update
-            echo -e "${BLUE}Installing missing dependencies...${NC}"
-            sudo apt-get install -y "${PACKAGES_TO_INSTALL[@]}"
-        else
-            echo -e "${RED}❌ Installation cancelled: Missing required dependencies.${NC}"
-            exit 1
-        fi
-    else
-        echo -e "${RED}❌ Please install ${PACKAGES_TO_INSTALL[*]} manually and rerun this script.${NC}"
-        exit 1
-    fi
-fi
-
-# ── 4. Retrieve Standalone Assets ─────────────────────────────────────────────
-echo -e "${BLUE}Downloading uv package manager...${NC}"
+# ── 4. Retrieve Standalone Assets (parallel) ─────────────────────────────────
+echo -e "${BLUE}Downloading uv and TUI binary in parallel...${NC}"
 export INSTALL_DIR="$KINTHIC_BIN"
 export CARGO_DIST_FORCE_INSTALL_DIR="$KINTHIC_BIN"
-curl -LsSf https://astral.sh/uv/install.sh | sh
 
-echo -e "${BLUE}Fetching latest TUI binary from GitHub Releases...${NC}"
-REPO="openyfai/kinthic"
-LATEST_TAG=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+UI_URL="https://github.com/$REPO/releases/latest/download/kinthic-ui-$UI_SUFFIX"
 
-if [ -n "$LATEST_TAG" ]; then
-    UI_URL="https://github.com/$REPO/releases/download/$LATEST_TAG/kinthic-ui-$UI_SUFFIX"
-    echo -e "Downloading precompiled UI version ${GREEN}$LATEST_TAG${NC}..."
-    if ! curl -L -sSf -o "$KINTHIC_BIN/kinthic-ui" "$UI_URL"; then
-        echo -e "${YELLOW}⚠️ Release UI download failed (404?). Build locally:${NC}"
-        echo -e "  cd kinthic-ink-ui && npm install && npm run build"
-        cat << 'EOF' > "$KINTHIC_BIN/kinthic-ui"
+(
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+) &
+UV_PID=$!
+
+(
+    if curl -L -sSf -o "$KINTHIC_BIN/kinthic-ui" "$UI_URL"; then
+        echo "ui_ok" > "$KINTHIC_BIN/.ui_download_status"
+    else
+        echo "ui_fail" > "$KINTHIC_BIN/.ui_download_status"
+    fi
+) &
+UI_PID=$!
+
+wait "$UV_PID"
+wait "$UI_PID"
+
+if [ ! -x "$KINTHIC_BIN/uv" ]; then
+    echo -e "${RED}❌ Error: uv installation failed.${NC}"
+    exit 1
+fi
+
+if [ -f "$KINTHIC_BIN/.ui_download_status" ] && [ "$(cat "$KINTHIC_BIN/.ui_download_status")" = "ui_fail" ]; then
+    echo -e "${YELLOW}⚠️ Release UI download failed. Using dev fallback stub.${NC}"
+    cat << 'EOF' > "$KINTHIC_BIN/kinthic-ui"
 #!/usr/bin/env bash
 echo "❌ Precompiled UI missing. From a dev checkout run: cd kinthic-ink-ui && npm run build"
 exit 1
 EOF
-    fi
-else
-    echo -e "${YELLOW}⚠️ No release tag found.${NC}"
-    echo -e "  Dev fallback: cd kinthic-ink-ui && npm run build"
-    cat << 'EOF' > "$KINTHIC_BIN/kinthic-ui"
-#!/usr/bin/env bash
-if command -v node &>/dev/null && [ -f "$HOME/kinthic/kinthic-ink-ui/dist/index.js" ]; then
-    exec node "$HOME/kinthic/kinthic-ink-ui/dist/index.js" "$@"
-elif command -v npx &>/dev/null; then
-    exec npx tsx "$(dirname "$0")/../../kinthic-ink-ui/src/index.tsx" "$@"
-else
-    echo "❌ Node.js or compiled standalone UI not found."
-    echo "   From a dev checkout: cd kinthic-ink-ui && npm install && npm run build"
-    exit 1
 fi
-EOF
-fi
-
+rm -f "$KINTHIC_BIN/.ui_download_status"
 chmod +x "$KINTHIC_BIN/kinthic-ui"
 
 # ── 5. Setup Python Sandboxed Virtual Environment ────────────────────────────
-echo -e "${BLUE}Configuring isolated Python virtual environment...${NC}"
-"$KINTHIC_BIN/uv" venv "$KINTHIC_VENV"
+echo -e "${BLUE}Installing managed Python ${PYTHON_VERSION} via uv...${NC}"
+"$KINTHIC_BIN/uv" python install "$PYTHON_VERSION"
 
-echo -e "${BLUE}Installing Silex reasoning engine backend (with MCP support)...${NC}"
-if [ -f "$REPO_ROOT/pyproject.toml" ]; then
+echo -e "${BLUE}Configuring isolated Python virtual environment...${NC}"
+"$KINTHIC_BIN/uv" venv "$KINTHIC_VENV" --python "$PYTHON_VERSION"
+
+# uv pip does not auto-detect a venv created at a custom path — target it explicitly.
+UV_PIP=( "$KINTHIC_BIN/uv" pip install --python "$KINTHIC_VENV/bin/python" --compile-bytecode )
+
+echo -e "${BLUE}Installing Silex reasoning engine (MCP + vector memory)...${NC}"
+if [ -f "$REPO_ROOT/pyproject.toml" ] && [ -f "$REPO_ROOT/scripts/install.sh" ]; then
     cd "$REPO_ROOT"
-    "$KINTHIC_BIN/uv" pip install -e ".[mcp]" || "$KINTHIC_BIN/uv" pip install -e .
+    "${UV_PIP[@]}" -e ".[mcp,vector]" || "${UV_PIP[@]}" -e .
 else
-    "$KINTHIC_BIN/uv" pip install "git+https://github.com/$REPO.git" || true
-    "$KINTHIC_BIN/uv" pip install "openyfai-kinthic[mcp]" 2>/dev/null || true
+    "${UV_PIP[@]}" "git+https://github.com/$REPO.git#egg=kinthic[mcp,vector]" \
+        || "${UV_PIP[@]}" "git+https://github.com/$REPO.git"
 fi
 
 # Verify kinthic entrypoint
@@ -181,7 +174,7 @@ if [ ! -f "$KINTHIC_DIR/.env" ]; then
     else
         cat > "$KINTHIC_DIR/.env" << 'ENVEOF'
 # Kinthic runtime configuration
-# Add your provider API keys here, then run: kinthic onboard
+# Add your provider API keys here, then run: kinthic init
 
 GEMINI_API_KEY=
 # TELEGRAM_BOT_TOKEN=
@@ -190,7 +183,7 @@ GEMINI_API_KEY=
 # ALLOWED_DISCORD_USERS=
 ENVEOF
     fi
-    echo -e "  Created ${GREEN}$KINTHIC_DIR/.env${NC} — run ${GREEN}kinthic onboard${NC} next"
+    echo -e "  Created ${GREEN}$KINTHIC_DIR/.env${NC} — run ${GREEN}kinthic init${NC} next"
 fi
 
 # Bundled catalog fallback (offline KinthicHub)
@@ -236,7 +229,12 @@ PYEOF
 
 # Non-fatal smoke test
 echo -e "${BLUE}Running install smoke check (kinthic doctor)...${NC}"
-"$KINTHIC_VENV/bin/kinthic" doctor || echo -e "${YELLOW}⚠️ doctor reported issues — run kinthic onboard to fix${NC}"
+if "$KINTHIC_VENV/bin/kinthic" doctor; then
+    :
+else
+    echo -e "${YELLOW}⚠️ doctor reported issues — run ${GREEN}kinthic init${NC}${YELLOW} to fix${NC}"
+fi
+echo -e "${GREEN}→ Run ${YELLOW}kinthic init${NC}${GREEN} next to configure your provider.${NC}"
 
 # ── 7. Create Binary Command Wrapper & Link PATH ──────────────────────────────
 echo -e "${BLUE}Registering CLI path endpoints...${NC}"
@@ -267,8 +265,9 @@ echo -e "${GREEN}🎉 OpenYF Kinthic Installed Successfully!${NC}"
 echo -e ""
 echo -e "Install method: ${YELLOW}curl -fsSL https://kinthic.openyf.dev/install.sh | bash${NC}"
 echo -e ""
-echo -e "Start the agent:"
-echo -e "  ${GREEN}kinthic${NC}                  — terminal session"
-echo -e "  ${GREEN}kinthic telegram run${NC}   — messaging bot (after onboard)"
-echo -e "  ${GREEN}kinthic skills list${NC}    — installed skills"
+echo -e "Next steps:"
+echo -e "  ${GREEN}kinthic init${NC}                    — first-run wizard (provider + models)"
+echo -e "  ${GREEN}kinthic daemon install${NC}          — 24/7 service (survives reboot)"
+echo -e "  ${GREEN}kinthic channels telegram run${NC}   — messaging bot (after init)"
+echo -e "  ${GREEN}kinthic skills list${NC}             — installed skills"
 echo -e "──────────────────────────────────────────────────────────\n"

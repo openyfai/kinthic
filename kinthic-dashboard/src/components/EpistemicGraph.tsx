@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
+import { apiFetch } from '@/lib/api';
 
 // ForceGraph2D uses canvas and window, so it cannot be SSR'd
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { ssr: false });
@@ -32,7 +33,7 @@ export default function EpistemicGraph() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/graph');
+      const res = await apiFetch('/api/graph');
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const json = await res.json();
       
@@ -66,7 +67,7 @@ export default function EpistemicGraph() {
     }
   }, [loading, error]);
 
-  if (loading) return <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[#F5A623] text-sm font-medium tracking-widest uppercase animate-pulse">Initializing Topology...</div>;
+  if (loading) return <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[#312E81] text-sm font-medium tracking-widest uppercase animate-pulse">Initializing Topology...</div>;
   if (error) return <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[#FF453A] text-sm font-medium bg-red-900/20 px-4 py-2 rounded-full border border-red-900/50">Backend Offline: {error}</div>;
 
   return (
@@ -76,7 +77,7 @@ export default function EpistemicGraph() {
         graphData={data}
         nodeRelSize={4}
         nodeColor={(node: any) => {
-          if (node.type === 'decision') return '#F5A623';
+          if (node.type === 'decision') return '#312E81';
           if (node.type === 'dead_end') return '#FF453A';
           if (node.type === 'hypothesis') return '#5E5CE6';
           return '#32ADE6'; // Fact
@@ -100,7 +101,7 @@ export default function EpistemicGraph() {
           const radius = 4 / globalScale;
 
           // Get color based on type
-          const color = node.type === 'decision' ? '#F5A623' : 
+          const color = node.type === 'decision' ? '#312E81' : 
                         node.type === 'dead_end' ? '#FF453A' : 
                         node.type === 'hypothesis' ? '#5E5CE6' : '#32ADE6';
 

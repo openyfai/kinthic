@@ -128,7 +128,9 @@ class SkillAdmissionController:
         origin_trajectory_id: str | None = None,
         session_id: str | None = None,
         user_id: str = "default_user",
-        threshold: float = 0.70
+        threshold: float = 0.70,
+        source: str = "evolution",
+        author: str | None = None,
     ) -> tuple[bool, float]:
         """
         Orchestrates skill admission:
@@ -162,22 +164,19 @@ class SkillAdmissionController:
             f"name: {skill_name}\n"
             f"description: {description}\n"
             f"category: {category}\n"
+            f"source: {source}\n"
+            f"author: {author or source}\n"
             f"amac_score: {composite_score:.4f}\n"
             "---\n\n"
         )
         full_markdown_payload = frontmatter + content
 
-        # Write agentskills.io nested structure
-        nested_dir = self.skills_dir / "active" / category / skill_name
+        nested_dir = self.skills_dir / skill_name
         nested_dir.mkdir(parents=True, exist_ok=True)
         nested_file = nested_dir / "SKILL.md"
         nested_file.write_text(full_markdown_payload, encoding="utf-8")
 
-        # Write flat backup for VYN/Kinthic flat loader compat
-        flat_file = self.skills_dir / f"{skill_name}.md"
-        flat_file.write_text(full_markdown_payload, encoding="utf-8")
-
-        log.info(f"Wrote skill files to nested: {nested_file} and flat: {flat_file}")
+        log.info(f"Wrote skill file to {nested_file}")
 
         # 3. Log into database admitted_memories
         memory_id = f"mem_skill_{hashlib.md5(skill_name.encode('utf-8')).hexdigest()[:12]}"

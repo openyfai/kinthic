@@ -100,17 +100,16 @@ async def test_admit_skill_gating(tmp_path: Path):
         assert success is True
         assert score >= 0.70
         
-        # Files must be written correctly
-        nested_file = skills_dir / "active" / "deployment" / "good_skill" / "SKILL.md"
-        flat_file = skills_dir / "good_skill.md"
+        # Files must be written correctly (nested layout under skills_dir/<name>/SKILL.md)
+        nested_file = skills_dir / "good_skill" / "SKILL.md"
         assert nested_file.exists()
-        assert flat_file.exists()
-        
-        # Read flat file content to verify frontmatter
-        flat_content = flat_file.read_text(encoding="utf-8")
-        assert "name: good_skill" in flat_content
-        assert "amac_score:" in flat_content
-        assert "instructions to deploy artifacts securely" in flat_content
+        assert not (skills_dir / "good_skill.md").exists()
+
+        nested_content = nested_file.read_text(encoding="utf-8")
+        assert "name: good_skill" in nested_content
+        assert "source: evolution" in nested_content
+        assert "amac_score:" in nested_content
+        assert "instructions to deploy artifacts securely" in nested_content
 
         # Database row must exist
         row = await db.fetch_one("SELECT * FROM admitted_memories WHERE skill_name = ?", ("good_skill",))

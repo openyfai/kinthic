@@ -44,6 +44,9 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("init", help="First-run wizard: provider, skills, Telegram, MCP")
+    subparsers.add_parser("innit", help="Alias for init (common typo)")
+    subparsers.add_parser("onboard", help="Alias for init (first-run wizard)")
+    subparsers.add_parser("setup", help="Alias for init (first-run wizard)")
     doctor_parser = subparsers.add_parser("doctor", help="Show local setup and security status")
     doctor_parser.add_argument(
         "--ping",
@@ -61,11 +64,23 @@ def build_parser() -> argparse.ArgumentParser:
     daemon_sub.add_parser("status", help="Check if the daemon is running")
     daemon_sub.add_parser("logs", help="Tail the daemon logs")
     daemon_sub.add_parser("run", help="Run the supervisor in the foreground")
+    daemon_install = daemon_sub.add_parser("install", help="Install as a systemd/LaunchAgent service (survives reboot)")
+    daemon_install.add_argument("--force", action="store_true", help="Overwrite an existing service unit")
+    daemon_sub.add_parser("uninstall", help="Remove the installed service unit")
 
     data_parser = subparsers.add_parser("data", help="Manage memories, backups, and exports")
     data_sub = data_parser.add_subparsers(dest="data_command")
-    backup_p = data_sub.add_parser("backup", help="Export data to zip")
+    backup_p = data_sub.add_parser("backup", help="Export ~/.kinthic to a zip archive")
     backup_p.add_argument("--output", default="kinthic-backup.zip", help="Output zip file")
+    restore_p = data_sub.add_parser("restore", help="Restore ~/.kinthic from a backup zip")
+    restore_p.add_argument("archive", help="Path to kinthic-backup.zip")
+    restore_p.add_argument("--dry-run", action="store_true", help="Preview restore plan (default)")
+    restore_p.add_argument("--apply", action="store_true", help="Execute restore")
+    restore_p.add_argument(
+        "--no-pre-backup",
+        action="store_true",
+        help="Skip automatic pre-restore safety backup",
+    )
     export_p = data_sub.add_parser("export", help="Export training trajectories (SFT / GRPO / CSV)")
     export_p.add_argument("--format", choices=["sft", "grpo", "csv"], default="grpo", help="Output format (default: grpo)")
     export_p.add_argument("--output", default=None, help="Output file path")
@@ -107,6 +122,11 @@ def build_parser() -> argparse.ArgumentParser:
     skills_install = skills_sub.add_parser("install", help="Install a skill by name or URL")
     skills_install.add_argument("name", help="Skill name or https:// URL")
     skills_sub.add_parser("reload", help="Reload skills from disk")
+    skills_uninstall = skills_sub.add_parser("uninstall", help="Remove an installed skill")
+    skills_uninstall.add_argument("name", help="Skill name")
+    skills_show = skills_sub.add_parser("show", help="Show full skill markdown")
+    skills_show.add_argument("name", help="Skill name")
+    skills_sub.add_parser("refresh", help="Refresh skill catalog from KinthicHub")
 
     mcp_parser = subparsers.add_parser("mcp", help="Manage MCP server integrations")
     mcp_sub = mcp_parser.add_subparsers(dest="mcp_command")
@@ -124,6 +144,30 @@ def build_parser() -> argparse.ArgumentParser:
     mcp_test.add_argument("name", help="Server name")
     mcp_tools = mcp_sub.add_parser("tools", help="List tools exposed by MCP servers")
     mcp_tools.add_argument("--server", default=None, help="Filter by server name")
+    mcp_serve = mcp_sub.add_parser("serve", help="Run the Silex memory MCP server")
+    mcp_serve.add_argument("--stdio", action="store_true", help="stdio transport (Claude Desktop / Cursor)")
+    mcp_print = mcp_sub.add_parser("print-config", help="Print MCP client config JSON")
+    mcp_print.add_argument("--client", choices=["claude", "cursor"], default="claude")
+
+    benchmark_parser = subparsers.add_parser("benchmark", help="Run evaluation benchmarks")
+    benchmark_sub = benchmark_parser.add_subparsers(dest="benchmark_command")
+    recall_p = benchmark_sub.add_parser("recall", help="Memory recall needle-in-haystack benchmark")
+    recall_p.add_argument("--seed", type=int, default=42, help="RNG seed (default: 42)")
+    recall_p.add_argument("--noise", type=int, default=None, help="Override distractor memory count")
+    recall_p.add_argument(
+        "--conditions",
+        nargs="*",
+        default=None,
+        help="Condition names (default: all in suite.yaml)",
+    )
+    recall_p.add_argument("--output", default=None, help="JSON results path")
+    recall_p.add_argument("--report", default=None, help="Markdown report path")
+    recall_p.add_argument(
+        "--track",
+        choices=["retrieval", "mcp"],
+        default="retrieval",
+        help="retrieval=MemoryStore baselines; mcp=silex_recall service path",
+    )
 
     return parser
 
@@ -422,7 +466,14 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
 
         ui.render_step("Core skills", "Installing bundled workflow skills...")
         from silex.plugins.registry import get_registry
-        installed = get_registry().install_core_skills()
+        reg = get_registry()
+        try:
+            ok, refresh_msg = reg.refresh_from_remote()
+            if ok:
+                ui.render_step("Core skills", refresh_msg)
+        except Exception:
+            pass
+        installed = reg.install_core_skills()
         ui.render_step(
             "Core skills",
             f"Installed {len(installed)} skills: {', '.join(installed) or 'none'}",
@@ -581,13 +632,24 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
     store.save_settings(settings_payload)
 
     if onboard:
+        ui.render_step("Semantic memory", "Prefetching embedding model (one-time download)...")
+        from silex.ops.prefetch import prefetch_embedding_model
+        prefetch_msg = prefetch_embedding_model()
+        if prefetch_msg:
+            ui.render_step("Semantic memory", prefetch_msg)
+            await asyncio.sleep(0.5)
+
+    if onboard:
         ui.render_step(
             "You're ready",
             "Next steps:\n\n"
-            "  kinthic              — interactive terminal agent\n"
-            "  kinthic telegram run — messaging bot (if paired)\n"
-            "  kinthic skills list  — browse installed skills\n"
-            "  kinthic mcp list     — MCP server status",
+            "  kinthic                      — interactive terminal agent\n"
+            "  kinthic daemon install       — 24/7 service (survives reboot)\n"
+            "  kinthic channels telegram run — messaging bot (if paired)\n"
+            "  kinthic skills list          — browse installed skills\n"
+            "  kinthic mcp list             — MCP client integrations\n"
+            "  kinthic mcp print-config     — connect Claude/Cursor to Silex memory\n"
+            "  kinthic data backup          — export ~/.kinthic (restore with data restore)",
             subtitle="Run kinthic doctor --ping anytime to verify connectivity",
         )
     else:
@@ -595,7 +657,7 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
         ui.render_step(
             "Activation Complete",
             f"Kinthic cognitive core is now active.\n\n  {greeting}",
-            subtitle="Run 'kinthic onboard' for the full first-run path, or 'kinthic' to start",
+            subtitle="Run 'kinthic init' for the full first-run path, or 'kinthic' to start",
         )
     ui.prompt("Press Enter to exit")
     ui.clear()
@@ -625,8 +687,7 @@ def run_onboard() -> None:
 
 
 def run_setup() -> None:
-    print("Tip: use 'kinthic onboard' for the full first-run wizard (provider, skills, Telegram, MCP).")
-    asyncio.run(run_interactive_setup())
+    run_onboard()
 
 
 
@@ -641,7 +702,11 @@ def run_doctor(*, ping: bool = False) -> None:
         provider_label = f"Custom ({settings.get('custom_label', 'Unknown')})"
 
     print("\nKinthic doctor\n")
-    print(f"Setup complete: {status['setup_completed']}")
+    if not status["setup_completed"]:
+        print("Setup complete: False  ← expected before first run of `kinthic init`")
+        print("Next step: run `kinthic init` to configure your provider and skills.\n")
+    else:
+        print(f"Setup complete: {status['setup_completed']}")
     print(f"Provider: {provider_label}")
     print(f"Model: {status['model']}")
     print(f"Provider key configured: {status['provider_configured']}")
@@ -688,6 +753,26 @@ def run_doctor(*, ping: bool = False) -> None:
             print(line)
     except Exception as exc:
         print(f"MCP status unavailable: {exc}")
+
+    try:
+        from silex.mcp.server.app import get_mcp_context
+        from silex.mcp.server.audit import get_audit_log
+        from silex.utils.config import gateway_host, gateway_port
+
+        ctx = get_mcp_context()
+        print(f"Silex MCP server endpoint: http://{gateway_host()}:{gateway_port()}/mcp")
+        print(f"Silex MCP active in-process: {'yes' if ctx else 'no (start daemon/gateway)'}")
+        audit = get_audit_log()
+        print(f"MCP audit log: {audit.path}")
+        if audit.last_error:
+            print(f"MCP audit last error: {audit.last_error}")
+    except Exception as exc:
+        print(f"Silex MCP server status unavailable: {exc}")
+
+    from silex.utils.config import KINTHIC_BACKUPS, KINTHIC_HOME
+    print(f"Kinthic data home: {KINTHIC_HOME}")
+    print("Backup/restore: kinthic data backup | kinthic data restore <archive> [--apply]")
+    print(f"Pre-restore safety backups: {KINTHIC_BACKUPS}")
     
     warnings = []
     if os.name == "nt":
@@ -697,6 +782,14 @@ def run_doctor(*, ping: bool = False) -> None:
         print("\nWarnings:")
         for warning in warnings:
             print(f"- {warning}")
+
+    try:
+        import importlib.util
+        if browser_actions_enabled() and importlib.util.find_spec("playwright") is None:
+            print("\nWarnings:")
+            print("- Browser tools are enabled but playwright is not installed. Run: pip install 'kinthic[browser]'")
+    except Exception:
+        pass
 
     if ping:
         import asyncio
@@ -782,23 +875,86 @@ def run_skills(command: str, name: str | None = None) -> None:
     from silex.core.skills import SkillLoader
 
     registry = get_registry()
+    loader = SkillLoader()
+
     if command == "list":
         entries = registry.get_all(type_filter="skill")
-        print("\nKinthic skills\n")
+        print("\nKinthic skills (catalog)\n")
         print(registry.format_list(entries))
-        loader = SkillLoader()
         count = loader.load_all()
-        print(f"\nLoaded locally: {count} skill(s)")
+        print(f"\nLoaded locally: {count} skill(s)\n")
+        for row in loader.list_skills_detailed():
+            trigger = f" | trigger: {row['trigger']}" if row.get("trigger") else ""
+            print(
+                f"  [{row['trust_level']}] {row['name']} ({row.get('source', 'user')})"
+                f"{trigger}\n    {row['description']}"
+            )
     elif command == "search":
         results = registry.search(name or "", type_filter="skill")
         print(registry.format_list(results))
     elif command == "install":
         ok, msg = registry.install(name or "")
+        if ok:
+            loader.load_all()
+        print(msg if ok else f"Failed: {msg}")
+    elif command == "uninstall":
+        ok, msg = registry.uninstall(name or "")
+        if ok:
+            loader.load_all()
+        print(msg if ok else f"Failed: {msg}")
+    elif command == "show":
+        loader.load_all()
+        body = loader.get_skill_body(name or "")
+        if body is None:
+            print(f"Skill '{name}' not loaded.")
+            return
+        meta = loader.skill_meta.get(name or "")
+        if meta and meta.trigger:
+            print(f"# {name}\nTrigger: {meta.trigger}\n")
+        print(body)
+    elif command == "refresh":
+        ok, msg = registry.refresh_from_remote()
         print(msg if ok else f"Failed: {msg}")
     elif command == "reload":
-        loader = SkillLoader()
         count = loader.load_all()
         print(f"Reloaded {count} skill(s) from ~/.kinthic/skills/")
+
+
+def run_benchmark_recall(
+    *,
+    seed: int = 42,
+    noise: int | None = None,
+    conditions: list[str] | None = None,
+    output: str | None = None,
+    report: str | None = None,
+    track: str = "retrieval",
+) -> None:
+    import asyncio
+    from pathlib import Path
+
+    from benchmarks.memory_recall.harness import run_benchmark, run_mcp_benchmark
+
+    runner = run_mcp_benchmark if track == "mcp" else run_benchmark
+    payload = asyncio.run(
+        runner(
+            seed=seed,
+            noise_count=noise,
+            conditions=conditions,
+            output_json=Path(output) if output else None,
+            output_md=Path(report) if report else None,
+        )
+    )
+    hybrid = None
+    for cond in payload.get("conditions", []):
+        if cond["name"] == "aged_21d":
+            hybrid = cond["baselines"].get("hybrid", {})
+            break
+    if hybrid:
+        print(
+            f"\naged_21d hybrid — Hit@5: {hybrid.get('hit_at_5', 0):.1%} | "
+            f"Hit@12: {hybrid.get('hit_at_12', 0):.1%} | MRR: {hybrid.get('mrr', 0):.3f}"
+        )
+    print(f"Full report: benchmarks/memory_recall/results/REPORT.md")
 
 
 def run_mcp(command: str, name: str | None = None, **kwargs) -> None:
@@ -855,6 +1011,17 @@ def run_mcp(command: str, name: str | None = None, **kwargs) -> None:
             if server_filter and tool.server_name != server_filter:
                 continue
             print(f"  {tool.name}: {tool.description[:80]}")
+    elif command == "serve":
+        if kwargs.get("stdio"):
+            from silex.mcp.server.stdio_bridge import run_stdio_bridge
+            run_stdio_bridge()
+        else:
+            print("Use --stdio for Claude Desktop / Cursor, or connect via HTTP when daemon is running:")
+            from silex.utils.config import gateway_host, gateway_port
+            print(f"  http://{gateway_host()}:{gateway_port()}/mcp")
+    elif command == "print-config":
+        from silex.mcp.server.print_config import print_config
+        print_config(kwargs.get("client", "claude"))
 
 
 def run_usage() -> None:
@@ -893,7 +1060,16 @@ def run_backup(command: str, output: str) -> None:
         from silex.ops.backup import export_backup
         export_backup(output)
     else:
-        print("Usage: kinthic backup export [--output filename.zip]")
+        print("Usage: kinthic data backup [--output filename.zip]")
+
+
+def run_restore(archive: str, *, apply: bool, pre_backup: bool) -> None:
+    from silex.ops.backup import print_restore_summary, restore_backup
+
+    summary = restore_backup(archive, apply=apply, pre_backup=pre_backup)
+    print_restore_summary(summary, apply=apply)
+    if summary.get("errors"):
+        raise SystemExit(1)
 
 def run_migrate(command: str, source: str, path: str | None, dry_run: bool) -> None:
     if source == "hermes":
@@ -924,8 +1100,9 @@ def run_start() -> None:
     import sys
     import os
     import json
+    import time
     from silex.utils.config import KINTHIC_DAEMON_LOCK
-    
+
     if KINTHIC_DAEMON_LOCK.exists():
         try:
             lock_data = json.loads(KINTHIC_DAEMON_LOCK.read_text(encoding="utf-8").strip())
@@ -937,15 +1114,49 @@ def run_start() -> None:
         except Exception:
             pass
 
+    # Prefer systemd/LaunchAgent when the service unit is installed.
+    try:
+        from silex.ops.service import is_service_installed, start_service
+        if is_service_installed():
+            ok, msg = start_service()
+            print(msg)
+            if ok:
+                return
+    except Exception:
+        pass
+
     print("Starting Kinthic daemon in the background...")
-    
-    if os.name == 'nt':
+    daemon_argv = [sys.executable, sys.argv[0], "daemon", "run"]
+
+    if os.name == "nt":
         CREATE_NO_WINDOW = 0x08000000
-        subprocess.Popen([sys.executable, sys.argv[0], "daemon"], creationflags=CREATE_NO_WINDOW)
+        subprocess.Popen(daemon_argv, creationflags=CREATE_NO_WINDOW)
     else:
-        subprocess.Popen([sys.executable, sys.argv[0], "daemon"], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-    print("Daemon started.")
+        subprocess.Popen(
+            daemon_argv,
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    # Wait briefly for the lockfile — the child should create it almost immediately.
+    for _ in range(30):
+        if KINTHIC_DAEMON_LOCK.exists():
+            try:
+                lock_data = json.loads(KINTHIC_DAEMON_LOCK.read_text(encoding="utf-8").strip())
+                pid = lock_data.get("pid")
+                if pid:
+                    os.kill(pid, 0)
+                    print(f"Daemon started (PID {pid}).")
+                    return
+            except Exception:
+                pass
+        time.sleep(0.1)
+
+    print(
+        "Error: daemon process did not start (no lockfile after 3s). "
+        "Run 'kinthic daemon run' in the foreground to see the error."
+    )
 
 def run_stop() -> None:
     import json
@@ -962,6 +1173,17 @@ def run_stop() -> None:
         print("Corrupted daemon.lock. Removing.")
         lock_path.unlink(missing_ok=True)
         return
+
+    try:
+        from silex.ops.service import is_service_installed, stop_service
+        if is_service_installed():
+            ok, msg = stop_service()
+            if ok:
+                print(msg)
+                lock_path.unlink(missing_ok=True)
+                return
+    except Exception:
+        pass
 
     try:
         os.kill(pid, 0)  # existence check
@@ -993,7 +1215,11 @@ def run_proposals(command: str, proposal_id: str | None = None) -> None:
                 for p in proposals:
                     print(f"{p.id[:8]} {p.target_system} {p.description}")
             elif command in {"approve", "reject"}:
-                await engine.update_status(proposal_id, command + "d") # type: ignore
+                status = {"approve": "approved", "reject": "rejected"}.get(command)
+                if not status:
+                    print(f"Unknown proposals command: {command}")
+                    return
+                await engine.update_status(proposal_id, status)  # type: ignore
         finally:
             await db.close()
     asyncio.run(_run())
@@ -1003,22 +1229,40 @@ def run_web() -> None:
     import subprocess
     import sys
     import os
-    from silex.utils.config import PROJECT_ROOT
-    
+    from silex.utils.config import PROJECT_ROOT, gateway_host, gateway_port
+    from silex.runtime.settings import RuntimeSettingsStore
+
     dashboard_path = PROJECT_ROOT / "kinthic-dashboard"
     if not dashboard_path.exists():
-        print("Dashboard not found. Run the setup or check installation.")
+        print(
+            "Dashboard is not bundled in this install (dev checkout only).\n"
+            "On a server, run:\n"
+            "  kinthic daemon install\n"
+            f"  ssh -N -L {gateway_port()}:{gateway_host()}:{gateway_port()} user@your-host\n"
+            f"Then open http://127.0.0.1:{gateway_port()}/api/health"
+        )
         return
-        
+
+    # Auto-provision (or reuse) the local web API key and hand it to the
+    # Next.js dev server so the dashboard can authenticate to the gateway
+    # without any manual setup step.
+    api_key = RuntimeSettingsStore().ensure_web_api_key()
+    api_base = f"http://{gateway_host()}:{gateway_port()}"
+
     print("Starting Kinthic Dashboard (Backend + Frontend)...")
     api_proc = None
     ui_proc = None
     try:
         api_proc = subprocess.Popen([sys.executable, str(PROJECT_ROOT / "scripts" / "dashboard_api.py")])
         npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
-        ui_proc = subprocess.Popen([npm_cmd, "run", "dev"], cwd=str(dashboard_path))
-        
-        print("\n[+] Dashboard is running! Press Ctrl+C to stop.")
+        ui_env = {
+            **os.environ,
+            "NEXT_PUBLIC_KINTHIC_API_KEY": api_key,
+            "NEXT_PUBLIC_KINTHIC_API_BASE": api_base,
+        }
+        ui_proc = subprocess.Popen([npm_cmd, "run", "dev"], cwd=str(dashboard_path), env=ui_env)
+
+        print(f"\n[+] Dashboard is running against {api_base} (Press Ctrl+C to stop).")
         ui_proc.wait()
     except KeyboardInterrupt:
         print("\nStopping dashboard...")
@@ -1114,6 +1358,7 @@ def run_daemon_foreground() -> None:
         lock_path.unlink(missing_ok=True)
 
 def main() -> None:
+    import sys
     parser = build_parser()
     args = parser.parse_args()
 
@@ -1122,7 +1367,7 @@ def main() -> None:
         run_main()
         return
 
-    if args.command == "init":
+    if args.command in ("init", "innit", "onboard", "setup"):
         run_onboard()
     elif args.command == "doctor":
         run_doctor(ping=getattr(args, "ping", False))
@@ -1143,18 +1388,49 @@ def main() -> None:
             run_daemon_logs()
         elif args.daemon_command == "run":
             run_daemon_foreground()
+        elif args.daemon_command == "install":
+            from silex.ops.service import install_service
+            ok, msg = install_service(force=getattr(args, "force", False))
+            print(msg)
+            if not ok:
+                sys.exit(1)
+        elif args.daemon_command == "uninstall":
+            from silex.ops.service import uninstall_service
+            ok, msg = uninstall_service()
+            print(msg)
+            if not ok:
+                sys.exit(1)
         else:
             print("Unknown daemon command")
     elif args.command == "data":
         if args.data_command == "backup":
             run_backup("export", getattr(args, "output", "kinthic-backup.zip"))
+        elif args.data_command == "restore":
+            apply = bool(getattr(args, "apply", False))
+            dry_run = bool(getattr(args, "dry_run", False))
+            if apply and dry_run:
+                print("Use either --dry-run or --apply, not both.")
+                raise SystemExit(1)
+            if not apply and not dry_run:
+                dry_run = True
+            run_restore(
+                getattr(args, "archive"),
+                apply=apply,
+                pre_backup=not getattr(args, "no_pre_backup", False),
+            )
         elif args.data_command == "export":
             _run_export_trajectories(args)
         elif args.data_command == "migrate":
-            if getattr(args, "scan_only", False):
-                run_migrate("scan", getattr(args, "source", ""), getattr(args, "path", None), True)
+            source = getattr(args, "source", "")
+            path = getattr(args, "path", None)
+            if getattr(args, "scan_only", False) or (
+                not getattr(args, "dry_run", False) and not getattr(args, "apply", False)
+            ):
+                run_migrate("scan", source, path, True)
+            elif getattr(args, "apply", False):
+                run_migrate("import", source, path, False)
             else:
-                run_migrate("import", getattr(args, "source", ""), getattr(args, "path", None), getattr(args, "dry_run", True))
+                run_migrate("import", source, path, True)
         else:
             print("Unknown data command")
     elif args.command == "channels":
@@ -1180,7 +1456,22 @@ def main() -> None:
             command=getattr(args, "mcp_exec", None),
             args=getattr(args, "mcp_args", None),
             server=getattr(args, "server", None),
+            stdio=getattr(args, "stdio", False),
+            client=getattr(args, "client", "claude"),
         )
+    elif args.command == "benchmark":
+        cmd = getattr(args, "benchmark_command", None) or "recall"
+        if cmd == "recall":
+            run_benchmark_recall(
+                seed=getattr(args, "seed", 42),
+                noise=getattr(args, "noise", None),
+                conditions=getattr(args, "conditions", None),
+                output=getattr(args, "output", None),
+                report=getattr(args, "report", None),
+                track=getattr(args, "track", "retrieval"),
+            )
+        else:
+            print(f"Unknown benchmark command: {cmd}")
 
 
 if __name__ == "__main__":

@@ -15,12 +15,55 @@ from silex.utils.logger import setup_logger
 log = setup_logger("kinthic.daemon")
 
 
+def _webhook_url_is_safe(url: str) -> bool:
+    """Restrict the watchdog webhook to public http(s) endpoints.
+
+    KINTHIC_WATCHDOG_WEBHOOK is operator-set, not remote-attacker-controlled,
+    but it's still a raw URL handed to a fetcher — allowlist the scheme and
+    resolve+check the host so a mistyped/malicious value can't be used to
+    probe loopback/private/link-local addresses (including cloud metadata
+    endpoints at 169.254.169.254, which resolves as link-local) from this
+    process.
+    """
+    import ipaddress
+    import socket as _socket
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    host = parsed.hostname
+    if not host:
+        return False
+    try:
+        resolved = _socket.getaddrinfo(host, None)
+    except Exception:
+        return False
+    for _family, _type, _proto, _canon, sockaddr in resolved:
+        try:
+            ip = ipaddress.ip_address(sockaddr[0])
+        except ValueError:
+            continue
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+            return False
+    return True
+
+
 def run_gateway_worker() -> None:
     """Entry point for the Omnichannel Gateway (FastAPI server + Adapters)."""
     try:
         import uvicorn
+        from silex.utils.config import gateway_host, gateway_port
         # We pass the import string so uvicorn can run it
-        uvicorn.run("silex.api.server:app", host="0.0.0.0", port=8000, log_level="warning")
+        uvicorn.run(
+            "silex.api.server:app",
+            host=gateway_host(),
+            port=gateway_port(),
+            log_level="warning",
+        )
     except KeyboardInterrupt:
         pass
     except Exception as e:
@@ -221,9 +264,33 @@ def run_cron_worker() -> None:
 
             last_daily = 0.0
             last_memory_decay = 0.0
+            last_vector_reconcile = 0.0
+            VECTOR_RECONCILE_INTERVAL = 6 * 3600  # every 6 hours
 
             while True:
                 now = time.time()
+
+                # ── Periodic SQLite<->ChromaDB integrity reconciliation ─
+                if now - last_vector_reconcile >= VECTOR_RECONCILE_INTERVAL:
+                    try:
+                        from silex.memory.memory_store import MemoryStore
+
+                        mem_store = MemoryStore(db)
+                        reindexed = await mem_store.reconcile_vector_index()
+                        retried_deletes = await mem_store.retry_pending_vector_deletes()
+                        if reindexed:
+                            log.info(
+                                "Cron worker: vector integrity reconciliation re-indexed %d memories.",
+                                reindexed,
+                            )
+                        if retried_deletes:
+                            log.info(
+                                "Cron worker: cleared %d pending vector-store delete(s).",
+                                retried_deletes,
+                            )
+                        last_vector_reconcile = now
+                    except Exception as e:
+                        log.error(f"Cron worker vector reconciliation error: {e}")
 
                 # ── Daily maintenance pass ──────────────────────────────
                 if now - last_daily >= 86400:
@@ -303,6 +370,10 @@ class DaemonWatchdog:
     # Heartbeat check is throttled to once every 60s to avoid
     # thousands of unnecessary DB open/close cycles per day.
     HEARTBEAT_CHECK_INTERVAL = 60.0
+    LOG_ROTATE_INTERVAL = 3600.0
+    LOG_ROTATE_MAX_BYTES = 10 * 1024 * 1024
+    MAX_CONSECUTIVE_FAILURES = 5
+    BACKOFF_SECONDS = (2, 5, 15, 60)
 
     def __init__(self):
         self.gateway_process: multiprocessing.Process | None = None
@@ -311,15 +382,131 @@ class DaemonWatchdog:
         self.cron_process: multiprocessing.Process | None = None
         self.running = False
         self._last_heartbeat_check: float = 0.0  # epoch seconds
+        self._last_log_rotate: float = 0.0
+        self._worker_state: dict[str, dict] = {}
+
+    def _worker_state_for(self, name: str) -> dict:
+        return self._worker_state.setdefault(
+            name,
+            {
+                "consecutive_failures": 0,
+                "next_restart_at": 0.0,
+                "started_at": 0.0,
+                "disabled": False,
+            },
+        )
+
+    def _rotate_daemon_log_if_needed(self) -> None:
+        from silex.utils.config import KINTHIC_DAEMON_LOG
+
+        if not KINTHIC_DAEMON_LOG.exists():
+            return
+        if KINTHIC_DAEMON_LOG.stat().st_size <= self.LOG_ROTATE_MAX_BYTES:
+            return
+        for i in range(2, 0, -1):
+            old = KINTHIC_DAEMON_LOG.with_name(f"daemon.log.{i}")
+            new = KINTHIC_DAEMON_LOG.with_name(f"daemon.log.{i + 1}")
+            if old.exists():
+                try:
+                    old.replace(new)
+                except OSError:
+                    pass
+        try:
+            KINTHIC_DAEMON_LOG.replace(KINTHIC_DAEMON_LOG.with_name("daemon.log.1"))
+        except OSError:
+            pass
+
+    def _maybe_restart_worker(
+        self,
+        name: str,
+        process: multiprocessing.Process | None,
+        target,
+        *,
+        normal_exit_codes: tuple[int | None, ...] = (0, None),
+    ) -> multiprocessing.Process | None:
+        """Restart a dead worker with backoff; disable after repeated crashes."""
+        if process is None or process.is_alive():
+            return process
+
+        state = self._worker_state_for(name)
+        if state["disabled"]:
+            return process
+
+        exit_code = process.exitcode
+        now = time.time()
+
+        if exit_code in normal_exit_codes:
+            state["consecutive_failures"] = 0
+            state["next_restart_at"] = 0.0
+            log.info("%s exited normally (code=%s); restarting.", name, exit_code)
+            return self.start_process(target, name)
+
+        # Waiting for backoff window before restart attempt.
+        if state["next_restart_at"] and now < state["next_restart_at"]:
+            return process
+
+        # Backoff elapsed (or first scheduling pass) — restart now.
+        if state["next_restart_at"] and now >= state["next_restart_at"]:
+            state["next_restart_at"] = 0.0
+            new_proc = self.start_process(target, name)
+            state["started_at"] = time.time()
+            return new_proc
+
+        # First observation of a crash — schedule backoff and alert once.
+        state["consecutive_failures"] += 1
+        backoff_idx = min(state["consecutive_failures"] - 1, len(self.BACKOFF_SECONDS) - 1)
+        delay = self.BACKOFF_SECONDS[backoff_idx]
+        state["next_restart_at"] = now + delay
+
+        if state["consecutive_failures"] >= self.MAX_CONSECUTIVE_FAILURES:
+            state["disabled"] = True
+            msg = (
+                f"⚠️ [FATAL] {name} crashed {state['consecutive_failures']} times in a row "
+                f"(last exit code {exit_code}). Watchdog will not restart it until daemon reload."
+            )
+            log.critical(msg)
+            self._send_webhook(msg)
+            return process
+
+        msg = (
+            f"⚠️ [CRITICAL] {name} died with exit code {exit_code}! "
+            f"Restart in {delay}s (failure {state['consecutive_failures']}/{self.MAX_CONSECUTIVE_FAILURES})."
+        )
+        log.warning(msg)
+        self._send_webhook(msg)
+        return process
+
+    def _track_worker_uptime_resets(self) -> None:
+        """Reset failure counters after a worker has stayed up for 30s."""
+        now = time.time()
+        for name, proc in (
+            ("GatewayWorker", self.gateway_process),
+            ("CognitiveWorker", self.cognitive_process),
+            ("WatcherWorker", self.watcher_process),
+            ("CronWorker", self.cron_process),
+        ):
+            state = self._worker_state_for(name)
+            if proc and proc.is_alive() and state["started_at"]:
+                if now - state["started_at"] >= 30.0:
+                    state["consecutive_failures"] = 0
+                    state["next_restart_at"] = 0.0
+                    state["started_at"] = 0.0
 
     def _send_webhook(self, message: str) -> None:
         webhook_url = os.environ.get("KINTHIC_WATCHDOG_WEBHOOK")
         if not webhook_url:
             return
-            
+
         import urllib.request
         import json
-        
+
+        if not _webhook_url_is_safe(webhook_url):
+            log.error(
+                "KINTHIC_WATCHDOG_WEBHOOK is set to an unsafe target (must be a public "
+                "http(s) URL, not a loopback/private/link-local address) — refusing to send."
+            )
+            return
+
         log.info(f"Sending out-of-band webhook alert: {message}")
         payload = {
             "text": message,
@@ -344,6 +531,7 @@ class DaemonWatchdog:
         log.info(f"Watchdog starting {name}...")
         p = multiprocessing.Process(target=target, name=name, daemon=True)
         p.start()
+        self._worker_state_for(name)["started_at"] = time.time()
         return p
 
     def _recover_stale_jobs(self) -> None:
@@ -434,39 +622,33 @@ class DaemonWatchdog:
         # The Watchdog Loop
         while self.running:
             try:
-                # 1. Check Gateway Worker
-                if self.gateway_process and not self.gateway_process.is_alive():
-                    msg = f"⚠️ [CRITICAL] Gateway worker died with exit code {self.gateway_process.exitcode}! Watchdog restarting it..."
-                    log.warning(msg)
-                    self._send_webhook(msg)
-                    self.gateway_process = self.start_process(run_gateway_worker, "GatewayWorker")
+                now = time.time()
+                if now - self._last_log_rotate >= self.LOG_ROTATE_INTERVAL:
+                    self._last_log_rotate = now
+                    self._rotate_daemon_log_if_needed()
 
-                # 3. Check Cognitive Worker
-                if self.cognitive_process and not self.cognitive_process.is_alive():
-                    msg = f"⚠️ [CRITICAL] Cognitive worker died with exit code {self.cognitive_process.exitcode}! Watchdog restarting it..."
-                    log.warning(msg)
-                    self._send_webhook(msg)
-                    self.cognitive_process = self.start_process(run_cognitive_worker, "CognitiveWorker")
-                else:
-                    # Throttle: only check heartbeats once per 60s, not every 2s loop tick
-                    now = time.time()
+                self.gateway_process = self._maybe_restart_worker(
+                    "GatewayWorker", self.gateway_process, run_gateway_worker
+                )
+                self.cognitive_process = self._maybe_restart_worker(
+                    "CognitiveWorker",
+                    self.cognitive_process,
+                    run_cognitive_worker,
+                    normal_exit_codes=(0, None),
+                )
+                self.watcher_process = self._maybe_restart_worker(
+                    "WatcherWorker", self.watcher_process, run_watcher_worker
+                )
+                self.cron_process = self._maybe_restart_worker(
+                    "CronWorker", self.cron_process, run_cron_worker
+                )
+
+                self._track_worker_uptime_resets()
+
+                if self.cognitive_process and self.cognitive_process.is_alive():
                     if now - self._last_heartbeat_check >= self.HEARTBEAT_CHECK_INTERVAL:
                         self._last_heartbeat_check = now
                         self._check_heartbeats()
-
-                # 4. Check Watcher Worker
-                if self.watcher_process and not self.watcher_process.is_alive():
-                    msg = f"⚠️ [CRITICAL] Watcher worker died with exit code {self.watcher_process.exitcode}! Watchdog restarting it..."
-                    log.warning(msg)
-                    self._send_webhook(msg)
-                    self.watcher_process = self.start_process(run_watcher_worker, "WatcherWorker")
-
-                # 5. Check Cron Worker
-                if self.cron_process and not self.cron_process.is_alive():
-                    msg = f"⚠️ [CRITICAL] Cron worker died with exit code {self.cron_process.exitcode}! Watchdog restarting it..."
-                    log.warning(msg)
-                    self._send_webhook(msg)
-                    self.cron_process = self.start_process(run_cron_worker, "CronWorker")
 
                 time.sleep(2.0)  # Gentle polling
             except Exception as e:

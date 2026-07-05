@@ -1,53 +1,26 @@
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict, Any
+"""Deprecated standalone dashboard API.
 
-from silex.storage.database import Database
-from silex.utils.config import SILEX_DB
+This used to run a second, unauthenticated FastAPI app with only a single
+`/api/graph` route — duplicating (and colliding on the same port with)
+`silex.api.server`, which has since grown the full chat/settings/metrics
+surface plus the local API-key + Origin auth gate.
 
-# We instantiate a fresh read-only Database instance
-db_path = SILEX_DB
-db = Database(str(db_path))
+Kept as a thin re-export so `python scripts/dashboard_api.py` (used by
+`kinthic web`) still works, but it now serves the exact same authenticated
+gateway app as the daemon instead of an insecure duplicate.
+"""
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Setup
-    await db.connect()
-    yield
-    # Teardown
-    await db.close()
+import sys
+from pathlib import Path
 
-app = FastAPI(title="Kinthic Dashboard API", lifespan=lifespan)
+# Dev checkout: agent/ lives at repo root but is not always on sys.path when
+# this script is spawned as `python scripts/dashboard_api.py`.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-# Allow CORS for the Vite dev server
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Adjust in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.get("/api/graph")
-async def get_graph() -> Dict[str, Any]:
-    """Fetch all epistemic nodes and edges for the graph visualization."""
-    try:
-        # Fetch nodes
-        node_rows = await db.fetch_all("SELECT node_id, type, content, status FROM epistemic_nodes")
-        nodes = [dict(row) for row in node_rows]
-        
-        # Fetch edges
-        edge_rows = await db.fetch_all("SELECT edge_id, source_node_id, target_node_id, relation_type FROM epistemic_edges")
-        edges = [dict(row) for row in edge_rows]
-        
-        return {
-            "nodes": nodes,
-            "edges": edges,
-        }
-    except Exception as e:
-        return {"error": str(e), "nodes": [], "edges": []}
+from silex.api.server import app  # noqa: F401
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    from silex.utils.config import gateway_host, gateway_port
+
+    uvicorn.run(app, host=gateway_host(), port=gateway_port())

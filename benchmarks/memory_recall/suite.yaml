@@ -1,0 +1,118 @@
+version: 1
+description: >
+  Needle-in-haystack recall suite. Each needle carries a unique token (NEEDLE_*)
+  to avoid accidental noise matches. Queries are paraphrased — not copy-paste
+  of needle content.
+
+needles:
+  - id: deploy_window
+    content: "NEEDLE_DEPLOY_7x9k Deploy window is Tuesday 02:00 UTC. Rollback plan kinthic-rollback-v3."
+    query: "When do we deploy to production?"
+    must_contain: ["Tuesday", "02:00"]
+    importance: 0.9
+    age_days: 21
+
+  - id: staging_db
+    content: "NEEDLE_STAGING_4m2p Staging postgres URL is postgres://staging.internal:5432/kinthic"
+    query: "What's the staging database connection string?"
+    must_contain: ["postgres", "5432"]
+    importance: 0.5
+    age_days: 21
+
+  - id: project_codename
+    content: "NEEDLE_CODENAME_8z1q Project codename is Kinthic and the memory engine is Silex."
+    query: "What is the internal project name?"
+    must_contain: ["Kinthic", "Silex"]
+    importance: 0.7
+    age_days: 21
+
+  - id: oncall_rotation
+    content: "NEEDLE_ONCALL_3v8n Primary on-call this sprint is Alex; backup is Sam for pagerduty."
+    query: "Who handles production incidents this week?"
+    must_contain: ["Alex", "pagerduty"]
+    importance: 0.6
+    age_days: 21
+
+  - id: api_key_vault
+    content: "NEEDLE_VAULT_9k2w Production API keys live in vault path secret/prod/kinthic-api-v2."
+    query: "Where are production API credentials stored?"
+    must_contain: ["vault", "kinthic-api"]
+    importance: 0.85
+    age_days: 21
+
+  - id: user_preference_theme
+    content: "NEEDLE_THEME_1p4x User prefers dark mode in all developer tools and terminals."
+    query: "What UI theme does the user like?"
+    must_contain: ["dark mode"]
+    importance: 0.4
+    age_days: 21
+
+  - id: release_branch
+    content: "NEEDLE_BRANCH_6h3c Release branch for v1.2 is release/1.2.0-cutoff-feb-14."
+    query: "Which git branch is the v1.2 release cut from?"
+    must_contain: ["release/1.2.0"]
+    importance: 0.55
+    age_days: 21
+
+  - id: dog_name
+    content: "NEEDLE_PET_2d7f The user's dog is named Pixel and loves fetch at the park."
+    query: "What's my dog's name?"
+    must_contain: ["Pixel"]
+    importance: 0.75
+    age_days: 21
+
+  - id: paraphrase_deploy
+    content: "NEEDLE_ROLLBACK_5t1m Rollback artifact for production is kinthic-rollback-v3 stored in S3."
+    query: "Which rollback bundle do we use if prod deploy fails?"
+    must_contain: ["kinthic-rollback-v3"]
+    importance: 0.8
+    age_days: 21
+
+  - id: low_signal_fact
+    content: "NEEDLE_MISC_0a9b Office plants are watered on Wednesdays by facilities."
+    query: "When are the office plants watered?"
+    must_contain: ["Wednesday"]
+    importance: 0.25
+    age_days: 21
+
+  - id: unique_token_only
+    content: "NEEDLE_UNIQUE_zephyr-quantum-4417 is the canary deployment identifier."
+    query: "What identifier do we use for canary deployments?"
+    must_contain: ["zephyr-quantum-4417"]
+    importance: 0.5
+    age_days: 21
+
+  - id: semantic_paraphrase
+    content: "NEEDLE_LATENCY_8n4p P99 API latency budget is 250ms for checkout endpoints."
+    query: "How fast must checkout APIs respond at the tail?"
+    must_contain: ["250ms", "checkout"]
+    importance: 0.65
+    age_days: 21
+
+noise:
+  count: 500
+  templates:
+    - "User asked about {topic} during standup on {day}."
+    - "Completed task: refactor {module} module for better {metric}."
+    - "Preference note: prefers {tool} over {alt} for {task}."
+    - "Meeting summary: discussed {topic}, action item assigned to {person}."
+    - "Debug log: {module} returned status {code} at {time}."
+    - "Code review comment on {file}: consider extracting {pattern}."
+    - "Reminder: renew {service} subscription before {month}."
+    - "Test run: {suite} passed {count} cases with {metric} coverage."
+
+conditions:
+  - name: fresh
+    age_days_override: 0
+    importance_override: null
+
+  - name: aged_21d
+    age_days_override: 21
+    importance_override: null
+
+  - name: aged_21d_low_importance
+    age_days_override: 21
+    importance_override: 0.2
+
+scoring:
+  k_values: [5, 12]

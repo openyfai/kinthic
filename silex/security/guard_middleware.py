@@ -63,7 +63,10 @@ class MemoryGuardMiddleware:
     def validate_read_attempt(self, memory_id: str, content: str, signature: str) -> bool:
         """Verify memory hasn't been tampered with in the DB."""
         if not signature:
-            # For backward compatibility with unsigned memories
+            # Reject unsigned memories if strict mode is enabled
+            if MEMORY_GUARD_STRICT:
+                log.warning(f"MemoryGuard rejected unsigned memory read attempt: {memory_id}")
+                return False
             return True
             
         expected = self._generate_signature(content, memory_id)

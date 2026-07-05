@@ -1,0 +1,67 @@
+---
+title: WSL setup
+description: Install and run Kinthic on Windows using WSL2.
+---
+
+Kinthic runs on **Linux only**. On Windows, use **WSL2** (Windows Subsystem for Linux).
+
+<Warning>
+  Do **not** run the installer from PowerShell or Git Bash. Open **Ubuntu** (or your WSL distro) from the Start menu.
+</Warning>
+
+## 1. Enable WSL2
+
+Open PowerShell **as Administrator**:
+
+```powershell
+wsl --install
+```
+
+Restart if prompted, then open **Ubuntu** from the Start menu.
+
+Verify:
+
+```bash
+uname -a
+# Should mention Microsoft / WSL
+```
+
+## 2. Install Kinthic
+
+Inside your **WSL Ubuntu** terminal:
+
+```bash
+curl -fsSL https://kinthic.openyf.dev/install.sh | bash
+source ~/.bashrc
+```
+
+## 3. Initialize
+
+```bash
+kinthic init
+```
+
+This configures your LLM provider, installs core skills, optional Telegram pairing, and optional MCP servers.
+
+## 4. Run
+
+```bash
+kinthic                        # terminal agent
+kinthic channels telegram run  # messaging bot (after pairing)
+kinthic doctor --ping          # verify API connectivity
+```
+
+## Common mistakes
+
+| Mistake | Fix |
+|---------|-----|
+| Running `curl \| bash` in PowerShell | Open WSL Ubuntu first |
+| `$'\r': command not found` | Script has Windows line endings — re-download or clone with LF |
+| `kinthic: command not found` | `source ~/.bashrc` or open a new WSL tab |
+| Provider ping fails | Re-run `kinthic init` and check API key in `~/.kinthic/.env` |
+| `No virtual environment found` during install | Use the latest installer from `kinthic.openyf.dev` |
+
+## Next steps
+
+- [Getting started](/start/getting-started)
+- [Troubleshooting](/help/troubleshooting)

@@ -18,18 +18,29 @@ import asyncio
 import json
 from datetime import datetime, timezone
 from math import exp
+from typing import Any
 
 from silex.memory.admission_control import AdmissionController
 from silex.security.guard_middleware import MemoryGuardMiddleware
 from silex.models.schemas import Memory, MemorySource, MemoryType
 from silex.storage.database import Database
 from silex.utils.config import (
+    MAX_CONTEXT_MEMORY_CHARS,
     MAX_IMPORTANT_MEMORIES,
     MAX_RECENT_MEMORIES,
     MAX_RELEVANT_MEMORIES,
+    MAX_RETRIEVAL_QUERY_CHARS,
 )
 from silex.memory.vector_store import VectorStore
 import hashlib
+
+async def _run_sync(fn, /, *args, **kwargs):
+    """Run blocking work in a worker thread (anyio-safe for MCP HTTP transport)."""
+    import anyio.to_thread
+
+    if kwargs:
+        return await anyio.to_thread.run_sync(lambda: fn(*args, **kwargs))
+    return await anyio.to_thread.run_sync(fn, *args)
 from silex.utils.logger import setup_logger
 from silex.storage.graph_buffer import GraphTransactionBuffer
 
@@ -48,8 +59,44 @@ class MemoryStore:
         self._fts5_available: bool | None = None  # lazily probed on first search
 
     async def flush(self) -> None:
-        """Atomically flush all pending memory operations to SQLite."""
-        await self.buffer.commit_flush()
+        """Atomically flush all pending SQLite writes, then upsert their vectors.
+
+        Vector writes only happen for memories that `commit_flush()` confirms
+        were actually committed to SQLite — never before, and never for
+        memories that end up not being committed (e.g. an outer transaction
+        that rolls back before this runs). This is what closes the "orphan
+        vector" split-brain for memories added while nested inside a
+        caller-managed transaction (see `add()` below): those calls only
+        stage; the vector write is deferred all the way to this point.
+        """
+        flushed_memories = await self.buffer.commit_flush()
+        for memory in flushed_memories:
+            await self._upsert_vector(memory)
+
+    async def _upsert_vector(self, memory: Memory) -> None:
+        """Best-effort vector upsert for an already SQLite-durable memory.
+
+        Must only ever be called after the corresponding SQLite row is
+        committed. Failure here is logged, not raised — `reconcile_vector_index`
+        (startup + periodic) backfills any memory missing a vector, so a
+        failure here delays semantic recall rather than losing the memory.
+        """
+        if not self.vs.is_active:
+            return
+        content_type = memory.memory_type.value if isinstance(memory.memory_type, MemoryType) else memory.memory_type
+        try:
+            await _run_sync(
+                self.vs.add_chunks,
+                [memory.content],
+                [{"type": content_type, "timestamp": datetime.now(timezone.utc).timestamp()}],
+                ids=[memory.id],
+            )
+        except Exception as e:
+            log.error(
+                "Vector store write failed for %s after SQLite commit; "
+                "will be backfilled by the next reconciliation pass: %s",
+                memory.id, e,
+            )
 
     async def _check_fts5(self) -> bool:
         """Return True if the memories_fts FTS5 virtual table is available."""
@@ -61,22 +108,24 @@ class MemoryStore:
                 self._fts5_available = False
         return self._fts5_available
 
+    async def fts5_available(self) -> bool:
+        """Public wrapper for FTS5 availability checks."""
+        return await self._check_fts5()
+
     # ------------------------------------------------------------------
     # CRUD
     # ------------------------------------------------------------------
 
-    async def add(self, memory: Memory) -> Memory | None:
-        """Store a new memory (with duplicate detection and A-MAC gating)."""
-        # Check for duplicates - skip if a very similar memory exists
+    async def add_with_result(self, memory: Memory) -> dict:
+        """Store a memory and return structured admission outcome (MCP/API transparency)."""
         if await self._is_duplicate(memory.content):
             log.debug(f"Skipped duplicate memory: {memory.content[:40]}...")
-            return None
+            return {"accepted": False, "memory": None, "reason": "duplicate", "amac_score": None}
 
-        # A-MAC Evaluation
         async def novelty_checker(cand: str) -> float:
             if self.vs.is_active:
                 try:
-                    results = await asyncio.to_thread(self.vs.search, cand, 1)
+                    results = await _run_sync(self.vs.search, cand, 1)
                     if results and "distance" in results[0]:
                         return results[0]["distance"]
                 except Exception as e:
@@ -84,39 +133,66 @@ class MemoryStore:
             return 1.0
 
         content_type = memory.memory_type.value if isinstance(memory.memory_type, MemoryType) else memory.memory_type
-        
         prov_dict = memory.provenance if isinstance(memory.provenance, dict) else {}
         source_context = prov_dict.get("context", "")
         session_id = prov_dict.get("session_id", None)
         user_id = prov_dict.get("user_id", "default")
-        
+
         guard_result = self.guard.validate_write_attempt(memory.id, memory.content)
         if not guard_result["allowed"]:
             log.warning(f"MemoryGuard rejected memory write for {memory.id}")
-            return None
-            
+            return {"accepted": False, "memory": None, "reason": "guard_blocked", "amac_score": None}
+
         if guard_result["flagged"]:
             memory.confidence *= 0.5
             memory.importance *= 0.5
-            
+
         prov_dict["hmac_signature"] = guard_result.get("signature")
         memory.provenance = prov_dict
-        
+
         amac_result = await self.amac.evaluate_admission(
             memory.content,
             content_type,
             source_context,
-            novelty_checker
+            novelty_checker,
         )
-        
-        if not amac_result["admitted"]:
-            log.info(f"Memory rejected by A-MAC (Score: {amac_result['composite_score']:.2f}): {memory.content[:40]}...")
-            return None
 
-        # Apply payload gating
+        if not amac_result["admitted"]:
+            score = amac_result.get("composite_score")
+            log.info(f"Memory rejected by A-MAC (Score: {score:.2f}): {memory.content[:40]}...")
+            return {
+                "accepted": False,
+                "memory": None,
+                "reason": "amac_rejected",
+                "amac_score": float(score) if score is not None else None,
+            }
+
+        stored = await self._commit_admitted_memory(
+            memory, amac_result, content_type, user_id, session_id
+        )
+        return {
+            "accepted": True,
+            "memory": stored,
+            "reason": "accepted",
+            "amac_score": float(amac_result.get("composite_score", 0.0)),
+        }
+
+    async def add(self, memory: Memory) -> Memory | None:
+        """Store a new memory (with duplicate detection and A-MAC gating)."""
+        result = await self.add_with_result(memory)
+        return result.get("memory") if result.get("accepted") else None
+
+    async def _commit_admitted_memory(
+        self,
+        memory: Memory,
+        amac_result: dict,
+        content_type: str,
+        user_id: str,
+        session_id,
+    ) -> Memory:
+        """Persist a memory that passed guard + A-MAC checks."""
         memory.content = amac_result.get("sanitized_content", memory.content)
 
-        # Vector 3 Fix: Safe float parsing and string encoding to prevent crashes
         import math
         composite_score = amac_result.get("composite_score", 0.0)
         if math.isnan(composite_score):
@@ -173,25 +249,29 @@ class MemoryStore:
             except Exception:
                 self._fts5_available = None
 
-        async def _write_vector_store() -> None:
-            if self.vs.is_active:
-                await asyncio.to_thread(
-                    self.vs.add_chunks,
-                    [memory.content],
-                    [{"type": content_type, "timestamp": datetime.now(timezone.utc).timestamp()}],
-                    ids=[memory.id],
-                )
-
         from silex.storage.database import transaction_depth_var
 
-        # Phase 1 Fix: Vector store write must be atomic with SQLite transaction
+        await _write_sqlite_rows()
+
         if transaction_depth_var.get() == 0:
-            async with self.db.transaction():
-                await _write_sqlite_rows()
-                await _write_vector_store()
+            # Commit SQLite FIRST, then upsert the vector. This ordering (and
+            # only vector-writing memories that `commit_flush()` confirms were
+            # actually committed) is the fix for the historical "orphan
+            # vector" split-brain: previously the vector was written
+            # before/independently of the SQLite commit, so a crash or later
+            # rollback left a vector with no backing row — and since
+            # duplicate/novelty checks only query ChromaDB, that orphan would
+            # permanently block the same content from ever being re-added.
+            flushed_memories = await self.buffer.commit_flush()
+            for flushed in flushed_memories:
+                await self._upsert_vector(flushed)
         else:
-            await _write_sqlite_rows()
-            await _write_vector_store()
+            # Nested inside a caller-managed outer transaction: only stage.
+            # Committing (and therefore vector-writing) here would be unsafe —
+            # the outer transaction might still roll back this row. The
+            # eventual top-level `flush()` call performs both the commit and
+            # the vector upsert together once this data is actually durable.
+            pass
 
         log.debug(f"Stored memory (A-MAC {composite_score:.2f}): {memory.content[:60]}...")
         return memory
@@ -236,12 +316,66 @@ class MemoryStore:
 
         if self.vs.is_active:
             try:
-                await asyncio.to_thread(self.vs.delete_by_ids, [memory_id])
+                await _run_sync(self.vs.delete_by_ids, [memory_id])
             except Exception as e:
-                log.error("Vector store delete failed for %s (SQLite committed): %s", memory_id, e)
+                # SQLite has already committed the delete — the vector is now an
+                # orphan. Don't log-and-forget: durably queue it for retry so it
+                # gets cleaned up even across a process restart, instead of
+                # silently lingering in ChromaDB (and in search results) until
+                # the next full reconciliation pass happens to notice it.
+                log.error(
+                    "Vector store delete failed for %s (SQLite already committed); queuing for retry: %s",
+                    memory_id, e,
+                )
+                try:
+                    await self.db.execute(
+                        "INSERT OR REPLACE INTO pending_vector_deletes (memory_id, queued_at, attempts) VALUES (?, ?, 0)",
+                        (memory_id, datetime.now(timezone.utc).timestamp()),
+                    )
+                except Exception as queue_exc:
+                    log.error("Failed to queue vector-delete retry for %s: %s", memory_id, queue_exc)
 
         log.info(f"Deleted memory: {row['content'][:40]}...")
         return True
+
+    async def retry_pending_vector_deletes(self, max_attempts: int = 10) -> int:
+        """Retry vector-store deletes that failed at delete()-time.
+
+        Call on startup and periodically (see cron worker). Idempotent.
+        Returns the count of successfully retried deletes.
+        """
+        if not self.vs.is_active:
+            return 0
+
+        rows = await self.db.fetch_all(
+            "SELECT memory_id, attempts FROM pending_vector_deletes WHERE attempts < ?",
+            (max_attempts,),
+        )
+        if not rows:
+            return 0
+
+        succeeded = 0
+        for row in rows:
+            memory_id = row["memory_id"]
+            try:
+                await _run_sync(self.vs.delete_by_ids, [memory_id])
+                await self.db.execute(
+                    "DELETE FROM pending_vector_deletes WHERE memory_id = ?", (memory_id,)
+                )
+                succeeded += 1
+            except Exception as e:
+                log.warning("Retry of pending vector delete for %s failed (attempt %d): %s", memory_id, row["attempts"] + 1, e)
+                try:
+                    await self.db.execute(
+                        "UPDATE pending_vector_deletes SET attempts = attempts + 1 WHERE memory_id = ?",
+                        (memory_id,),
+                    )
+                except Exception:
+                    pass
+
+        if succeeded:
+            log.info("Retried %d pending vector delete(s) successfully.", succeeded)
+        return succeeded
 
     async def delete_by_index(self, index: int) -> bool:
         """Delete a memory by its display index (1-based)."""
@@ -262,6 +396,25 @@ class MemoryStore:
             (now, memory_id),
         )
 
+    async def update_access_bulk(self, memory_ids: list[str]) -> None:
+        """Mark multiple memories as accessed in a single batched write.
+
+        Used by retrieve_context, which previously issued one UPDATE per
+        retrieved memory (each a separate round-trip through the serialized
+        writer queue) on every single turn.
+        """
+        if not memory_ids:
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        await self.db.executemany(
+            """
+            UPDATE memories
+            SET last_accessed = ?, access_count = access_count + 1
+            WHERE id = ?
+            """,
+            [(now, memory_id) for memory_id in memory_ids],
+        )
+
     async def count(self) -> int:
         """Get total memory count."""
         row = await self.db.fetch_one("SELECT COUNT(*) as cnt FROM memories")
@@ -274,28 +427,60 @@ class MemoryStore:
         )
         return [m for r in rows if (m := self._row_to_memory(r)) is not None]
 
+    async def list_page(
+        self, offset: int = 0, limit: int = 20, tag: str | None = None
+    ) -> tuple[list[Memory], int]:
+        """Paginated memory listing with optional tag filter."""
+        if tag:
+            count_row = await self.db.fetch_one(
+                """
+                SELECT COUNT(*) as cnt FROM memories m, json_each(m.tags) je
+                WHERE je.value = ?
+                """,
+                (tag,),
+            )
+            rows = await self.db.fetch_all(
+                """
+                SELECT m.* FROM memories m, json_each(m.tags) je
+                WHERE je.value = ?
+                ORDER BY m.importance DESC
+                LIMIT ? OFFSET ?
+                """,
+                (tag, limit, offset),
+            )
+        else:
+            count_row = await self.db.fetch_one("SELECT COUNT(*) as cnt FROM memories")
+            rows = await self.db.fetch_all(
+                "SELECT * FROM memories ORDER BY importance DESC LIMIT ? OFFSET ?",
+                (limit, offset),
+            )
+        total = int(count_row["cnt"]) if count_row else 0
+        memories = [m for r in rows if (m := self._row_to_memory(r)) is not None]
+        return memories, total
+
     async def search(self, query: str) -> list[Memory]:
         """Search memories by keyword (for the :search command)."""
         return await self._search_relevant(query, limit=50)
 
-    async def add_manual(self, content: str, importance: float = 0.5, level: int = 1, child_memory_ids: list[str] = None) -> Memory:
+    async def add_manual(self, content: str, importance: float = 0.5, level: int = 1, child_memory_ids: list[str] = None, tags: list[str] | None = None) -> Memory | None:
         """Add a memory manually from user command or pruner flush.
 
         Bypasses A-MAC threshold and duplicate check (intentional), but still
         runs the injection guard to prevent prompt-injection via memory content.
+
+        Returns None if the guard blocks the write — callers (e.g. the weekly
+        consolidator) must treat that identically to "nothing was persisted"
+        and must NOT archive/discard other memories on the assumption that
+        this one landed. Previously this returned a Memory object even when
+        blocked, so callers had no way to distinguish "persisted" from
+        "guard-blocked", which caused consolidation to archive children whose
+        synthesis was silently never written.
         """
         # Apply injection guard even on manual/system memories
         guard_result = self.guard.validate_write_attempt(f"manual-{content[:32]}", content)
         if not guard_result["allowed"]:
             log.warning("MemoryGuard blocked add_manual content: %s...", content[:40])
-            return Memory(
-                content=content,
-                source=MemorySource.USER,
-                importance=importance,
-                tags=["manual", "guard_blocked"],
-                level=level,
-                child_memory_ids=child_memory_ids or [],
-            )
+            return None
         if guard_result["flagged"]:
             importance = importance * 0.7
 
@@ -303,7 +488,7 @@ class MemoryStore:
             content=content,
             source=MemorySource.USER,
             importance=importance,
-            tags=["manual"],
+            tags=list(tags) if tags else ["manual"],
             level=level,
             child_memory_ids=child_memory_ids or [],
         )
@@ -334,9 +519,11 @@ class MemoryStore:
                 memory.archived_at,
             ),
         )
-        if self.vs.is_active:
-            type_val = memory.memory_type.value if isinstance(memory.memory_type, MemoryType) else memory.memory_type
-            await asyncio.to_thread(self.vs.add_chunks, [memory.content], [{"type": type_val, "timestamp": datetime.now(timezone.utc).timestamp()}], ids=[memory.id])
+        # SQLite is already durable above; route the vector write through the
+        # same best-effort helper `add()` uses so a Chroma failure here can't
+        # raise past a committed write and crash the caller (e.g. the weekly
+        # consolidator) — reconcile_vector_index backfills it instead.
+        await self._upsert_vector(memory)
 
         try:
             if await self._check_fts5():
@@ -358,6 +545,10 @@ class MemoryStore:
         """
         Retrieve memory context using hybrid search (RRF) blending keyword and semantic pools.
         """
+        # A pathologically long query (e.g. a pasted document used as turn
+        # input) would otherwise be tokenized into thousands of FTS terms and
+        # embedded in full for no retrieval-quality benefit.
+        query = query[:MAX_RETRIEVAL_QUERY_CHARS]
         candidates: dict[str, Memory] = {}
 
         # Pool 1: Recent
@@ -381,7 +572,7 @@ class MemoryStore:
         semantic_results = []
         semantic_memories = []
         if query.strip() and self.vs.is_active:
-            semantic_results = await asyncio.to_thread(self.vs.search, query, MAX_RELEVANT_MEMORIES * 2)
+            semantic_results = await _run_sync(self.vs.search, query, MAX_RELEVANT_MEMORIES * 2)
             semantic_ids = [res["id"] for res in semantic_results if res.get("id")]
             if semantic_ids:
                 placeholders = ",".join("?" * len(semantic_ids))
@@ -393,7 +584,9 @@ class MemoryStore:
                 now_ts = datetime.now(timezone.utc).timestamp()
                 for row in rows:
                     res = next((r for r in semantic_results if r["id"] == row["id"]), None)
-                    if res:
+                    if not res:
+                        continue
+                    try:
                         created_at = datetime.fromisoformat(row["created_at"])
                         age_days = (now_ts - created_at.timestamp()) / 86400.0
                         adjusted_score = (1.0 - res.get("distance", 1.0)) * math.exp(-age_days / 180.0)
@@ -402,6 +595,10 @@ class MemoryStore:
                             if m is not None:
                                 semantic_memories.append(m)
                                 candidates[m.id] = m
+                    except Exception as exc:
+                        # A single malformed timestamp/row must not abort retrieval
+                        # for the whole turn — skip just this candidate.
+                        log.warning("Skipping malformed memory row %s during semantic scoring: %s", row.get("id"), exc)
 
         # Reciprocal Rank Fusion (RRF) for hybrid search relevance blending
         rrf_scores = {}
@@ -465,9 +662,22 @@ class MemoryStore:
             reverse=True,
         )
 
-        # Update access timestamps for retrieved memories
+        # Enforce a total content-size budget: keep highest-scoring memories
+        # (already sorted above) until the budget is exhausted, rather than
+        # handing the full candidate pool to the prompt assembler unbounded.
+        budgeted_result: list[Memory] = []
+        total_chars = 0
         for m in result:
-            await self.update_access(m.id)
+            content_len = len(m.content)
+            if budgeted_result and total_chars + content_len > MAX_CONTEXT_MEMORY_CHARS:
+                break
+            budgeted_result.append(m)
+            total_chars += content_len
+        result = budgeted_result
+
+        # Update access timestamps for retrieved memories in one batched write
+        # instead of N sequential round-trips through the writer queue.
+        await self.update_access_bulk([m.id for m in result])
 
         log.debug(f"Retrieved {len(result)} memories for context")
         return result
@@ -488,11 +698,17 @@ class MemoryStore:
         )
         return [m for r in rows if (m := self._row_to_memory(r)) is not None]
 
+    # Hard cap on distinct FTS MATCH terms per query — even a query within the
+    # char budget could pathologically consist of thousands of short unique
+    # tokens (e.g. "a1 a2 a3 ...").
+    _MAX_FTS_KEYWORDS = 40
+
     async def _search_relevant(self, query: str, limit: int) -> list[Memory]:
         """
         Keyword relevance search: FTS5 (BM25) when available, LIKE fallback.
         """
-        keywords = [kw.strip().lower() for kw in query.split() if len(kw.strip()) > 2]
+        query = query[:MAX_RETRIEVAL_QUERY_CHARS]
+        keywords = [kw.strip().lower() for kw in query.split() if len(kw.strip()) > 2][: self._MAX_FTS_KEYWORDS]
         if not keywords:
             return []
 
@@ -598,7 +814,7 @@ class MemoryStore:
         Falls back to word overlap if VectorStore is offline.
         """
         if self.vs.is_active:
-            results = await asyncio.to_thread(self.vs.search, content, 1)
+            results = await _run_sync(self.vs.search, content, 1)
             # Distance < 0.2 typically indicates semantic equivalence with MiniLM
             if results and results[0].get("distance", 1.0) < 0.2:
                 return True
@@ -698,33 +914,52 @@ class MemoryStore:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _row_to_memory(self, row: dict) -> Memory | None:
-        """Convert a database row to a Memory model; verify HMAC integrity."""
-        provenance = json.loads(row.get("provenance_json", "{}"))
-        signature = provenance.get("hmac_signature")
-        if signature and not self.guard.validate_read_attempt(
-            row["id"], row["content"], signature
-        ):
-            log.warning("MemoryGuard rejected tampered memory on read: %s", row["id"])
-            return None
+    @staticmethod
+    def _safe_json_loads(raw: Any, default: Any) -> Any:
+        """Parse JSON, tolerating corrupt/legacy rows instead of raising."""
+        if raw is None:
+            return default
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return default
 
-        return Memory(
-            id=row["id"],
-            content=row["content"],
-            source=row["source"],
-            memory_type=row.get("memory_type", "semantic"),
-            importance=row["importance"],
-            confidence=row.get("confidence", 0.5),
-            created_at=row["created_at"],
-            last_accessed=row["last_accessed"],
-            access_count=row["access_count"],
-            tags=json.loads(row["tags"]),
-            level=row.get("level", 1),
-            child_memory_ids=json.loads(row.get("child_memory_ids", "[]")),
-            provenance=provenance,
-            related_memories=json.loads(row["related_memories"]),
-            archived_at=row.get("archived_at"),
-        )
+    def _row_to_memory(self, row: dict) -> Memory | None:
+        """Convert a database row to a Memory model; verify HMAC integrity.
+
+        A single corrupt column (bad JSON, unparseable timestamp) must not
+        crash the whole retrieval batch — such rows are skipped (logged) so
+        the rest of the turn's context can still be assembled.
+        """
+        try:
+            provenance = self._safe_json_loads(row.get("provenance_json"), {})
+            signature = provenance.get("hmac_signature") if isinstance(provenance, dict) else None
+            if signature and not self.guard.validate_read_attempt(
+                row["id"], row["content"], signature
+            ):
+                log.warning("MemoryGuard rejected tampered memory on read: %s", row["id"])
+                return None
+
+            return Memory(
+                id=row["id"],
+                content=row["content"],
+                source=row["source"],
+                memory_type=row.get("memory_type", "semantic"),
+                importance=row["importance"],
+                confidence=row.get("confidence", 0.5),
+                created_at=row["created_at"],
+                last_accessed=row["last_accessed"],
+                access_count=row["access_count"],
+                tags=self._safe_json_loads(row.get("tags"), []),
+                level=row.get("level", 1),
+                child_memory_ids=self._safe_json_loads(row.get("child_memory_ids"), []),
+                provenance=provenance if isinstance(provenance, dict) else {},
+                related_memories=self._safe_json_loads(row.get("related_memories"), []),
+                archived_at=row.get("archived_at"),
+            )
+        except Exception as exc:
+            log.error("Skipping corrupt memory row %s: %s", row.get("id", "<unknown>"), exc)
+            return None
     # ------------------------------------------------------------------
     # Semantic Profiles (Phase 7)
     # ------------------------------------------------------------------
@@ -764,11 +999,39 @@ class MemoryStore:
         rows = await self.db.fetch_all("SELECT term, objective_proxies FROM semantic_profiles")
         return {row["term"]: json.loads(row["objective_proxies"]) for row in rows}
 
+    async def get_vector_drift_count(self) -> int:
+        """Cheap, read-only check of SQLite<->ChromaDB id-set drift.
+
+        Unlike `reconcile_vector_index`, this performs no repair and no
+        embedding calls — just an id-set diff — so it's safe to call from a
+        hot path like `/api/metrics`.
+        """
+        if not self.vs.is_active:
+            return 0
+        try:
+            rows = await self.db.fetch_all("SELECT id FROM memories WHERE archived_at IS NULL")
+            valid_ids = {row["id"] for row in rows}
+            existing = self.vs.collection.get(include=[])
+            existing_ids = set(existing.get("ids", []))
+        except Exception as e:
+            log.warning("Vector drift check failed: %s", e)
+            return -1
+        return len(valid_ids ^ existing_ids)
+
     async def reconcile_vector_index(self) -> int:
-        """Re-sync: ensure every non-archived SQLite memory has a vector entry.
-        
-        Call on startup or after a vector store crash. Idempotent.
-        Returns the count of re-indexed memories.
+        """Re-sync SQLite <-> ChromaDB in both directions. Idempotent.
+
+        Forward: ensure every non-archived SQLite memory has a vector entry
+        (heals a memory whose vector write failed or was never attempted).
+
+        Reverse: purge vectors with no backing non-archived SQLite row. These
+        are orphans left by a crash/rollback between a vector write and the
+        SQLite commit; left alone, dedup/novelty checks (which only query
+        ChromaDB) would treat that content as a permanent duplicate and block
+        the same memory from ever being re-added.
+
+        Call on startup (see CognitiveLoop.startup) or after a vector store
+        crash. Returns the count of re-indexed (forward-healed) memories.
         """
         if not self.vs.is_active:
             return 0
@@ -776,8 +1039,9 @@ class MemoryStore:
         rows = await self.db.fetch_all(
             "SELECT id, content, memory_type FROM memories WHERE archived_at IS NULL"
         )
-        # Get existing vector IDs
-        existing_ids = set()
+        valid_ids = {row["id"] for row in rows}
+
+        existing_ids: set[str] = set()
         try:
             existing = self.vs.collection.get(include=[])
             existing_ids = set(existing.get("ids", []))
@@ -788,7 +1052,7 @@ class MemoryStore:
         for row in rows:
             if row["id"] not in existing_ids:
                 try:
-                    await asyncio.to_thread(
+                    await _run_sync(
                         self.vs.add_chunks,
                         [row["content"]],
                         [{"type": row["memory_type"], "timestamp": 0.0}],
@@ -797,6 +1061,18 @@ class MemoryStore:
                     count += 1
                 except Exception as e:
                     log.error("Reconcile failed for memory %s: %s", row["id"], e)
+
+        orphan_ids = existing_ids - valid_ids
+        if orphan_ids:
+            try:
+                await _run_sync(self.vs.delete_by_ids, list(orphan_ids))
+                log.warning(
+                    "Vector index reconciliation: purged %d orphaned vector(s) with no backing memory row",
+                    len(orphan_ids),
+                )
+            except Exception as e:
+                log.error("Failed to purge orphaned vectors: %s", e)
+
         if count:
             log.info("Vector index reconciliation: re-indexed %d memories", count)
         return count

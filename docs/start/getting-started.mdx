@@ -1,0 +1,123 @@
+---
+title: Getting started
+description: Install Kinthic, run the init wizard, and start your first session.
+---
+
+This is the **single golden path** from zero to a working agent.
+
+## Prerequisites
+
+- **Linux or macOS**, or **WSL2 on Windows** — see [WSL setup](/start/wsl)
+- `curl` and `git` (the installer handles Python via `uv`)
+
+## Step 1 — Install
+
+Inside a **Linux terminal** (WSL Ubuntu on Windows):
+
+```bash
+curl -fsSL https://kinthic.openyf.dev/install.sh | bash
+source ~/.bashrc   # or ~/.zshrc
+```
+
+The installer:
+
+1. Downloads `uv` into `~/.kinthic/bin`
+2. Creates a Python 3.12 venv at `~/.kinthic/runtime/venv`
+3. Installs Kinthic with MCP and vector memory support
+4. Registers `kinthic` on your PATH
+
+Verify:
+
+```bash
+kinthic doctor
+```
+
+## Step 2 — Initialize
+
+```bash
+kinthic init
+```
+
+`kinthic onboard` and `kinthic setup` are aliases for the same wizard.
+
+The wizard walks through:
+
+1. LLM provider and API key (with live ping)
+2. Core skills (research, release notes, Telegram setup, daily briefing, and more)
+3. Optional Telegram pairing
+4. Optional MCP servers (filesystem / fetch)
+
+## Step 3 — Run
+
+```bash
+kinthic
+```
+
+Try: *Analyze this repo and summarize the architecture.*
+
+For a background service that survives reboot:
+
+```bash
+kinthic daemon install
+kinthic daemon start
+```
+
+## Telegram (optional)
+
+After configuring a bot token during `kinthic init`:
+
+```bash
+kinthic channels telegram run
+```
+
+Or let the daemon manage the gateway — see [Telegram guide](/guides/telegram).
+
+## Skills
+
+```bash
+kinthic skills list
+kinthic skills search docker
+kinthic skills install repo_onboard
+kinthic skills reload
+```
+
+Inside a session, use `:skills` and the `skill_view` tool for full instructions. See [Skills](/concepts/skills).
+
+## MCP (optional)
+
+```bash
+kinthic mcp add filesystem --preset filesystem
+kinthic mcp enable filesystem
+kinthic mcp test filesystem
+```
+
+Details: [MCP guide](/guides/mcp).
+
+## Verify connectivity
+
+```bash
+kinthic doctor
+kinthic doctor --ping
+```
+
+## Develop from source
+
+```bash
+git clone https://github.com/openyfai/kinthic.git
+cd kinthic
+uv venv .venv && source .venv/bin/activate
+uv pip install -e ".[mcp,vector,dev]"
+kinthic init
+kinthic
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Memory engine" icon="brain" href="/concepts/memory">
+    Understand how Silex stores and recalls knowledge.
+  </Card>
+  <Card title="Daemon" icon="server" href="/guides/daemon">
+    Run Kinthic 24/7 with systemd or LaunchAgent.
+  </Card>
+</CardGroup>

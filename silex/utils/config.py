@@ -197,6 +197,14 @@ def ensure_kinthic_home() -> None:
                     shutil.copy2(src, dest)
                 except OSError as exc:
                     log.debug("Could not seed skill %s: %s", src.name, exc)
+            sidecar = bundled_skills_dir / f"{src.stem}.yaml"
+            if sidecar.exists():
+                dest_yaml = KINTHIC_SKILLS / sidecar.name
+                if not dest_yaml.exists():
+                    try:
+                        shutil.copy2(sidecar, dest_yaml)
+                    except OSError as exc:
+                        log.debug("Could not seed skill sidecar %s: %s", sidecar.name, exc)
 
     if not KINTHIC_DIRECTIVES_FILE.exists():
         KINTHIC_DIRECTIVES_FILE.write_text(
@@ -457,6 +465,15 @@ def terminal_execution_enabled() -> bool:
             env_flag("ARIA_ENABLE_TERMINAL_EXECUTION", _saved_security_flag("terminal_execution", False)))
 
 
+def terminal_host_fallback_enabled() -> bool:
+    """Whether terminal commands may run directly on the host when Docker is
+    unavailable. Defaults to OFF: an unsandboxed host fallback defeats the
+    purpose of the approval gate, since the child process inherits the same
+    privileges and (if not scrubbed) secrets as the daemon itself.
+    """
+    return env_flag("KINTHIC_ALLOW_HOST_TERMINAL_FALLBACK", False)
+
+
 def code_apply_enabled() -> bool:
     """Whether Kinthic may apply code edits without a human approval step."""
     return (env_flag("SILEX_ENABLE_CODE_APPLY") or 
@@ -488,6 +505,45 @@ def max_tool_calls_per_turn() -> int:
         return max(1, int(raw))
     except ValueError:
         return 8
+
+
+def gateway_host() -> str:
+    """Bind address for the HTTP gateway. Defaults to loopback-only.
+
+    Only widen this (e.g. to 0.0.0.0) if you understand that the gateway
+    has no TLS and relies on the web API key + Origin allowlist for auth.
+    """
+    return os.getenv("KINTHIC_GATEWAY_HOST", "127.0.0.1")
+
+
+def gateway_port() -> int:
+    raw = os.getenv("KINTHIC_GATEWAY_PORT", "8000")
+    try:
+        return int(raw)
+    except ValueError:
+        return 8000
+
+
+def gateway_allowed_origins() -> list[str]:
+    """Explicit browser Origins allowed to call the local gateway (no wildcards)."""
+    extra = os.getenv("KINTHIC_DASHBOARD_ORIGIN", "")
+    origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+    if extra:
+        origins.extend(o.strip() for o in extra.split(",") if o.strip())
+    return origins
+
+
+def gateway_auth_required() -> bool:
+    """Whether the gateway must validate the web API key on every request.
+
+    Defaults to True: the gateway executes tools/terminal commands on behalf
+    of whoever can reach it, so even on loopback it must not trust arbitrary
+    browser requests (any tab, e.g. a malicious website, can reach 127.0.0.1).
+    """
+    return env_flag("KINTHIC_GATEWAY_AUTH_REQUIRED", True)
 
 
 def get_process_role() -> str:
@@ -528,6 +584,17 @@ def autonomy_policy_snapshot() -> dict:
 MAX_RECENT_MEMORIES = 5
 MAX_IMPORTANT_MEMORIES = 5
 MAX_RELEVANT_MEMORIES = 5
+
+# Hard cap on the retrieval query text itself (chars). Without this, a huge
+# pasted document used as a turn's input would be tokenized into thousands of
+# FTS MATCH terms and embedded in full, making a single retrieval pathologically
+# slow/expensive for no retrieval-quality benefit.
+MAX_RETRIEVAL_QUERY_CHARS = int(os.getenv("KINTHIC_MAX_RETRIEVAL_QUERY_CHARS", "2000"))
+
+# Hard cap on total memory content (chars) returned by retrieve_context for a
+# single turn, so a large candidate pool can't blow up the prompt's token
+# budget. ~4 chars/token, so this is a rough ~3k token ceiling by default.
+MAX_CONTEXT_MEMORY_CHARS = int(os.getenv("KINTHIC_MAX_CONTEXT_MEMORY_CHARS", "12000"))
 
 # Conversation context
 MAX_HISTORY_TURNS = 10

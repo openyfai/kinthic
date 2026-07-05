@@ -7,6 +7,7 @@ Supports smart chunking for code and markdown to maintain semantic integrity.
 import os
 import json
 import hashlib
+import threading
 from typing import List
 
 from silex.memory.vector_store import VectorStore
@@ -36,6 +37,8 @@ class WorkspaceIndexer:
     """
     Crawls the workspace and populates the VectorStore with semantically chunked content.
     """
+    _lock = threading.Lock()
+    _running = False
 
     def __init__(self, vector_store: VectorStore, root_dir: str, manifest_path=None):
         self.vector_store = vector_store
@@ -44,53 +47,63 @@ class WorkspaceIndexer:
 
     def run(self):
         """Incrementally index changed workspace files."""
-        if not getattr(self.vector_store, "is_active", False):
-            log.info(
-                "Skipping workspace indexing: vector store inactive "
-                "(install ChromaDB / openyfai-vyn[vector])."
-            )
-            return
-        log.info(f"Starting workspace indexing for: {self.root_dir}")
-        previous_manifest = self._load_manifest(self.manifest_path)
-        next_manifest: dict[str, dict] = {}
+        with WorkspaceIndexer._lock:
+            if WorkspaceIndexer._running:
+                log.info("WorkspaceIndexer is already running. Skipping duplicate run.")
+                return
+            WorkspaceIndexer._running = True
 
-        indexed = 0
-        skipped = 0
-        for root, dirs, files in os.walk(self.root_dir):
-            # Filter ignored directories
-            dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
+        try:
+            if not getattr(self.vector_store, "is_active", False):
+                log.info(
+                    "Skipping workspace indexing: vector store inactive "
+                    "(install ChromaDB / openyfai-vyn[vector])."
+                )
+                return
+            log.info(f"Starting workspace indexing for: {self.root_dir}")
+            previous_manifest = self._load_manifest(self.manifest_path)
+            next_manifest: dict[str, dict] = {}
 
-            for file in files:
-                if file.startswith(".") or file in IGNORE_NAMES:
-                    continue
-                ext = os.path.splitext(file)[1].lower()
-                if ext in IGNORE_EXTS:
-                    continue
+            indexed = 0
+            skipped = 0
+            for root, dirs, files in os.walk(self.root_dir):
+                # Filter ignored directories
+                dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
 
-                full_path = os.path.join(root, file)
-                if os.path.abspath(full_path) == os.path.abspath(str(self.manifest_path)):
-                    continue
-                if os.path.getsize(full_path) > MAX_INDEX_FILE_BYTES:
-                    continue
-                rel_path = os.path.relpath(full_path, self.root_dir)
-                
-                try:
-                    fingerprint = self._fingerprint(full_path)
-                    next_manifest[rel_path] = fingerprint
-                    if previous_manifest.get(rel_path) == fingerprint:
-                        skipped += 1
+                for file in files:
+                    if file.startswith(".") or file in IGNORE_NAMES:
                         continue
-                    self.vector_store.delete_by_path(rel_path)
-                    self._index_file(full_path, rel_path, fingerprint)
-                    indexed += 1
-                except Exception as e:
-                    log.error(f"Failed to index {rel_path}: {e}")
+                    ext = os.path.splitext(file)[1].lower()
+                    if ext in IGNORE_EXTS:
+                        continue
 
-        for removed_path in set(previous_manifest) - set(next_manifest):
-            self.vector_store.delete_by_path(removed_path)
+                    full_path = os.path.join(root, file)
+                    if os.path.abspath(full_path) == os.path.abspath(str(self.manifest_path)):
+                        continue
+                    if os.path.getsize(full_path) > MAX_INDEX_FILE_BYTES:
+                        continue
+                    rel_path = os.path.relpath(full_path, self.root_dir)
+                    
+                    try:
+                        fingerprint = self._fingerprint(full_path)
+                        next_manifest[rel_path] = fingerprint
+                        if previous_manifest.get(rel_path) == fingerprint:
+                            skipped += 1
+                            continue
+                        self.vector_store.delete_by_path(rel_path)
+                        self._index_file(full_path, rel_path, fingerprint)
+                        indexed += 1
+                    except Exception as e:
+                        log.error(f"Failed to index {rel_path}: {e}")
 
-        self._save_manifest(self.manifest_path, next_manifest)
-        log.info(f"Indexing complete. Indexed {indexed} changed files; skipped {skipped} unchanged files.")
+            for removed_path in set(previous_manifest) - set(next_manifest):
+                self.vector_store.delete_by_path(removed_path)
+
+            self._save_manifest(self.manifest_path, next_manifest)
+            log.info(f"Indexing complete. Indexed {indexed} changed files; skipped {skipped} unchanged files.")
+        finally:
+            with WorkspaceIndexer._lock:
+                WorkspaceIndexer._running = False
 
     def _index_file(self, full_path: str, rel_path: str, fingerprint: dict):
         """Chunks a single file and adds it to the vector store."""

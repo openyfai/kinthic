@@ -10,6 +10,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 import asyncio
+import os
 
 try:
     import fcntl
@@ -30,6 +31,14 @@ log = setup_logger("silex.storage")
 
 transaction_depth_var: ContextVar[int] = ContextVar("transaction_depth_var", default=0)
 active_transaction_conn_var: ContextVar[aiosqlite.Connection | None] = ContextVar("active_transaction_conn_var", default=None)
+
+# Global registry for active connected databases
+_active_databases: dict[str, Database] = {}
+
+# Sentinel marking an executemany() request in the write queue, distinguishing
+# it from a regular (sql, params, future) single-statement write and from the
+# (None, None, ...) transaction-lease request.
+_EXECUTEMANY_MARKER = object()
 
 # ---------------------------------------------------------------------------
 # Schema — this IS the database definition
@@ -677,6 +686,13 @@ MIGRATIONS_SQL = [
     "CREATE VIRTUAL TABLE IF NOT EXISTS turns_fts USING fts5(user_input, response, id UNINDEXED, tokenize='porter unicode61')",
     # Index last maintenance pass timestamps in user_profiles.global_preferences (JSON)
     # No schema change needed — stored as JSON key inside existing global_preferences column.
+    # Durable retry queue for vector-store deletes that failed after the SQLite
+    # row was already removed — see MemoryStore.delete()/retry_pending_vector_deletes().
+    """CREATE TABLE IF NOT EXISTS pending_vector_deletes (
+        memory_id TEXT PRIMARY KEY,
+        queued_at REAL NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0
+    )""",
 ]
 
 
@@ -684,8 +700,35 @@ MIGRATIONS_SQL = [
 # Database connection management
 # ---------------------------------------------------------------------------
 
+
+class _WriteCompleteCursor:
+    """Placeholder cursor returned after a threaded MCP write."""
+
+    async def fetchone(self):
+        return None
+
+    async def fetchall(self):
+        return []
+
+
 class Database:
     """Async SQLite database wrapper for ARIA with serialized background write queue."""
+
+    # Consecutive writer-loop crashes tolerated before we stop respawning and
+    # start failing writes fast instead of risking another silent hang.
+    MAX_CONSECUTIVE_WRITER_FAILURES = 5
+
+    # How long a caller will wait for room in the (bounded, maxsize=10000)
+    # write queue before the write is shed (rejected) instead of blocking
+    # indefinitely. If the queue stays saturated this long the writer is
+    # structurally stuck (alive but not keeping up) and callers deserve a
+    # fast, clear failure rather than an unbounded hang.
+    WRITE_QUEUE_ENQUEUE_TIMEOUT = float(os.getenv("KINTHIC_WRITE_QUEUE_ENQUEUE_TIMEOUT", "60.0"))
+
+    # How often to attempt a WAL checkpoint(TRUNCATE) so the -wal file doesn't
+    # grow unbounded under sustained write load between SQLite's own passive
+    # auto-checkpoints.
+    WAL_CHECKPOINT_INTERVAL_SECONDS = float(os.getenv("KINTHIC_WAL_CHECKPOINT_INTERVAL_SECONDS", str(30 * 60)))
 
     def __init__(self, db_path: str | None = None):
         self.db_path = db_path or str(SILEX_DB)
@@ -694,9 +737,28 @@ class Database:
         self.worker_task = None
         self.is_running = False
         self._write_conn = None
+        # Set once the writer loop has crashed too many times in a row to
+        # keep respawning. While True, all writes fail immediately instead of
+        # being silently queued forever with nothing left to consume them.
+        self._writer_dead = False
+        self._checkpoint_task = None
+        self._is_shared = False
 
     async def connect(self) -> None:
         """Open the database connection and ensure schema exists."""
+        normalized_path = os.path.abspath(self.db_path)
+        if normalized_path in _active_databases:
+            existing = _active_databases[normalized_path]
+            self._conn = existing._conn
+            self.write_queue = existing.write_queue
+            self.worker_task = existing.worker_task
+            self._write_conn = existing._write_conn
+            self._checkpoint_task = existing._checkpoint_task
+            self._is_shared = True
+            log.info(f"Reusing active database connection for path: {self.db_path}")
+            return
+
+        self._is_shared = False
         log.info(f"Connecting to database: {self.db_path}")
         self._conn = await aiosqlite.connect(self.db_path, timeout=15.0)
         self._conn.row_factory = aiosqlite.Row
@@ -717,8 +779,10 @@ class Database:
         # Start background writer task
         self.is_running = True
         self.worker_task = asyncio.create_task(self._writer_loop_supervisor())
+        self._checkpoint_task = asyncio.create_task(self._periodic_checkpoint_loop())
         
         log.info("Database schema initialized and background writer queue started")
+        _active_databases[normalized_path] = self
 
     async def _run_migrations(self) -> None:
         """Apply additive migrations for existing local SQLite brains."""
@@ -731,7 +795,21 @@ class Database:
 
     async def close(self) -> None:
         """Close the database connection and shut down the writer loop."""
+        if getattr(self, "_is_shared", False):
+            log.debug(f"Skipping close for shared database connection: {self.db_path}")
+            return
+
+        normalized_path = os.path.abspath(self.db_path)
+        _active_databases.pop(normalized_path, None)
+
         self.is_running = False
+        if self._checkpoint_task:
+            self._checkpoint_task.cancel()
+            try:
+                await self._checkpoint_task
+            except (asyncio.CancelledError, Exception):
+                pass
+            self._checkpoint_task = None
         # Stop background writer worker task
         await self.write_queue.put(None)
         if self.worker_task:
@@ -753,6 +831,18 @@ class Database:
             raise RuntimeError("Database not connected. Call connect() first.")
         return self._conn
 
+    async def _enqueue_write(self, item) -> None:
+        """Put a write/transaction-lease request on the queue, shedding
+        (raising) instead of blocking forever if it stays saturated."""
+        try:
+            await asyncio.wait_for(self.write_queue.put(item), timeout=self.WRITE_QUEUE_ENQUEUE_TIMEOUT)
+        except asyncio.TimeoutError:
+            raise RuntimeError(
+                f"Database write queue has been saturated for over "
+                f"{self.WRITE_QUEUE_ENQUEUE_TIMEOUT:.0f}s — shedding this write instead of "
+                f"blocking indefinitely (writer alive but not keeping up)."
+            )
+
     def _is_write_query(self, sql: str) -> bool:
         sql_stripped = sql.strip().upper()
         # Any query modifying data is enqueued
@@ -761,20 +851,69 @@ class Database:
 
     async def execute(self, sql: str, params: tuple = ()) -> aiosqlite.Cursor:
         """Execute a single SQL statement. Auto-commits or routes writes to the background queue."""
+        from silex.utils.mcp_write_context import mcp_http_write_ctx
+
         tx_conn = active_transaction_conn_var.get()
         if tx_conn is not None:
             # We are inside a transaction: run directly on the transaction writer connection
             return await tx_conn.execute(sql, params)
 
         if self._is_write_query(sql):
+            if mcp_http_write_ctx.get():
+                await self.execute_write_in_thread(sql, params)
+                return _WriteCompleteCursor()
+
+            if self._writer_dead:
+                raise RuntimeError("Database writer loop is dead; refusing to queue another write.")
             # Write query outside transaction: execute through background writer queue
             loop = asyncio.get_running_loop()
             future = loop.create_future()
-            await self.write_queue.put((sql, params, future))
+            await self._enqueue_write((sql, params, future))
             return await future
         else:
             # Read query: run on main read-only connection
             return await self.conn.execute(sql, params)
+
+    async def execute_write_in_thread(self, sql: str, params: tuple = ()) -> None:
+        """Run a single write on a sync SQLite connection (MCP HTTP / anyio-safe)."""
+        import anyio.to_thread
+
+        def _run() -> None:
+            import sqlite3
+
+            conn = sqlite3.connect(self.db_path, timeout=30.0)
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute(sql, params)
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
+
+        await anyio.to_thread.run_sync(_run)
+
+    async def executemany(self, sql: str, seq_of_params: list[tuple]) -> None:
+        """Batch INSERT/UPDATE via executemany, routed through the same
+        single-writer path as execute() (writer connection only — never the
+        read connection). No-op on an empty sequence.
+        """
+        if not seq_of_params:
+            return
+
+        tx_conn = active_transaction_conn_var.get()
+        if tx_conn is not None:
+            await tx_conn.executemany(sql, seq_of_params)
+            return
+
+        if self._writer_dead:
+            raise RuntimeError("Database writer loop is dead; refusing to queue another write.")
+
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        await self._enqueue_write((_EXECUTEMANY_MARKER, (sql, seq_of_params), future))
+        await future
 
     @asynccontextmanager
     async def transaction(self):
@@ -788,14 +927,22 @@ class Database:
         transaction_depth_var.set(depth + 1)
         
         if depth == 0:
+            if self._writer_dead:
+                transaction_depth_var.set(0)
+                raise RuntimeError("Database writer loop is dead; refusing to open another transaction.")
+
             start_event = asyncio.Event()
             done_event = asyncio.Event()
             finish_event = asyncio.Event()
             tx_state = {"action": "rollback"}
             
             # Put transaction request in queue
-            await self.write_queue.put((None, None, start_event, done_event, (tx_state, finish_event)))
-            
+            try:
+                await self._enqueue_write((None, None, start_event, done_event, (tx_state, finish_event)))
+            except RuntimeError:
+                transaction_depth_var.set(0)
+                raise
+
             try:
                 await start_event.wait()
             except asyncio.CancelledError:
@@ -815,20 +962,39 @@ class Database:
             # Store connection in ContextVar
             active_transaction_conn_var.set(self._write_conn)
             
+            body_raised = False
             try:
                 yield
                 tx_state["action"] = "commit"
             except BaseException:
+                body_raised = True
                 tx_state["action"] = "rollback"
                 raise
             finally:
                 done_event.set()
+                writer_ack = True
                 try:
                     await asyncio.wait_for(finish_event.wait(), timeout=30.0)
                 except asyncio.TimeoutError:
+                    writer_ack = False
                     log.critical("Transaction finish_event timed out after 30s — writer loop may be dead")
                 active_transaction_conn_var.set(None)
                 transaction_depth_var.set(0)
+
+                # The writer's own 30s watchdog (see _process_write_queue_loop)
+                # can force a rollback of a transaction whose body already ran
+                # to completion here, believing it had committed. Silently
+                # returning in that case would let the caller (and everything
+                # downstream of it) proceed on the false assumption that its
+                # writes are durable. Surface it as a hard failure instead —
+                # but only if the body itself didn't already raise, so we
+                # never mask the original exception.
+                if not body_raised and (tx_state.get("forced_rollback") or not writer_ack):
+                    raise RuntimeError(
+                        "Transaction did not commit: the writer's 30s watchdog forcibly "
+                        "rolled it back (or the writer never acknowledged completion). "
+                        "None of this transaction's writes were persisted."
+                    )
         else:
             try:
                 yield
@@ -849,19 +1015,98 @@ class Database:
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
+    def _drain_queue_with_error(self, error: Exception) -> None:
+        """Fail every still-queued write/transaction request immediately.
+
+        Used when the writer loop is declared dead so callers currently
+        blocked on a future/event don't hang forever waiting for a consumer
+        that will never come back.
+        """
+        while True:
+            try:
+                item = self.write_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            try:
+                if item is None:
+                    continue
+                if item[0] is None:
+                    _, _, start_event, done_event, payload = item
+                    tx_state, finish_event = payload
+                    tx_state["error"] = error
+                    tx_state["action"] = "rollback"
+                    tx_state["forced_rollback"] = True
+                    start_event.set()
+                    done_event.set()
+                    finish_event.set()
+                else:
+                    _, _, future = item
+                    if not future.done():
+                        future.set_exception(error)
+            finally:
+                self.write_queue.task_done()
+
+    async def _periodic_checkpoint_loop(self):
+        """Periodically runs PRAGMA wal_checkpoint(TRUNCATE) so the -wal file
+        is folded back into the main DB file and truncated, instead of
+        growing unbounded under sustained write load between SQLite's own
+        passive auto-checkpoints (which can be starved by long-lived readers).
+
+        Issued directly on the writer connection rather than through the
+        write queue: wrapping it in the queue's implicit BEGIN IMMEDIATE would
+        make the checkpoint always report busy/no-op. aiosqlite serializes all
+        calls on a connection through one background thread, so sharing the
+        connection with the writer loop task is safe — worst case the
+        checkpoint lands mid another statement and reports busy=1, which is
+        harmless and simply retried next interval.
+        """
+        while self.is_running:
+            try:
+                await asyncio.sleep(self.WAL_CHECKPOINT_INTERVAL_SECONDS)
+            except asyncio.CancelledError:
+                return
+            if not self.is_running or self._writer_dead:
+                continue
+            conn = self._write_conn
+            if conn is None:
+                continue
+            try:
+                cursor = await conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                row = await cursor.fetchone()
+                if row is not None:
+                    busy, wal_pages, checkpointed_pages = row[0], row[1], row[2]
+                    if busy:
+                        log.debug(
+                            "WAL checkpoint(TRUNCATE) partial: busy=%s wal_pages=%s checkpointed=%s",
+                            busy, wal_pages, checkpointed_pages,
+                        )
+                    else:
+                        log.debug(
+                            "WAL checkpoint(TRUNCATE) complete: wal_pages=%s checkpointed=%s",
+                            wal_pages, checkpointed_pages,
+                        )
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                log.warning(f"Periodic WAL checkpoint failed (will retry next interval): {e}")
+
     async def _writer_loop_supervisor(self):
         """Supervises the background database writer loop, automatically re-spawning it if it fails/cancels."""
         log.info("Database writer loop supervisor started")
+        consecutive_failures = 0
         while self.is_running:
             try:
                 # Run the actual writer queue loop
                 await self._process_write_queue_loop()
+                consecutive_failures = 0
             except asyncio.CancelledError:
                 log.info("Database writer loop supervisor cancelled")
                 break
             except Exception as e:
+                consecutive_failures += 1
                 log.critical(
-                    f"CRITICAL TELEMETRY: Database writer loop failed with exception: {e}. "
+                    f"CRITICAL TELEMETRY: Database writer loop failed with exception: {e} "
+                    f"(consecutive failure {consecutive_failures}/{self.MAX_CONSECUTIVE_WRITER_FAILURES}). "
                     f"Re-spawning consumer task connection cleanly...",
                     exc_info=True
                 )
@@ -871,6 +1116,20 @@ class Database:
                     except Exception:
                         pass
                     self._write_conn = None
+
+                if consecutive_failures >= self.MAX_CONSECUTIVE_WRITER_FAILURES:
+                    log.critical(
+                        "Database writer loop crashed %d times in a row — giving up on "
+                        "respawning. All writes will now fail fast (instead of hanging "
+                        "indefinitely queued with no consumer) until the process is restarted.",
+                        consecutive_failures,
+                    )
+                    self._writer_dead = True
+                    self._drain_queue_with_error(
+                        RuntimeError("Database writer loop is dead after repeated crashes")
+                    )
+                    break
+
                 await asyncio.sleep(0.5)
 
     async def _process_write_queue_loop(self):
@@ -907,6 +1166,7 @@ class Database:
                             log.critical("Transaction blocked the writer thread for 30s! Forcing rollback.")
                             tx_state["error"] = RuntimeError("Transaction blocked too long")
                             tx_state["action"] = "rollback"
+                            tx_state["forced_rollback"] = True
                         
                         action = tx_state.get("action", "rollback")
                         if action == "commit":
@@ -916,6 +1176,7 @@ class Database:
                     except Exception as e:
                         log.error(f"Transaction in background writer failed: {e}")
                         tx_state["error"] = e
+                        tx_state["forced_rollback"] = True
                         start_event.set()  # Unblock caller — they will read tx_state["error"]
                         try:
                             await self._write_conn.rollback()
@@ -925,7 +1186,24 @@ class Database:
                         finish_event.set()
                         self.write_queue.task_done()
                     continue
-                
+
+                if item[0] is _EXECUTEMANY_MARKER:
+                    _, (sql, seq_of_params), future = item
+                    try:
+                        await self._write_conn.execute("BEGIN IMMEDIATE;")
+                        await self._write_conn.executemany(sql, seq_of_params)
+                        await self._write_conn.commit()
+                        future.set_result(None)
+                    except Exception as ex:
+                        try:
+                            await self._write_conn.rollback()
+                        except Exception:
+                            pass
+                        future.set_exception(ex)
+                    finally:
+                        self.write_queue.task_done()
+                    continue
+
                 # Regular single query write
                 query, params, future = item
                 try:

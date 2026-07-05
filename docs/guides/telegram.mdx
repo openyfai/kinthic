@@ -1,0 +1,99 @@
+---
+title: Telegram
+description: Pair your bot, manage approvals, and run the Telegram channel adapter.
+---
+
+Kinthic bridges to Telegram as a **secure personal assistant** — not a public cloud bot. The agent runs on your machine; Telegram is the UI layer.
+
+## Features
+
+- **Paired access only** — deny-by-default for unrecognized accounts
+- **Tool approvals** — risky actions push to your chat for `/approve` or `/reject`
+- **Local memory** — graph stored in `~/.kinthic`, not on Telegram servers
+
+## Setup
+
+<Steps>
+  <Step title="Create a bot">
+    Message [@BotFather](https://t.me/BotFather) on Telegram and create a bot. Copy the token.
+  </Step>
+  <Step title="Configure during init">
+    Run `kinthic init` and paste the bot token when prompted. The wizard generates a pairing deep-link.
+  </Step>
+  <Step title="Pair your account">
+    Click the deep-link or send `/start` to your bot. For headless servers, run `kinthic channels telegram pair` and message `/pair CODE` to the bot.
+  </Step>
+  <Step title="Start the channel">
+    ```bash
+    kinthic channels telegram run
+    ```
+    Or use `kinthic daemon install && kinthic daemon start` for 24/7 operation.
+  </Step>
+</Steps>
+
+## CLI commands
+
+| Command | Purpose |
+|---------|---------|
+| `kinthic channels telegram run` | Run the Telegram bot worker |
+| `kinthic channels telegram pair` | Generate a pairing code for a new account |
+
+Legacy aliases `kinthic telegram run` and `kinthic telegram pair` may still work but prefer the `channels` namespace.
+
+## Bot commands
+
+| Command | Purpose |
+|---------|---------|
+| `/whoami` | Print your authorized Telegram user ID |
+| `/status` | LLM provider, session, and backend health |
+| `/skills` | List loaded skills |
+| `/approvals` | Show pending tool executions |
+| `/approve <id>` | Approve a pending action |
+| `/reject <id>` | Reject a pending action |
+| `/logout` | Unpair this Telegram account |
+
+Natural language works for everything else — these are system commands.
+
+## Tool approvals via Telegram
+
+When Kinthic attempts a risky action:
+
+```
+⚠️ Approval Required
+Tool: run_terminal_command
+Risk: repo_write
+ID: a1b2c3d4
+
+Type /approve a1b2c3d4 or /reject a1b2c3d4
+```
+
+Respond within **120 seconds** or the action times out (treated as rejected).
+
+## Environment variables
+
+Set in `~/.kinthic/.env`:
+
+```bash
+TELEGRAM_BOT_TOKEN=your_token_here
+ALLOWED_TELEGRAM_USERS=123456789
+```
+
+During `kinthic init`, pairing populates `ALLOWED_TELEGRAM_USERS` automatically.
+
+## Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| No response to messages | Ensure `kinthic channels telegram run` or the daemon is running |
+| "Access Denied" | Pair your account — see Setup above |
+| Long messages cut off | Kinthic splits at 4096 chars; check host connectivity if chunks missing |
+| Approval timed out | Retry the action; respond within 120 seconds |
+
+## Security
+
+See [Security model](/concepts/security) for pairing protocol, rate limits, and approval gates.
+
+## Related
+
+- [Daemon guide](/guides/daemon)
+- [Getting started](/start/getting-started)
