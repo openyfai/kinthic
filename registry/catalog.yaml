@@ -170,3 +170,14 @@ entries:
     source: bundled
     entry_file: debug_error.md
     installed: false
+
+  - name: silex_memory
+    type: mcp_server
+    version: "1.0.0"
+    description: Silex persistent memory engine — recall, graph context, tiered writes
+    tags: [memory, cognition, local-first]
+    trust_level: core
+    source: bundled
+    command: kinthic
+    args: ["mcp", "serve", "--stdio"]
+    installed: false

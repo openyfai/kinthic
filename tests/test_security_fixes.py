@@ -471,9 +471,12 @@ class TestUltraFix:
         # Test inline command python bypass attempt
         bypass_cmd = "python -c \"import os; os.system('cat /etc/passwd')\""
         
-        # It must raise a PermissionError
+        # It must raise a PermissionError (sandboxed=True: this test targets the
+        # interpreter inline-execution check specifically, which only applies
+        # inside the Docker allowlist — the host-fallback allowlist excludes
+        # interpreters entirely, see TestHostFallbackHardening below).
         with pytest.raises(PermissionError) as excinfo:
-            tool._check_safety(bypass_cmd, ["python", "-c", "import os; os.system('cat /etc/passwd')"])
+            tool._check_safety(bypass_cmd, ["python", "-c", "import os; os.system('cat /etc/passwd')"], sandboxed=True)
 
         assert (
             "inline script execution" in str(excinfo.value)

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import socket
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -24,6 +25,25 @@ if Path("/kinthic/workers").exists():
 else:
     _POLICY_ROOT = Path.home() / ".kinthic" / "workers"
 _PROXY_PORT = 8080
+
+
+def _default_bind_host() -> str:
+    """Choose the least-exposed bind address for the current context.
+
+    Normal usage runs this inside the dedicated `kinthic_sandbox` Docker
+    network (internal=True, no published host port — see warm_pool.py), where
+    it must listen on all interfaces for sibling worker containers to reach
+    it via Docker DNS; that network has no route to the host or the internet,
+    so `0.0.0.0` there is still sandboxed. `warm_pool.py` sets
+    KINTHIC_EGRESS_PROXY_IN_SANDBOX_NETWORK=true when launching that
+    container. Outside of that context (e.g. run directly on a host for local
+    dev/testing), default to loopback so the proxy is never exposed to the
+    LAN with only a per-worker-policy allowlist standing between it and the
+    outside world.
+    """
+    if os.environ.get("KINTHIC_EGRESS_PROXY_IN_SANDBOX_NETWORK", "").strip().lower() in {"1", "true", "yes"}:
+        return "0.0.0.0"
+    return os.environ.get("KINTHIC_EGRESS_PROXY_HOST", "127.0.0.1")
 
 
 def _load_policy_file(policy_file: Path) -> tuple[bool, set[str]]:
@@ -138,19 +158,20 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 class EgressProxyServer:
     """HTTP CONNECT egress proxy for worker sandboxes."""
 
-    def __init__(self, worker_id: str = "shared", port: int = _PROXY_PORT):
+    def __init__(self, worker_id: str = "shared", port: int = _PROXY_PORT, host: Optional[str] = None):
         self.worker_id = worker_id
         self._server: Optional[HTTPServer] = None
         self._thread: Optional[threading.Thread] = None
         self.port = port
+        self.host = host or _default_bind_host()
 
     def start(self) -> int:
         handler = type("Handler", (_ProxyHandler,), {"worker_id": self.worker_id})
-        self._server = HTTPServer(("0.0.0.0", self.port), handler)
+        self._server = HTTPServer((self.host, self.port), handler)
         self.port = self._server.server_address[1]
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
-        log.info("Egress proxy listening on 0.0.0.0:%d", self.port)
+        log.info("Egress proxy listening on %s:%d", self.host, self.port)
         return self.port
 
     def stop(self) -> None:

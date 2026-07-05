@@ -64,12 +64,12 @@ SLASH_COMMANDS = [
     {"cmd": "/rag",       "args": "<query>",             "desc": "Query the file index directly"},
 
     # ── Plugins & Skills ─────────────────────────────────────────────────
-    {"cmd": "/plugins",         "args": "",                  "desc": "List all registered tools (built-in + plugins)"},
-    {"cmd": "/skills",          "args": "",                  "desc": "List all loaded skills with metadata"},
-    {"cmd": "/plugin",          "args": "reload",            "desc": "Hot-reload plugins and skills without restart"},
-    {"cmd": "/plugin",          "args": "search <query>",    "desc": "Search KinthicHub catalog"},
-    {"cmd": "/plugin",          "args": "install <name>",    "desc": "Install a skill or tool plugin from catalog or URL"},
-    {"cmd": "/plugin",          "args": "uninstall <name>",  "desc": "Remove an installed skill or tool plugin"},
+    {"cmd": ":plugins",         "args": "",                  "desc": "List all registered tools (built-in + plugins)"},
+    {"cmd": ":skills",          "args": "",                  "desc": "List all loaded skills with metadata"},
+    {"cmd": ":plugin",          "args": "reload",            "desc": "Hot-reload plugins and skills without restart"},
+    {"cmd": ":plugin",          "args": "search <query>",    "desc": "Search KinthicHub catalog"},
+    {"cmd": ":plugin",          "args": "install <name>",    "desc": "Install a skill or tool plugin from catalog or URL"},
+    {"cmd": ":plugin",          "args": "uninstall <name>",  "desc": "Remove an installed skill or tool plugin"},
 
     # ── Training Data Export ─────────────────────────────────────────────
     {"cmd": "/export-traj", "args": "[--format grpo|sft|csv] [--success-only]",

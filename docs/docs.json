@@ -1,0 +1,84 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "Kinthic",
+  "description": "Local-first AI operator with graph-based memory. Install, configure, and run Kinthic on your machine.",
+  "theme": "mint",
+  "icons": {
+    "library": "lucide"
+  },
+  "colors": {
+    "primary": "#4f46e5",
+    "light": "#6366f1",
+    "dark": "#4f46e5"
+  },
+  "background": {
+    "color": {
+      "dark": "#121212"
+    }
+  },
+  "styling": {
+    "codeblocks": {
+      "theme": {
+        "dark": "github-dark",
+        "light": "github-light"
+      }
+    }
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Website",
+        "href": "https://kinthic.com"
+      },
+      {
+        "label": "GitHub",
+        "href": "https://github.com/openyfai/kinthic",
+        "icon": "github"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Install",
+      "href": "https://kinthic.openyf.dev/install.sh"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/openyfai/kinthic",
+      "x": "https://x.com/openyfai"
+    }
+  },
+  "navigation": [
+    {
+      "group": "Get started",
+      "pages": [
+        "index",
+        "start/getting-started",
+        "start/wsl"
+      ]
+    },
+    {
+      "group": "Concepts",
+      "pages": [
+        "concepts/memory",
+        "concepts/security",
+        "concepts/skills"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/daemon",
+        "guides/telegram",
+        "guides/mcp"
+      ]
+    },
+    {
+      "group": "Reference",
+      "pages": [
+        "reference/cli",
+        "help/troubleshooting"
+      ]
+    }
+  ]
+}

@@ -36,20 +36,35 @@ class GraphTransactionBuffer:
         async with self._lock:
             self._raw_queries.append((query, params))
 
-    async def commit_flush(self) -> None:
+    async def commit_flush(self) -> List[Memory]:
         """
         Atomically flush all staged nodes, edges, and memories to SQLite using executemany.
+
+        Routed entirely through `Database.transaction()`/`execute()`/`executemany()`
+        (the serialized writer connection) — never the plain read connection —
+        to avoid two connections independently issuing BEGIN against the same
+        file (a "database is locked" source under concurrency).
+
+        Staged data is only cleared after a successful commit. On failure it is
+        retained so the caller can retry the flush instead of silently losing
+        memories/nodes/edges that were staged but never persisted.
+
+        Returns the list of Memory objects that were just committed, so callers
+        (MemoryStore.flush/add) can perform vector-store upserts strictly
+        *after* the SQLite commit — never before — which is what prevents
+        ChromaDB from ever holding a vector with no backing SQLite row.
         """
         async with self._lock:
             if not self._nodes and not self._edges and not self._memories and not self._raw_queries:
-                return
+                return []
+
+            memory_count, node_count, edge_count = len(self._memories), len(self._nodes), len(self._edges)
 
             try:
-                # Use executemany for atomic batch inserts (UNWIND pattern)
-                async with self.db._conn.execute("BEGIN TRANSACTION"):
+                async with self.db.transaction():
                     for query, params in self._raw_queries:
-                        await self.db._conn.execute(query, params)
-                        
+                        await self.db.execute(query, params)
+
                     if self._memories:
                         memory_data = [
                             (
@@ -61,7 +76,7 @@ class GraphTransactionBuffer:
                                 None # content_fingerprint
                             ) for m in self._memories
                         ]
-                        await self.db._conn.executemany(
+                        await self.db.executemany(
                             """
                             INSERT OR REPLACE INTO memories (
                                 id, content, source, memory_type, importance, confidence,
@@ -81,7 +96,7 @@ class GraphTransactionBuffer:
                                 json.dumps(n.metadata)
                             ) for n in self._nodes
                         ]
-                        await self.db._conn.executemany(
+                        await self.db.executemany(
                             """
                             INSERT OR REPLACE INTO knowledge_nodes (
                                 id, content, node_type, confidence, source, created_at,
@@ -99,7 +114,7 @@ class GraphTransactionBuffer:
                                 e.strength, e.evidence, e.created_at
                             ) for e in self._edges
                         ]
-                        await self.db._conn.executemany(
+                        await self.db.executemany(
                             """
                             INSERT OR REPLACE INTO causal_edges (
                                 id, source_node, target_node, edge_type, strength, evidence, created_at
@@ -107,16 +122,18 @@ class GraphTransactionBuffer:
                             """, edge_data
                         )
 
-                    await self.db._conn.commit()
-
-                log.info(f"Batched Flush Complete: {len(self._memories)} memories, {len(self._nodes)} nodes, {len(self._edges)} edges.")
-            except Exception as e:
-                log.error(f"Batch flush failed: {e}")
-                await self.db._conn.rollback()
-                raise
-            finally:
-                # Clear buffers
+                # Only clear staged state once the transaction has actually committed.
+                committed_memories = list(self._memories)
                 self._nodes.clear()
                 self._edges.clear()
                 self._memories.clear()
                 self._raw_queries.clear()
+
+                log.info(f"Batched Flush Complete: {memory_count} memories, {node_count} nodes, {edge_count} edges.")
+                return committed_memories
+            except Exception as e:
+                log.error(
+                    "Batch flush failed, retaining %d memories/%d nodes/%d edges for retry: %s",
+                    memory_count, node_count, edge_count, e,
+                )
+                raise

@@ -4,7 +4,7 @@ Kinthic can connect to external **Model Context Protocol (MCP)** servers and exp
 
 ## Quick start
 
-After `kinthic onboard`, enable a preset:
+After `kinthic init`, enable a preset:
 
 ```bash
 kinthic mcp add filesystem --preset filesystem
@@ -82,3 +82,75 @@ kinthic mcp enable myserver
 ```
 
 See [PLUGIN_DEVELOPMENT.md](../PLUGIN_DEVELOPMENT.md) for when to use MCP vs skills vs tool plugins.
+
+---
+
+## Serving Silex memory (MCP server mode)
+
+Kinthic can **expose** the Silex memory engine as an MCP server so Claude Desktop, Cursor, or other agents use your persistent brain.
+
+### Quick start
+
+1. Start the daemon (gateway mounts MCP at `/mcp`):
+
+```bash
+kinthic daemon install
+kinthic daemon start
+```
+
+2. Connect Claude Desktop / Cursor:
+
+```bash
+kinthic mcp print-config --client claude
+```
+
+Paste the JSON into your MCP client config, or run:
+
+```bash
+kinthic mcp serve --stdio
+```
+
+### HTTP endpoint
+
+When the gateway is running:
+
+- URL: `http://127.0.0.1:8000/mcp` (Streamable HTTP)
+- Auth: `x-kinthic-api-key` or `Authorization: Bearer <key>`
+
+### Tools exposed
+
+| Tool | Purpose |
+|------|---------|
+| `silex_recall` | Hybrid memory retrieval (primary) |
+| `silex_search` | Keyword FTS search |
+| `silex_remember` | Full A-MAC admission with metadata |
+| `silex_remember_explicit` | Direct fact storage |
+| `silex_forget` | Delete by ID (`confirm=true`) |
+| `silex_get_memory` | Fetch one memory |
+| `silex_list_memories` | Paginated list |
+| `silex_graph_recall` | Knowledge graph context |
+| `silex_memory_health` | Engine stats |
+
+See [mcp-server-rfc.md](mcp-server-rfc.md) for the full contract.
+
+### CLI
+
+| Command | Purpose |
+|---------|---------|
+| `kinthic mcp serve --stdio` | stdio bridge for desktop clients |
+| `kinthic mcp print-config` | Paste-ready client JSON |
+| `kinthic doctor` | MCP endpoint + audit log status |
+
+### Audit log
+
+All MCP tool calls are logged to `~/.kinthic/logs/mcp-audit.ndjson`.
+
+### Benchmark
+
+```bash
+kinthic benchmark recall --seed 42
+python -m benchmarks.memory_recall.harness --noise 50 --conditions aged_21d
+python scripts/mcp_recall_benchmark.py
+```
+
+See [docs/benchmarks/memory-recall.md](benchmarks/memory-recall.md).

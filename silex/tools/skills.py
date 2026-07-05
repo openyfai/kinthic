@@ -60,7 +60,8 @@ class SkillViewTool(BaseTool):
 class SkillManageTool(BaseTool):
     name = "skill_manage"
     description = "Create or overwrite an agent skill in ~/.kinthic/skills/. Used for autonomous skill growth."
-    risk_level = "requires_approval"
+    risk_level = "repo_write"
+    requires_approval = True
     schema = {
         "type": "object",
         "properties": {
@@ -82,10 +83,10 @@ class SkillManageTool(BaseTool):
             
         import re
         from pathlib import Path
-        from silex.utils.config import KINTHIC_HOME
+        from silex.utils.config import KINTHIC_SKILLS
         
         safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', name.lower())
-        skills_dir = Path(KINTHIC_HOME) / "skills"
+        skills_dir = Path(KINTHIC_SKILLS)
         skills_dir.mkdir(parents=True, exist_ok=True)
         
         skill_path = skills_dir / f"{safe_name}.md"

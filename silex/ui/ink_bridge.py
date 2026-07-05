@@ -163,13 +163,7 @@ class KinthicInkBridge:
 
         self._enabled = True
 
-        # Close Python's own stdin so it can't race with Ink for keystrokes
-        try:
-            import sys
-            if sys.stdin is not None:
-                sys.stdin.close()
-        except Exception:
-            pass
+        # Close Python's own stdin was removed because it is redundant and causes terminal freezes on subprocess crashes.
 
         # Background reader for Ink → Python packets
         self._reader_task = asyncio.create_task(

@@ -6,7 +6,6 @@ Monitors successful trajectories and abstracts them into reusable, parameterized
 
 from __future__ import annotations
 
-import os
 import time
 import json
 from pathlib import Path
@@ -15,7 +14,8 @@ from pydantic import BaseModel, Field
 from silex.storage.database import Database
 from silex.llm.base import SupportsLLM
 from silex.world.graph import KnowledgeGraph
-from silex.utils.config import KINTHIC_HOME
+from silex.evolution.admission_control import SkillAdmissionController
+from silex.utils.config import KINTHIC_SKILLS
 from silex.utils.logger import setup_logger
 
 log = setup_logger("silex.autonomy.skill_synthesizer")
@@ -123,25 +123,54 @@ class GenesisSynthesizer:
                 await self._mark_synthesized(trajectory_id, "failed_validation")
                 return None
                 
-            # 5. Write to Disk
-            skill_dir = KINTHIC_HOME / "skills" / synthesis.skill_name
-            skill_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Write SKILL.md
-            (skill_dir / "SKILL.md").write_text(synthesis.skill_md, encoding="utf-8")
-            
+            # 5. Admit via A-MAC (writes to KINTHIC_SKILLS/<name>/SKILL.md)
+            body = synthesis.skill_md
+            if body.startswith("---"):
+                parts = body.split("---", 2)
+                if len(parts) >= 3:
+                    body = parts[2].strip()
+
+            admission = SkillAdmissionController(self.db, skills_dir=KINTHIC_SKILLS)
+            admitted, score = await admission.admit_skill(
+                skill_name=synthesis.skill_name,
+                category="genesis",
+                description=synthesis.description[:200],
+                content=body,
+                utility_score=0.9,
+                confidence_score=0.85,
+                type_prior=0.75,
+                origin_trajectory_id=trajectory_id,
+                threshold=0.55,
+                source="genesis",
+                author="genesis",
+            )
+            if not admitted:
+                log.info(
+                    f"GenesisSynthesizer: Skill '{synthesis.skill_name}' rejected by A-MAC "
+                    f"(score={score:.2f})"
+                )
+                await self._mark_synthesized(trajectory_id, "rejected_amac")
+                return None
+
+            skill_dir = KINTHIC_SKILLS / synthesis.skill_name
+
             # Write python script if provided
             if synthesis.python_script.strip():
                 script_path = skill_dir / f"{synthesis.skill_name}.py"
                 script_path.write_text(synthesis.python_script, encoding="utf-8")
-                
+
             # Write dependencies if any
             if synthesis.dependencies:
-                (skill_dir / "requirements.txt").write_text("\n".join(synthesis.dependencies), encoding="utf-8")
-                
+                (skill_dir / "requirements.txt").write_text(
+                    "\n".join(synthesis.dependencies), encoding="utf-8"
+                )
+
             # 6. Mark as synthesized
             await self._mark_synthesized(trajectory_id, synthesis.skill_name)
-            log.info(f"GenesisSynthesizer: Successfully created new skill '{synthesis.skill_name}' from trajectory {trajectory_id}.")
+            log.info(
+                f"GenesisSynthesizer: Admitted skill '{synthesis.skill_name}' from trajectory "
+                f"{trajectory_id} (A-MAC={score:.2f})."
+            )
             return synthesis.skill_name
             
         except Exception as e:

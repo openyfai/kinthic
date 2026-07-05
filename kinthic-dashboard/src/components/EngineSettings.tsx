@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Settings01Icon, FloppyDiskIcon, Shield01Icon, CpuIcon, AiLockIcon } from "hugeicons-react";
+import { apiFetch } from "@/lib/api";
 
 export default function EngineSettings() {
   const [settings, setSettings] = useState<any>(null);
@@ -9,16 +10,17 @@ export default function EngineSettings() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/settings")
+    apiFetch("/api/settings")
       .then((res) => res.json())
       .then((data) => setSettings(data))
+      .catch((err) => console.warn("Backend offline:", err))
       .finally(() => setLoading(false));
   }, []);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await fetch("http://localhost:8000/api/settings", {
+      await apiFetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings),
@@ -50,7 +52,7 @@ export default function EngineSettings() {
   };
 
   if (loading || !settings) {
-    return <div className="h-full flex items-center justify-center text-[#F5A623] animate-pulse">Loading settings...</div>;
+    return <div className="h-full flex items-center justify-center text-[#312E81] animate-pulse">Loading settings...</div>;
   }
 
   return (

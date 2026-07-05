@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 280" width="100%" role="img" aria-label="Silex memory engine architecture">
+  <defs>
+    <style>
+      .box { fill: #121212; stroke: #4338ca; stroke-width: 1.5; rx: 8; }
+      .label { fill: #e5e5e5; font-family: ui-monospace, monospace; font-size: 13px; }
+      .small { fill: #a3a3a3; font-family: ui-sans-serif, sans-serif; font-size: 11px; }
+      .arrow { stroke: #525252; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#525252"/>
+    </marker>
+  </defs>
+  <rect width="920" height="280" fill="#0a0a0a"/>
+  <text x="460" y="28" text-anchor="middle" class="label" font-size="15" fill="#4338ca">Silex Memory Engine</text>
+  <!-- Row 1: inputs -->
+  <rect x="40" y="50" width="120" height="44" class="box"/>
+  <text x="100" y="76" text-anchor="middle" class="label">CLI / TUI</text>
+  <rect x="190" y="50" width="120" height="44" class="box"/>
+  <text x="250" y="76" text-anchor="middle" class="label">Telegram</text>
+  <rect x="340" y="50" width="120" height="44" class="box"/>
+  <text x="400" y="76" text-anchor="middle" class="label">MCP clients</text>
+  <line x1="100" y1="94" x2="460" y2="118" class="arrow"/>
+  <line x1="250" y1="94" x2="460" y2="118" class="arrow"/>
+  <line x1="400" y1="94" x2="460" y2="118" class="arrow"/>
+  <!-- Cognitive loop -->
+  <rect x="360" y="118" width="200" height="44" class="box"/>
+  <text x="460" y="145" text-anchor="middle" class="label">Cognitive Loop</text>
+  <line x1="460" y1="162" x2="460" y2="182" class="arrow"/>
+  <!-- A-MAC -->
+  <rect x="360" y="182" width="200" height="44" class="box"/>
+  <text x="460" y="202" text-anchor="middle" class="label">A-MAC admission</text>
+  <text x="460" y="218" text-anchor="middle" class="small">filter noise before persist</text>
+  <!-- Stores -->
+  <line x1="460" y1="226" x2="160" y2="248" class="arrow"/>
+  <line x1="460" y1="226" x2="460" y2="248" class="arrow"/>
+  <line x1="460" y1="226" x2="760" y2="248" class="arrow"/>
+  <rect x="80" y="248" width="160" height="24" class="box"/>
+  <text x="160" y="265" text-anchor="middle" class="small">SQLite + FTS</text>
+  <rect x="380" y="248" width="160" height="24" class="box"/>
+  <text x="460" y="265" text-anchor="middle" class="small">Chroma vectors</text>
+  <rect x="680" y="248" width="160" height="24" class="box"/>
+  <text x="760" y="265" text-anchor="middle" class="small">Epistemic graph</text>
+  <!-- Recall -->
+  <rect x="600" y="118" width="280" height="88" class="box"/>
+  <text x="740" y="145" text-anchor="middle" class="label">Hybrid recall (RRF)</text>
+  <text x="740" y="165" text-anchor="middle" class="small">recent · important · keyword · semantic</text>
+  <text x="740" y="185" text-anchor="middle" class="small">’ context window</text>
+  <line x1="560" y1="260" x2="680" y2="180" class="arrow"/>
+  <line x1="460" y1="260" x2="700" y2="180" class="arrow"/>
+  <line x1="760" y1="260" x2="780" y2="180" class="arrow"/>
+</svg>

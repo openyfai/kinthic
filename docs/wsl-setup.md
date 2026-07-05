@@ -33,10 +33,10 @@ Reload your shell:
 source ~/.bashrc
 ```
 
-## 3. Onboard
+## 3. Initialize
 
 ```bash
-kinthic onboard
+kinthic init
 ```
 
 This configures your LLM provider, installs core skills, optional Telegram pairing, and optional MCP servers.
@@ -45,7 +45,7 @@ This configures your LLM provider, installs core skills, optional Telegram pairi
 
 ```bash
 kinthic                  # terminal agent
-kinthic telegram run     # messaging bot (after pairing)
+kinthic channels telegram run  # messaging bot (after pairing)
 kinthic doctor --ping    # verify API connectivity
 ```
 
@@ -55,7 +55,7 @@ kinthic doctor --ping    # verify API connectivity
 |---------|-----|
 | Running `curl \| bash` in PowerShell | Open WSL Ubuntu first |
 | `kinthic: command not found` | `source ~/.bashrc` or open a new WSL tab |
-| Provider ping fails | Re-run `kinthic onboard` and check API key in `~/.kinthic/.env` |
+| Provider ping fails | Re-run `kinthic init` and check API key in `~/.kinthic/.env` |
 
 ## Next steps
 

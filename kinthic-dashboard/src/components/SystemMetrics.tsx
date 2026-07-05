@@ -2,19 +2,22 @@
 
 import { useEffect, useState } from "react";
 import { Activity01Icon, Database01Icon, NeuralNetworkIcon, AiBrain01Icon, BinaryCodeIcon } from "hugeicons-react";
+import { apiFetch } from "@/lib/api";
 
 export default function SystemMetrics() {
   const [metrics, setMetrics] = useState<any>(null);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/metrics")
+    apiFetch("/api/metrics")
       .then((res) => res.json())
-      .then((data) => setMetrics(data));
+      .then((data) => setMetrics(data))
+      .catch((err) => console.warn("Backend offline:", err));
       
     const int = setInterval(() => {
-      fetch("http://localhost:8000/api/metrics")
+      apiFetch("/api/metrics")
         .then((res) => res.json())
-        .then((data) => setMetrics(data));
+        .then((data) => setMetrics(data))
+        .catch((err) => console.warn("Backend offline:", err));
     }, 5000);
     return () => clearInterval(int);
   }, []);
@@ -52,10 +55,34 @@ export default function SystemMetrics() {
         
         <div className="mt-12 p-6 bg-black/60 border border-white/5 rounded-2xl flex items-center gap-4 text-neutral-400">
           <BinaryCodeIcon className="w-5 h-5" />
-          <div className="text-sm">
-            Gateway Server: <span className="text-emerald-400 font-mono">ONLINE</span> (Port 8000)
+          <div className="text-sm space-y-1">
+            <div>
+              Gateway Server: <span className="text-emerald-400 font-mono">ONLINE</span> (Port 8000)
+            </div>
+            {metrics?.mcp_server && (
+              <div>
+                Silex MCP: <span className="text-indigo-400 font-mono">ACTIVE</span> ({metrics?.mcp_tools || 9} tools @ {metrics?.mcp_endpoint || "/mcp"})
+              </div>
+            )}
+            {metrics?.daemon_running && (
+              <div>
+                Daemon: <span className="text-amber-400 font-mono">RUNNING</span> (stop before restore)
+              </div>
+            )}
           </div>
         </div>
+
+        {metrics && (metrics.vector_drift > 0 || metrics.writer_dead) && (
+          <div className="mt-4 p-6 bg-red-950/40 border border-red-500/30 rounded-2xl flex items-center gap-4 text-red-300">
+            <BinaryCodeIcon className="w-5 h-5" />
+            <div className="text-sm space-y-1">
+              {metrics.writer_dead && <div>⚠️ Database writer loop is dead — restart Kinthic.</div>}
+              {metrics.vector_drift > 0 && (
+                <div>⚠️ {metrics.vector_drift} memory/vector record(s) out of sync — will self-heal on next restart or reconciliation pass.</div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

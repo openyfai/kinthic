@@ -11,7 +11,6 @@ from typing import Any
 import os
 import asyncio
 import shlex
-import copy
 from pathlib import Path
 
 try:
@@ -20,12 +19,30 @@ except ImportError:
     docker = None
 
 from silex.tools.base import BaseTool
-from silex.utils.config import terminal_execution_enabled, WORKSPACE_DIR
+from silex.utils.config import terminal_execution_enabled, terminal_host_fallback_enabled, WORKSPACE_DIR
 from silex.utils.logger import setup_logger
 
 log = setup_logger("silex.tools.system")
 WORKSPACE_ROOT = WORKSPACE_DIR
 BLOCKED_PATH_PARTS = {".git", "node_modules", ".venv", "venv", "__pycache__", ".kinthic"}
+
+# Full allowlist — only used inside the network-disabled, capability-dropped
+# Docker sandbox where a compromised process cannot reach the host or network.
+_DOCKER_ALLOWED_COMMANDS = {"python", "python3", "pip", "git", "npm", "pytest", "ls", "cat", "echo", "mkdir", "touch", "grep", "node", "uv"}
+
+# Host-fallback allowlist is intentionally much smaller: this path runs with
+# real host privileges and (scrubbed but still real) host PATH access, so
+# interpreters and package managers — which can execute arbitrary code or
+# run install-time lifecycle scripts — are excluded.
+_HOST_FALLBACK_ALLOWED_COMMANDS = {"ls", "cat", "echo", "mkdir", "touch", "grep"}
+
+# Environment variables safe to pass through to a host-fallback subprocess.
+# Everything else (API keys, tokens, secrets) is deliberately dropped rather
+# than inherited via `copy.deepcopy(os.environ)`.
+_SAFE_HOST_ENV_PASSTHROUGH = {
+    "PATH", "HOME", "USERPROFILE", "TEMP", "TMP", "LANG", "LC_ALL",
+    "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "APPDATA", "LOCALAPPDATA",
+}
 
 
 def _resolve_project_path(path: str) -> Path:
@@ -95,10 +112,10 @@ class RunTerminalCommandTool(BaseTool):
     risk_level = "sandbox_write"
     requires_approval = True
     description = (
-        "Executes a terminal command inside a safe, isolated Alpine Linux container if Docker is running, "
-        "or falls back to a secure Python virtual environment (venv) sandbox with strict path/command validation "
-        "rules if Docker is unavailable. "
-        "Allows running tests, processing files safely, or installing packages."
+        "Executes a terminal command inside a safe, isolated Alpine Linux container. "
+        "Requires Docker to be running; if Docker is unavailable, execution is refused "
+        "unless the operator has explicitly opted into a reduced-isolation host fallback "
+        "(a small allowlist of read-only-ish commands with a scrubbed environment)."
     )
     schema = {
         "command": "string (The command to execute)"
@@ -138,9 +155,10 @@ class RunTerminalCommandTool(BaseTool):
                         f"Access denied: command attempts to reference path outside workspace: '{token}'"
                     )
 
-    def _check_safety(self, command: str, argv: list[str]) -> None:
-        # Strict allowlist of commands
-        allowed_commands = {"python", "python3", "pip", "git", "npm", "pytest", "ls", "cat", "echo", "mkdir", "touch", "grep", "node", "uv"}
+    def _check_safety(self, command: str, argv: list[str], sandboxed: bool) -> None:
+        # Strict allowlist of commands — narrower when not running inside
+        # the network-isolated Docker sandbox (see module-level comments).
+        allowed_commands = _DOCKER_ALLOWED_COMMANDS if sandboxed else _HOST_FALLBACK_ALLOWED_COMMANDS
         cmd_base = Path(argv[0]).name.lower()
         if cmd_base not in allowed_commands:
             raise PermissionError(f"Command '{cmd_base}' is not in the strict allowlist.")
@@ -188,12 +206,27 @@ class RunTerminalCommandTool(BaseTool):
         if not argv:
             return "Error: Command is empty."
 
-        # Enforce strict safety validation (raises PermissionError if unsafe)
+        # Enforce strict safety validation first (raises PermissionError if
+        # unsafe) so an inherently dangerous command is always rejected on
+        # its own merits, before we even consider whether a sandbox is
+        # available to run it in.
         try:
-            self._check_safety(command, argv)
+            self._check_safety(command, argv, sandboxed=bool(self.client))
         except PermissionError as e:
             log.warning(f"Command rejected by sandbox safety controller: {e}")
             return f"Command execution rejected: {e}"
+
+        # Fail closed: without Docker there is no network/capability isolation.
+        # Refuse rather than silently downgrade to an unsandboxed host process
+        # unless the operator has explicitly opted in.
+        if not self.client and not terminal_host_fallback_enabled():
+            return (
+                "Error: Execution blocked. Docker is not available, so there is no "
+                "isolated sandbox to run this command in. Start Docker, or explicitly "
+                "opt into the reduced-isolation host fallback (a small read-only-ish "
+                "command allowlist with a scrubbed environment) by setting "
+                "KINTHIC_ALLOW_HOST_TERMINAL_FALLBACK=true."
+            )
 
 
         if self.client:
@@ -245,13 +278,17 @@ class RunTerminalCommandTool(BaseTool):
                 venv_dir = await self._ensure_venv()
                 import shutil
                 import sys
-                
-                # Prepend the venv bin/Scripts path to the PATH env var to enable venv path lookups
-                env = copy.deepcopy(os.environ)
+
                 if sys.platform == "win32":
                     venv_bin = venv_dir / "Scripts"
                 else:
                     venv_bin = venv_dir / "bin"
+
+                # Scrubbed environment: only pass through what's needed to
+                # resolve/run a binary. API keys, tokens, and other secrets
+                # in the daemon's environment are deliberately never
+                # inherited here (unlike a plain `os.environ` copy).
+                env = {k: v for k, v in os.environ.items() if k.upper() in _SAFE_HOST_ENV_PASSTHROUGH}
                 env["PATH"] = str(venv_bin) + os.path.pathsep + env.get("PATH", "")
 
                 # Resolve binary from the path

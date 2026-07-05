@@ -1,0 +1,24 @@
+{
+  "benchmark": "memory_recall_mcp",
+  "suite_version": 1,
+  "seed": 42,
+  "noise_count": 50,
+  "track": "mcp",
+  "generated_at": "2026-07-05T17:38:13.574233+00:00",
+  "conditions": [
+    {
+      "name": "aged_21d",
+      "baselines": {
+        "mcp_recall": {
+          "queries": 12,
+          "mrr": 0.3809,
+          "false_positive_rate_top1": 0.0833,
+          "latency_ms_p50": 147.04,
+          "latency_ms_p95": 167.71,
+          "hit_at_5": 0.8333,
+          "hit_at_12": 1.0
+        }
+      }
+    }
+  ]
+}

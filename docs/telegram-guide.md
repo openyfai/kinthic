@@ -11,9 +11,9 @@ Kinthic is a local-first cognitive agent designed to act as your secure personal
 ## Setup & Pairing
 
 1. Generate a Telegram Bot Token via [@BotFather](https://t.me/BotFather).
-2. Run `kinthic onboard` on your host machine. When prompted, paste the Bot Token.
+2. Run `kinthic init` on your host machine. When prompted, paste the Bot Token.
 3. Kinthic will generate a deep-link. Click it, or open your bot and type `/start`.
-4. If you start Kinthic on a headless server and connect from a new Telegram account, run `kinthic telegram pair` on the server CLI to generate a secure pairing code, then message `/pair CODE` to your bot.
+4. If you start Kinthic on a headless server and connect from a new Telegram account, run `kinthic channels telegram pair` on the server CLI to generate a secure pairing code, then message `/pair CODE` to your bot.
 
 ## Core Commands
 
@@ -40,7 +40,7 @@ Respond with the `/approve` or `/reject` command followed by the short ID prefix
 
 ## Troubleshooting
 
-- **No response to messages?** Ensure `kinthic telegram run` (or `kinthic-telegram` CLI) is actively running on your host machine.
+- **No response to messages?** Ensure `kinthic channels telegram run` is actively running on your host machine (or the daemon is started).
 - **"Access Denied"** You haven't paired your account. Follow the Pairing instructions above.
 - **Long messages getting cut off?** Kinthic automatically splits massive code blocks into multiple 4096-character chunks. If a chunk appears completely missing, check your host's connection.
 - **Approval timed out?** If you wait too long to approve a tool (default 120 seconds), Kinthic will assume a rejection to prevent system deadlock. You will need to ask Kinthic to retry the action.

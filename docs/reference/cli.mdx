@@ -1,0 +1,112 @@
+---
+title: CLI reference
+description: Complete kinthic command reference.
+---
+
+Kinthic uses a **noun-verb** CLI structure. Run `kinthic --help` or `kinthic <command> --help` for live usage.
+
+## Core and setup
+
+| Command | Description |
+|---------|-------------|
+| `kinthic` | Start interactive TUI session |
+| `kinthic init` | First-run wizard (provider, skills, Telegram, MCP) |
+| `kinthic onboard` | Alias for `init` |
+| `kinthic setup` | Alias for `init` |
+| `kinthic doctor [--ping]` | Local setup and security status; `--ping` verifies API credentials |
+| `kinthic models` | List supported providers and models |
+| `kinthic web` | Launch local dashboard |
+| `kinthic usage` | View API usage and token costs |
+
+## Daemon
+
+| Command | Description |
+|---------|-------------|
+| `kinthic daemon start` | Start supervisor in background |
+| `kinthic daemon stop` | Stop background supervisor |
+| `kinthic daemon status` | Check if daemon is running |
+| `kinthic daemon logs` | Tail daemon logs |
+| `kinthic daemon run` | Run supervisor in foreground |
+| `kinthic daemon install [--force]` | Install systemd/LaunchAgent service |
+| `kinthic daemon uninstall` | Remove service unit |
+
+See [Daemon guide](/guides/daemon).
+
+## Channels
+
+| Command | Description |
+|---------|-------------|
+| `kinthic channels telegram run` | Run Telegram bot |
+| `kinthic channels telegram pair` | Generate pairing code |
+| `kinthic channels discord run` | Run Discord bot |
+
+See [Telegram guide](/guides/telegram).
+
+## Skills
+
+| Command | Description |
+|---------|-------------|
+| `kinthic skills list` | List catalog and loaded skills |
+| `kinthic skills search <query>` | Search KinthicHub catalog |
+| `kinthic skills install <name\|url>` | Install skill |
+| `kinthic skills uninstall <name>` | Remove skill |
+| `kinthic skills show <name>` | Print full skill markdown |
+| `kinthic skills reload` | Reload skills from disk |
+| `kinthic skills refresh` | Merge remote catalog entries |
+
+See [Skills](/concepts/skills).
+
+## MCP
+
+| Command | Description |
+|---------|-------------|
+| `kinthic mcp list` | List configured MCP servers |
+| `kinthic mcp add <name> [--preset] [--exec] [--args]` | Add MCP server |
+| `kinthic mcp enable <name>` | Enable server |
+| `kinthic mcp disable <name>` | Disable server |
+| `kinthic mcp test <name>` | Test connectivity |
+| `kinthic mcp tools [--server <name>]` | List MCP tools |
+| `kinthic mcp serve [--stdio]` | Run Silex memory MCP server |
+| `kinthic mcp print-config [--client claude\|cursor]` | Paste-ready client JSON |
+
+See [MCP guide](/guides/mcp).
+
+## Data and maintenance
+
+| Command | Description |
+|---------|-------------|
+| `kinthic data backup [--output]` | Export `~/.kinthic` to zip (excludes secrets) |
+| `kinthic data restore <archive> [--dry-run\|--apply]` | Restore from backup |
+| `kinthic data export [--format sft\|grpo\|csv] [--output]` | Export training trajectories |
+| `kinthic data migrate --from <hermes\|openclaw> [--path] [--scan-only\|--dry-run\|--apply]` | Import legacy agent state |
+
+## Proposals
+
+| Command | Description |
+|---------|-------------|
+| `kinthic proposals list` | List pending self-improvement proposals |
+| `kinthic proposals approve <id>` | Approve proposal by ID prefix |
+| `kinthic proposals reject <id>` | Reject proposal |
+
+## In-session commands (TUI)
+
+| Command | Purpose |
+|---------|---------|
+| `:skills` | List loaded skills |
+| `:mcp list` | List MCP servers |
+| `:mcp reload` | Reload MCP configuration |
+| `:plugin reload` | Reload skills/plugins |
+
+## Environment and config
+
+| Path | Purpose |
+|------|---------|
+| `~/.kinthic/.env` | API keys and runtime config |
+| `~/.kinthic/config/mcp.yaml` | MCP server definitions |
+| `~/.kinthic/skills/` | Installed skills |
+| `~/.kinthic/storage/` | SQLite database and vector store |
+
+## Related
+
+- [Getting started](/start/getting-started)
+- [Troubleshooting](/help/troubleshooting)

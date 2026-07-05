@@ -1,0 +1,57 @@
+---
+title: Kinthic Documentation
+description: Local-first AI operator powered by the Silex memory engine.
+---
+
+Kinthic is a local-first AI agent with **graph-based memory**. It stores what it learns as a network of entities and relationships — so it can answer not just *what* it knows, but *how things connect*.
+
+## Quick install
+
+```bash
+curl -fsSL https://kinthic.openyf.dev/install.sh | bash
+kinthic init
+```
+
+<Note>
+  Windows requires **WSL2**. See [WSL setup](/start/wsl).
+</Note>
+
+## Golden path
+
+<Steps>
+  <Step title="Install">
+    One-line installer pulls `uv`, Python 3.12, and the Kinthic CLI into `~/.kinthic`.
+  </Step>
+  <Step title="Initialize">
+    Run `kinthic init` to configure your LLM provider, core skills, optional Telegram, and MCP presets.
+  </Step>
+  <Step title="Run">
+    Start an interactive session with `kinthic`, or install the daemon for 24/7 operation.
+  </Step>
+</Steps>
+
+## What makes Kinthic different
+
+<CardGroup cols={2}>
+  <Card title="Silex memory engine" icon="brain" href="/concepts/memory">
+    Dual-store persistence (SQLite + vectors), admission control, consolidation, and graph recall — not a flat chat log.
+  </Card>
+  <Card title="Security by default" icon="shield" href="/concepts/security">
+    Tool approvals, sandboxed execution, Telegram pairing, and tamper-evident memories.
+  </Card>
+  <Card title="Skills & KinthicHub" icon="puzzle" href="/concepts/skills">
+    Drop Markdown workflows into `~/.kinthic/skills/` or install from the catalog.
+  </Card>
+  <Card title="MCP integration" icon="plug" href="/guides/mcp">
+    Connect filesystem, fetch, GitHub, and expose Silex memory as an MCP server.
+  </Card>
+</CardGroup>
+
+## Docs map
+
+| Section | Pages |
+|---------|-------|
+| **Start** | [Getting started](/start/getting-started), [WSL setup](/start/wsl) |
+| **Concepts** | [Memory](/concepts/memory), [Security](/concepts/security), [Skills](/concepts/skills) |
+| **Guides** | [Daemon](/guides/daemon), [Telegram](/guides/telegram), [MCP](/guides/mcp) |
+| **Reference** | [CLI](/reference/cli), [Troubleshooting](/help/troubleshooting) |

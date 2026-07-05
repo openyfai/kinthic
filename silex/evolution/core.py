@@ -20,6 +20,7 @@ from silex.evolution.trajectory_optimizer import TrajectoryOptimizer
 from silex.evolution.self_modification import SelfModificationEngine
 from silex.evolution.tdd_loops import RuntimeExtensionEngine
 from silex.evolution.admission_control import SkillAdmissionController
+from silex.utils.config import KINTHIC_SKILLS
 
 log = setup_logger("silex.evolution.core")
 
@@ -59,7 +60,7 @@ class SelfEvolutionCoordinator:
         self.optimizer = TrajectoryOptimizer(db, llm_client)
         self.self_mod = SelfModificationEngine(base_dir=self.evolution_dir)
         self.tdd = RuntimeExtensionEngine(sandbox_dir=self.evolution_dir / "sandbox")
-        self.admission = SkillAdmissionController(db, skills_dir=self.evolution_dir / "skills")
+        self.admission = SkillAdmissionController(db, skills_dir=KINTHIC_SKILLS)
 
     async def evolve_trajectory_revision(self, trajectory_id: str) -> dict[str, Any]:
         """Runs the Revision operator to critique and adjust step categories."""

@@ -38,6 +38,7 @@ DEFAULT_REGISTRY_URL = os.getenv(
     "KINTHIC_REGISTRY_URL",
     "https://kinthic.openyf.dev/registry/catalog.yaml",
 )
+MAX_DOWNLOAD_BYTES = 5 * 1024 * 1024  # 5 MiB
 
 
 class KinthicRegistry:
@@ -67,6 +68,7 @@ class KinthicRegistry:
         else:
             self._catalog = self._read_catalog_file()
 
+        self._sync_installed_flags(self._catalog or [])
         return self._catalog or []
 
     def _read_catalog_file(self) -> list[dict[str, Any]]:
@@ -112,6 +114,7 @@ class KinthicRegistry:
                 if entries:
                     log.info("Seeded KinthicHub catalog from bundled registry/catalog.yaml (%d entries)", len(entries))
                     self._write_catalog(entries)
+                    self._sync_installed_flags(entries)
                     return
             except Exception as exc:
                 log.warning("Could not load bundled catalog.yaml: %s", exc)
@@ -171,6 +174,35 @@ class KinthicRegistry:
 
         log.info("Seeded KinthicHub catalog with %d entries", len(entries))
         self._write_catalog(entries)
+        self._sync_installed_flags(entries)
+
+    def _skill_present_on_disk(self, name: str) -> bool:
+        """Return True if a catalog entry appears to be installed locally."""
+        from silex.utils.config import KINTHIC_PLUGINS_SKILLS, KINTHIC_PLUGINS_TOOLS, KINTHIC_SKILLS
+
+        if not name:
+            return False
+        if (KINTHIC_SKILLS / f"{name}.md").exists():
+            return True
+        if (KINTHIC_SKILLS / name).is_dir():
+            return True
+        if (KINTHIC_PLUGINS_SKILLS / name).is_dir():
+            return True
+        if (KINTHIC_PLUGINS_TOOLS / name).is_dir():
+            return True
+        return False
+
+    def _sync_installed_flags(self, entries: list[dict[str, Any]]) -> None:
+        """Reconcile catalog installed flags with files on disk."""
+        changed = False
+        for entry in entries:
+            name = entry.get("name", "")
+            present = self._skill_present_on_disk(name)
+            if entry.get("installed") != present:
+                entry["installed"] = present
+                changed = True
+        if changed:
+            self._write_catalog(entries)
 
     # ------------------------------------------------------------------
     # Search
@@ -249,8 +281,9 @@ class KinthicRegistry:
 
         try:
             log.info("Downloading %s from %s", entry["name"], url)
-            with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310
-                content_bytes = resp.read()
+            if not url.startswith("https://"):
+                return False, "Only https:// URLs are supported for remote installs."
+            content_bytes = self._download_bytes(url, MAX_DOWNLOAD_BYTES)
 
             # Integrity check
             if entry.get("sha256"):
@@ -270,13 +303,14 @@ class KinthicRegistry:
                 return True, f"Skill '{entry['name']}' installed to {dest}"
 
             elif plugin_type == "tool":
-                # Expect a .zip archive containing plugin.yaml + tool.py
                 import io
                 import zipfile
+                from pathlib import Path
+
                 plugin_dest = KINTHIC_PLUGINS_TOOLS / entry["name"]
                 plugin_dest.mkdir(parents=True, exist_ok=True)
                 with zipfile.ZipFile(io.BytesIO(content_bytes)) as zf:
-                    zf.extractall(plugin_dest)
+                    self._safe_extract_zip(zf, plugin_dest)
                 self._mark_installed(entry["name"])
                 return True, f"Tool plugin '{entry['name']}' installed to {plugin_dest}"
 
@@ -314,6 +348,9 @@ class KinthicRegistry:
             "write_release_notes",
             "telegram_setup",
             "daily_briefing",
+            "summarize_meeting",
+            "repo_onboard",
+            "security_audit",
         ]
         installed: list[str] = []
         for name in names or default:
@@ -330,6 +367,11 @@ class KinthicRegistry:
     def uninstall(self, name: str) -> tuple[bool, str]:
         """Remove an installed skill or tool plugin by name."""
         from silex.utils.config import KINTHIC_SKILLS, KINTHIC_PLUGINS_TOOLS, KINTHIC_PLUGINS_SKILLS
+
+        catalog = self.load_catalog()
+        entry = next((e for e in catalog if e.get("name") == name), None)
+        if entry and entry.get("trust_level") == "core":
+            return False, f"'{name}' is a core bundled plugin and cannot be removed."
 
         # Try flat skill
         skill_file = KINTHIC_SKILLS / f"{name}.md"
@@ -352,13 +394,35 @@ class KinthicRegistry:
             self._mark_uninstalled(name)
             return True, f"Tool plugin '{name}' removed."
 
-        # Check if it's a core (bundled) entry
-        catalog = self.load_catalog()
-        entry = next((e for e in catalog if e.get("name") == name), None)
-        if entry and entry.get("trust_level") == "core":
-            return False, f"'{name}' is a core bundled plugin and cannot be removed."
-
         return False, f"'{name}' not found in installed plugins or skills."
+
+    @staticmethod
+    def _download_bytes(url: str, max_bytes: int) -> bytes:
+        """Download URL content with a hard size cap."""
+        with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310
+            chunks: list[bytes] = []
+            total = 0
+            while True:
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise ValueError(f"Download exceeds {max_bytes} bytes")
+                chunks.append(chunk)
+        return b"".join(chunks)
+
+    @staticmethod
+    def _safe_extract_zip(zf, dest_dir) -> None:
+        """Extract zip archive, rejecting path traversal (zip slip)."""
+        from pathlib import Path
+
+        dest_root = Path(dest_dir).resolve()
+        for member in zf.namelist():
+            target = (dest_root / member).resolve()
+            if not str(target).startswith(str(dest_root)):
+                raise ValueError(f"Unsafe zip entry: {member}")
+        zf.extractall(dest_root)
 
     def _mark_installed(self, name: str) -> None:
         entries = self.load_catalog()

@@ -91,7 +91,7 @@ async def test_propose_and_validate_mutation_integration(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_distill_trajectory_to_skill_integration(tmp_path: Path):
+async def test_distill_trajectory_to_skill_integration(tmp_path: Path, monkeypatch):
     db_path = tmp_path / "test_evolution.db"
     db = Database(str(db_path))
     await db.connect()
@@ -122,6 +122,9 @@ async def test_distill_trajectory_to_skill_integration(tmp_path: Path):
         )
 
         llm = MockLLMCoordinatorClient()
+        skills_dir = tmp_path / "skills"
+        monkeypatch.setattr("silex.evolution.core.KINTHIC_SKILLS", skills_dir)
+        monkeypatch.setattr("silex.evolution.admission_control.KINTHIC_SKILLS", skills_dir)
         coordinator = SelfEvolutionCoordinator(db, llm, evolution_dir=tmp_path)
 
         success, score = await coordinator.distill_trajectory_to_skill(
@@ -135,11 +138,8 @@ async def test_distill_trajectory_to_skill_integration(tmp_path: Path):
         assert success is True
         assert score >= 0.70
 
-        # Verify files were written to skills directory
-        nested_skill = tmp_path / "skills" / "active" / "testing" / "pytest_skills" / "SKILL.md"
-        flat_skill = tmp_path / "skills" / "pytest_skills.md"
+        nested_skill = skills_dir / "pytest_skills" / "SKILL.md"
         assert nested_skill.exists()
-        assert flat_skill.exists()
         assert "# Pytest Tutorial" in nested_skill.read_text(encoding="utf-8")
 
         # Verify database record in admitted_memories

@@ -727,6 +727,10 @@ async def run() -> None:
                         await _emit_or(msg, show_warning, msg)
                         continue
                     memory = await loop.add_manual_memory(cmd_arg)
+                    if memory is None:
+                        msg = "Blocked: this content was rejected by the memory integrity guard."
+                        await _emit_or(msg, show_warning, msg)
+                        continue
                     msg = f"Stored: \"{memory.content[:50]}\""
                     await _emit_or(msg, show_success, msg)
                     continue
@@ -1526,6 +1530,14 @@ async def run() -> None:
 
 def main() -> None:
     """Synchronous wrapper for the async entry point."""
+    import os
+    if os.environ.get("KINTHIC_SKIP_SETUP") != "1":
+        from silex.runtime.settings import RuntimeSettingsStore
+        if not RuntimeSettingsStore().setup_status()["setup_completed"]:
+            print("First run: starting setup wizard...")
+            from scripts.cli import run_onboard
+            run_onboard()
+            return
     asyncio.run(run())
 
 

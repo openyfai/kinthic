@@ -16,11 +16,13 @@ curl -fsSL https://kinthic.openyf.dev/install.sh | bash
 source ~/.bashrc   # or ~/.zshrc
 ```
 
-## Step 2 — Onboard
+## Step 2 — Initialize
 
 ```bash
-kinthic onboard
+kinthic init
 ```
+
+`kinthic init` and `kinthic setup` are aliases for the same wizard.
 
 The wizard walks through:
 
@@ -40,7 +42,7 @@ Try: *Analyze this repo and summarize the architecture.*
 For Telegram:
 
 ```bash
-kinthic telegram run
+kinthic channels telegram run
 ```
 
 ## Skills CLI
@@ -71,13 +73,29 @@ kinthic doctor
 kinthic doctor --ping
 ```
 
+### Verify memory (optional)
+
+Prove Silex retrieval with the published needle-in-haystack benchmark (~1 min with 500 distractors):
+
+```bash
+kinthic benchmark recall --seed 42
+```
+
+Or run the live demo script (good for a 60s recording):
+
+```bash
+python benchmarks/memory_recall/demo.py
+```
+
+What the numbers mean: [benchmarks/memory-recall.md](benchmarks/memory-recall.md).
+
 ## Developing from source
 
 ```bash
 git clone https://github.com/openyfai/kinthic.git
 cd kinthic
 pip install -e ".[dev,mcp]"
-kinthic onboard
+kinthic init
 kinthic
 ```
 
@@ -86,7 +104,7 @@ kinthic
 Record a golden-path demo:
 
 1. `curl -fsSL …/install.sh | bash`
-2. `kinthic onboard` (pick Gemini + skip Telegram or pair live)
+2. `kinthic init` (pick Gemini + skip Telegram or pair live)
 3. `kinthic` → ask *tell me a joke* (uses `tell_joke` skill via `skill_view`)
 4. `kinthic skills list`
 5. `kinthic doctor --ping`

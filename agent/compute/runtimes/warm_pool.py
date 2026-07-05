@@ -291,6 +291,12 @@ class DockerWarmPoolManager(IsolationProvider):
                         str(self.project_root.resolve()): {"bind": "/project", "mode": "ro"},
                         str(Path.home() / ".kinthic" / "workers"): {"bind": "/kinthic/workers", "mode": "ro"},
                     },
+                    environment={
+                        # Safe here only because kinthic_sandbox is an internal
+                        # (no host route, no internet) network with no published
+                        # host port for this container — see network_proxy.py.
+                        "KINTHIC_EGRESS_PROXY_IN_SANDBOX_NETWORK": "true",
+                    },
                     detach=True,
                 )
                 self.client.networks.get("kinthic_sandbox").connect(
