@@ -224,6 +224,16 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
         ui.prompt("Press Enter to continue")
 
     providers = list_providers()  # Returns list of dicts: {id, label, env_key, base_url, models}
+    if not providers:
+        ui.render_step(
+            "Setup Error",
+            "No model providers could be loaded from your Kinthic/Silex plugins folder.\n\n"
+            "This usually indicates a packaging/installation error where the provider manifests "
+            "(plugin.yaml files) were not copied to site-packages.",
+            subtitle="Press Enter to exit",
+        )
+        ui.prompt("Press Enter to exit")
+        return
 
     # Sort: gemini first, anthropic second, then cloud, then local, custom last
     def provider_sort_key(p):
