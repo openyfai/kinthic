@@ -34,10 +34,6 @@ python benchmarks/memory_recall/demo.py
 
 ## Architecture
 
-<p align="center">
-  <img src="docs/assets/architecture.svg" alt="Silex architecture: admission control, dual-store persistence, hybrid recall, epistemic graph" width="720" />
-</p>
-
 ```mermaid
 flowchart TB
   subgraph inputs [Inputs]
