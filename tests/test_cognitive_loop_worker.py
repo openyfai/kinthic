@@ -31,8 +31,9 @@ MOCKS = [
     "silex.core.debate.DebateEngine",
     "silex.memory.memory_store.MemoryStore",
     "silex.memory.goal_tracker.GoalTracker",
-    "silex.memory.session.SessionManager"
+    "silex.memory.session.SessionManager",
 ]
+
 
 @pytest.mark.asyncio
 async def test_cognitive_loop_orchestrator_initialization():
@@ -40,35 +41,43 @@ async def test_cognitive_loop_orchestrator_initialization():
     with ExitStack() as stack:
         for m in MOCKS:
             stack.enter_context(patch(m))
-        
+
         loop = CognitiveLoop()
         assert loop.worker_orchestrator is not None
         assert loop.worker_orchestrator.max_workers == 4
+
 
 @pytest.mark.asyncio
 async def test_delegate_to_workers():
     """Test delegate_to_workers issues leases and calls spawn_job."""
     loop = CognitiveLoop.__new__(CognitiveLoop)
-    loop.session = SimpleNamespace(current=SimpleNamespace(id="test_session_123", turn_count=0))
+    loop.session = SimpleNamespace(
+        current=SimpleNamespace(id="test_session_123", turn_count=0)
+    )
     loop.worker_orchestrator = MagicMock()
-    
+
     mock_handle = AsyncMock()
     mock_handle.result.return_value = "worker output response"
     loop.worker_orchestrator.spawn_job = AsyncMock(return_value=mock_handle)
-    
+
     subtasks = [
-        {"task": "echo 'hello'", "tools_allowed": ["run_terminal_command"], "timeout_seconds": 300}
+        {
+            "task": "echo 'hello'",
+            "tools_allowed": ["run_terminal_command"],
+            "timeout_seconds": 300,
+        }
     ]
-    
+
     results = await loop.delegate_to_workers(subtasks)
     assert results == ["worker output response"]
-    
+
     loop.worker_orchestrator.spawn_job.assert_called_once()
     job_arg, lease_arg = loop.worker_orchestrator.spawn_job.call_args[0]
     assert job_arg.command == "echo 'hello'"
     assert job_arg.allowed_tools == ["run_terminal_command"]
     assert isinstance(lease_arg, ActuationLease)
     assert lease_arg.agent_id == "test_session_123"
+
 
 @pytest.mark.asyncio
 async def test_spawn_worker_tool():
@@ -77,7 +86,7 @@ async def test_spawn_worker_tool():
     assert tool.name == "spawn_worker"
     assert tool.risk_level == "sandbox_write"
     assert tool.requires_approval is True
-    
+
     mock_handle = AsyncMock()
     mock_handle.structured_result.return_value = WorkerJobResult(
         job_id="job_test",
@@ -86,12 +95,16 @@ async def test_spawn_worker_tool():
         exit_code=0,
         output="success output",
     )
-    
-    with patch("agent.orchestrator.WorkerOrchestrator.instance") as mock_orchestrator_instance:
+
+    with patch(
+        "agent.orchestrator.WorkerOrchestrator.instance"
+    ) as mock_orchestrator_instance:
         mock_orchestrator = MagicMock()
         mock_orchestrator.spawn_job = AsyncMock(return_value=mock_handle)
         mock_orchestrator_instance.return_value = mock_orchestrator
-        
-        output = await tool.execute(task="ls", tools_allowed=["run_terminal_command"], timeout_seconds=120)
+
+        output = await tool.execute(
+            task="ls", tools_allowed=["run_terminal_command"], timeout_seconds=120
+        )
         assert output == "success output"
         mock_orchestrator.spawn_job.assert_called_once()

@@ -12,16 +12,36 @@ log = setup_logger("silex.core.taste")
 
 
 class TasteScores(BaseModel):
-    simplicity: float = Field(ge=0.0, le=1.0, description="1.0 = highly minimal/standard; <0.7 = bloated/over-engineered")
-    performance: float = Field(ge=0.0, le=1.0, description="1.0 = optimal/async/light; <0.7 = latency issues/inefficient")
-    robustness: float = Field(ge=0.0, le=1.0, description="1.0 = clean errors/types; <0.7 = fragile/no safety margins")
-    security: float = Field(ge=0.0, le=1.0, description="1.0 = perfect isolation/sandboxed; <0.7 = insecure defaults/leaks")
+    simplicity: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="1.0 = highly minimal/standard; <0.7 = bloated/over-engineered",
+    )
+    performance: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="1.0 = optimal/async/light; <0.7 = latency issues/inefficient",
+    )
+    robustness: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="1.0 = clean errors/types; <0.7 = fragile/no safety margins",
+    )
+    security: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="1.0 = perfect isolation/sandboxed; <0.7 = insecure defaults/leaks",
+    )
 
 
 class TasteResponse(BaseModel):
     scores: TasteScores
-    feedback: str = Field(description="Honest, harsh, actionable explanation of any taste violations or improvements.")
-    is_tasteful: bool = Field(description="True if the design conforms to premium quality standards, False if rejected.")
+    feedback: str = Field(
+        description="Honest, harsh, actionable explanation of any taste violations or improvements."
+    )
+    is_tasteful: bool = Field(
+        description="True if the design conforms to premium quality standards, False if rejected."
+    )
 
 
 class TasteFrictionBlock(Exception):
@@ -62,7 +82,7 @@ class TasteEvaluator:
         Raises TasteFrictionBlock if scores fall below threshold.
         """
         log.debug("Evaluating taste of input request...")
-        
+
         try:
             result = await self.llm.complete_json(
                 schema=TasteResponse,
@@ -71,22 +91,29 @@ class TasteEvaluator:
                 temperature=0.1,
                 request_kind="taste_critic",
             )
-            
+
             # Compute geometric mean score
             scores = result.scores
-            geo_mean = (scores.simplicity * scores.performance * scores.robustness * scores.security) ** 0.25
-            
+            geo_mean = (
+                scores.simplicity
+                * scores.performance
+                * scores.robustness
+                * scores.security
+            ) ** 0.25
+
             log.debug(
                 f"Taste evaluation: Tasteful={result.is_tasteful} (GeoMean={geo_mean:.3f}) "
                 f"Simplicity={scores.simplicity:.2f} Performance={scores.performance:.2f} "
                 f"Robustness={scores.robustness:.2f} Security={scores.security:.2f}"
             )
-            
+
             # Force reject if geometric mean falls below threshold
             if geo_mean < self.taste_threshold or not result.is_tasteful:
-                log.warning(f"Taste friction triggered! Rejection feedback: {result.feedback[:100]}...")
+                log.warning(
+                    f"Taste friction triggered! Rejection feedback: {result.feedback[:100]}..."
+                )
                 raise TasteFrictionBlock(result.feedback, scores)
-                
+
         except TasteFrictionBlock:
             raise
         except Exception as e:

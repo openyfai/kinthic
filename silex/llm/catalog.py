@@ -28,10 +28,13 @@ PRICE_TABLE = {
     "o1-mini": (3.00, 12.00),
     "o3-mini": (1.10, 4.40),
     "deepseek-chat": (0.14, 0.28),
-    "deepseek-reasoner": (0.55, 2.19)
+    "deepseek-reasoner": (0.55, 2.19),
 }
 
-def calculate_cost_usd(model_id: str, prompt_tokens: int, completion_tokens: int) -> float | None:
+
+def calculate_cost_usd(
+    model_id: str, prompt_tokens: int, completion_tokens: int
+) -> float | None:
     """Calculate the exact USD cost based on token counts."""
     if model_id not in PRICE_TABLE:
         return None
@@ -72,7 +75,9 @@ def get_provider_defaults(provider: str) -> dict[str, Any]:
     if not models:
         raise ValueError(f"No models defined for provider: {provider}")
     fast_model = next((m for m in models if m.get("tier") == "fast"), models[0])
-    reasoning_model = next((m for m in models if m.get("tier") == "reasoning"), models[0])
+    reasoning_model = next(
+        (m for m in models if m.get("tier") == "reasoning"), models[0]
+    )
     fast_id = fast_model["id"]
     reasoning_id = reasoning_model["id"]
     return {
@@ -88,4 +93,6 @@ def get_provider_defaults(provider: str) -> dict[str, Any]:
 
 def find_model(provider: str, model_id: str) -> dict[str, Any] | None:
     payload = MODEL_CATALOG.get(provider, {})
-    return next((model for model in payload.get("models", []) if model["id"] == model_id), None)
+    return next(
+        (model for model in payload.get("models", []) if model["id"] == model_id), None
+    )

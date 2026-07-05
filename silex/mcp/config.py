@@ -46,9 +46,7 @@ class McpConfig:
 
     def enabled_servers(self) -> dict[str, dict[str, Any]]:
         return {
-            name: cfg
-            for name, cfg in self.servers.items()
-            if cfg.get("enabled", True)
+            name: cfg for name, cfg in self.servers.items() if cfg.get("enabled", True)
         }
 
     def save(self) -> None:

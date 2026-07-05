@@ -6,6 +6,7 @@ class Ontology:
     """
     Formally defines ARIA's objective ontology for mapping subjective human concepts.
     """
+
     def __init__(self):
         self.concepts = {}
         self.relationships = {}
@@ -13,7 +14,7 @@ class Ontology:
 
     def add_concept(self, name, attributes=None):
         if name not in self.concepts:
-            self.concepts[name] = {'attributes': attributes if attributes else {}}
+            self.concepts[name] = {"attributes": attributes if attributes else {}}
             return True
         return False
 
@@ -23,10 +24,9 @@ class Ontology:
                 self.relationships[from_concept] = {}
             if to_concept not in self.relationships[from_concept]:
                 self.relationships[from_concept][to_concept] = []
-            self.relationships[from_concept][to_concept].append({
-                'type': rel_type, 
-                'properties': properties if properties else {}
-            })
+            self.relationships[from_concept][to_concept].append(
+                {"type": rel_type, "properties": properties if properties else {}}
+            )
             return True
         return False
 
@@ -34,7 +34,7 @@ class Ontology:
         return self.relationships.get(concept, {})
 
     def get_concept_attributes(self, concept):
-        return self.concepts.get(concept, {}).get('attributes', {})
+        return self.concepts.get(concept, {}).get("attributes", {})
 
     def find_matches(self, text: str):
         """Return ontology concepts whose names or aliases appear in text."""
@@ -44,16 +44,20 @@ class Ontology:
             attributes = payload.get("attributes", {})
             aliases = attributes.get("aliases", [])
             candidates = [concept_name, *aliases]
-            if any(self._contains_term(normalized_text, candidate) for candidate in candidates):
+            if any(
+                self._contains_term(normalized_text, candidate)
+                for candidate in candidates
+            ):
                 matches.append(concept_name)
         return matches
 
     def serialize(self):
-        return {'concepts': self.concepts, 'relationships': self.relationships}
+        return {"concepts": self.concepts, "relationships": self.relationships}
 
     def merge_from_json_file(self, path: str | Path) -> None:
         """Merge overlay concepts/relationships from JSON (same shape as serialize())."""
         import logging
+
         logger = logging.getLogger("SILEX.Ontology")
         p = Path(path)
         try:
@@ -61,7 +65,7 @@ class Ontology:
         except Exception as e:
             logger.error(f"Failed to read/parse ontology JSON file at {path}: {e}")
             return
-            
+
         for name, payload in data.get("concepts", {}).items():
             try:
                 if isinstance(payload, dict) and "attributes" in payload:
@@ -69,38 +73,52 @@ class Ontology:
                 elif isinstance(payload, dict):
                     attrs = payload
                 else:
-                    logger.warning(f"Skipped invalid concept attributes payload type for '{name}' in ontology file.")
+                    logger.warning(
+                        f"Skipped invalid concept attributes payload type for '{name}' in ontology file."
+                    )
                     continue
                 if name in self.concepts:
                     self.concepts[name].setdefault("attributes", {}).update(attrs)
                 else:
                     self.add_concept(name, attrs)
             except Exception as e:
-                logger.warning(f"Skipped invalid ontology concept mapping '{name}': {e}")
+                logger.warning(
+                    f"Skipped invalid ontology concept mapping '{name}': {e}"
+                )
                 continue
-                
+
         for from_c, targets in data.get("relationships", {}).items():
             if not isinstance(targets, dict):
-                logger.warning(f"Skipped invalid relationship target mapping type for '{from_c}' in ontology file.")
+                logger.warning(
+                    f"Skipped invalid relationship target mapping type for '{from_c}' in ontology file."
+                )
                 continue
             for to_c, rel_list in targets.items():
                 if not isinstance(rel_list, list):
-                    logger.warning(f"Skipped invalid relationships format (not a list) from '{from_c}' to '{to_c}'.")
+                    logger.warning(
+                        f"Skipped invalid relationships format (not a list) from '{from_c}' to '{to_c}'."
+                    )
                     continue
                 for rel in rel_list:
                     try:
                         if isinstance(rel, dict) and rel.get("type"):
-                            self.add_relationship(from_c, to_c, rel["type"], rel.get("properties") or {})
+                            self.add_relationship(
+                                from_c, to_c, rel["type"], rel.get("properties") or {}
+                            )
                         else:
-                            logger.warning(f"Skipped invalid relationship format (missing type) from '{from_c}' to '{to_c}'.")
+                            logger.warning(
+                                f"Skipped invalid relationship format (missing type) from '{from_c}' to '{to_c}'."
+                            )
                     except Exception as e:
-                        logger.warning(f"Failed to add relationship from '{from_c}' to '{to_c}': {e}")
+                        logger.warning(
+                            f"Failed to add relationship from '{from_c}' to '{to_c}': {e}"
+                        )
 
     @classmethod
     def deserialize(cls, data):
         ontology = cls()
-        ontology.concepts = data['concepts']
-        ontology.relationships = data['relationships']
+        ontology.concepts = data["concepts"]
+        ontology.relationships = data["relationships"]
         return ontology
 
     def _bootstrap_default_concepts(self):
@@ -166,10 +184,30 @@ class Ontology:
         for concept_name, attributes in default_concepts.items():
             self.add_concept(concept_name, attributes)
 
-        self.add_relationship("autonomy", "consent", "requires", {"reason": "autonomy without consent can collapse into domination"})
-        self.add_relationship("trust", "truthfulness", "requires", {"reason": "trust depends on honest signaling"})
-        self.add_relationship("identity", "agency", "supports", {"reason": "stable identity supports coherent action"})
-        self.add_relationship("flourishing", "harm", "contradicts", {"reason": "harm undermines flourishing"})
+        self.add_relationship(
+            "autonomy",
+            "consent",
+            "requires",
+            {"reason": "autonomy without consent can collapse into domination"},
+        )
+        self.add_relationship(
+            "trust",
+            "truthfulness",
+            "requires",
+            {"reason": "trust depends on honest signaling"},
+        )
+        self.add_relationship(
+            "identity",
+            "agency",
+            "supports",
+            {"reason": "stable identity supports coherent action"},
+        )
+        self.add_relationship(
+            "flourishing",
+            "harm",
+            "contradicts",
+            {"reason": "harm undermines flourishing"},
+        )
 
     @staticmethod
     def _contains_term(text: str, term: str):

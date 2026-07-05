@@ -60,10 +60,17 @@ class EventRecorder:
             log.warning("EventRecorder write failed: %s", exc)
         return event.event_id
 
-    async def record_tool(self, tool_name: str, args: dict[str, Any], result: str, success: bool) -> None:
+    async def record_tool(
+        self, tool_name: str, args: dict[str, Any], result: str, success: bool
+    ) -> None:
         await self.record(
             JobEventKind.TOOL_CALL.value,
-            {"tool": tool_name, "args": args, "result": result[:512], "success": success},
+            {
+                "tool": tool_name,
+                "args": args,
+                "result": result[:512],
+                "success": success,
+            },
         )
 
     async def record_worker_spawn(self, worker_id: str, objective: str) -> None:
@@ -72,13 +79,17 @@ class EventRecorder:
             {"worker_id": worker_id, "objective": objective},
         )
 
-    async def record_worker_done(self, worker_id: str, exit_code: int, success: bool) -> None:
+    async def record_worker_done(
+        self, worker_id: str, exit_code: int, success: bool
+    ) -> None:
         await self.record(
             JobEventKind.WORKER_DONE.value,
             {"worker_id": worker_id, "exit_code": exit_code, "success": success},
         )
 
-    async def record_approval_requested(self, approval_id: str, tool_name: str, risk_level: str) -> None:
+    async def record_approval_requested(
+        self, approval_id: str, tool_name: str, risk_level: str
+    ) -> None:
         await self.record(
             JobEventKind.APPROVAL_REQUESTED.value,
             {"approval_id": approval_id, "tool": tool_name, "risk_level": risk_level},
@@ -96,7 +107,9 @@ class EventRecorder:
             {"superstep": superstep, "summary": summary[:1024]},
         )
 
-    async def record_step(self, step_order: int, action: str, output: str, latency_ms: float, tokens: int) -> None:
+    async def record_step(
+        self, step_order: int, action: str, output: str, latency_ms: float, tokens: int
+    ) -> None:
         await self.record(
             JobEventKind.STEP_DONE.value,
             {

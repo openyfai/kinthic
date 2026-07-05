@@ -10,7 +10,12 @@ def test_merge_from_json_file_adds_concept():
     with tempfile.TemporaryDirectory() as d:
         p = Path(d) / "overlay.json"
         p.write_text(
-            json.dumps({"concepts": {"custom_overlay": {"aliases": ["co"]}}, "relationships": {}}),
+            json.dumps(
+                {
+                    "concepts": {"custom_overlay": {"aliases": ["co"]}},
+                    "relationships": {},
+                }
+            ),
             encoding="utf-8",
         )
         ontology.merge_from_json_file(p)

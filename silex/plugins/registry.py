@@ -46,6 +46,7 @@ class KinthicRegistry:
 
     def __init__(self) -> None:
         from silex.utils.config import KINTHIC_HOME
+
         self.registry_dir = KINTHIC_HOME / "registry"
         self.catalog_path = self.registry_dir / "catalog.yaml"
         self._catalog: list[dict[str, Any]] | None = None
@@ -74,6 +75,7 @@ class KinthicRegistry:
     def _read_catalog_file(self) -> list[dict[str, Any]]:
         try:
             import yaml
+
             with open(self.catalog_path, encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
             return data.get("entries", [])
@@ -85,6 +87,7 @@ class KinthicRegistry:
         self._ensure_dir()
         try:
             import yaml
+
             payload = {
                 "version": "1.0",
                 "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -108,11 +111,15 @@ class KinthicRegistry:
         if bundled_catalog.exists():
             try:
                 import yaml
+
                 with open(bundled_catalog, encoding="utf-8") as f:
                     data = yaml.safe_load(f) or {}
                 entries = list(data.get("entries", []))
                 if entries:
-                    log.info("Seeded KinthicHub catalog from bundled registry/catalog.yaml (%d entries)", len(entries))
+                    log.info(
+                        "Seeded KinthicHub catalog from bundled registry/catalog.yaml (%d entries)",
+                        len(entries),
+                    )
                     self._write_catalog(entries)
                     self._sync_installed_flags(entries)
                     return
@@ -133,17 +140,19 @@ class KinthicRegistry:
                     if stripped:
                         desc = stripped[:120]
                         break
-                entries.append({
-                    "name": md.stem,
-                    "type": "skill",
-                    "version": "1.0.0",
-                    "description": desc,
-                    "tags": ["bundled"],
-                    "trust_level": "core",
-                    "source": "bundled",
-                    "entry_file": md.name,
-                    "installed": True,
-                })
+                entries.append(
+                    {
+                        "name": md.stem,
+                        "type": "skill",
+                        "version": "1.0.0",
+                        "description": desc,
+                        "tags": ["bundled"],
+                        "trust_level": "core",
+                        "source": "bundled",
+                        "entry_file": md.name,
+                        "installed": True,
+                    }
+                )
 
         # 2. Bundled provider plugins from E:/AGI/plugins/providers/
         providers_dir = PROJECT_ROOT / "plugins" / "providers"
@@ -156,19 +165,22 @@ class KinthicRegistry:
                     continue
                 try:
                     import yaml
+
                     with open(yaml_path, encoding="utf-8") as f:
                         manifest = yaml.safe_load(f) or {}
-                    entries.append({
-                        "name": manifest.get("name", provider_dir.name),
-                        "type": "provider",
-                        "version": "1.0.0",
-                        "description": manifest.get("description", ""),
-                        "tags": ["provider", "llm"],
-                        "trust_level": "core",
-                        "source": "bundled",
-                        "entry_file": "plugin.yaml",
-                        "installed": True,
-                    })
+                    entries.append(
+                        {
+                            "name": manifest.get("name", provider_dir.name),
+                            "type": "provider",
+                            "version": "1.0.0",
+                            "description": manifest.get("description", ""),
+                            "tags": ["provider", "llm"],
+                            "trust_level": "core",
+                            "source": "bundled",
+                            "entry_file": "plugin.yaml",
+                            "installed": True,
+                        }
+                    )
                 except Exception:
                     pass
 
@@ -178,7 +190,11 @@ class KinthicRegistry:
 
     def _skill_present_on_disk(self, name: str) -> bool:
         """Return True if a catalog entry appears to be installed locally."""
-        from silex.utils.config import KINTHIC_PLUGINS_SKILLS, KINTHIC_PLUGINS_TOOLS, KINTHIC_SKILLS
+        from silex.utils.config import (
+            KINTHIC_PLUGINS_SKILLS,
+            KINTHIC_PLUGINS_TOOLS,
+            KINTHIC_SKILLS,
+        )
 
         if not name:
             return False
@@ -208,7 +224,9 @@ class KinthicRegistry:
     # Search
     # ------------------------------------------------------------------
 
-    def search(self, query: str, type_filter: str | None = None) -> list[dict[str, Any]]:
+    def search(
+        self, query: str, type_filter: str | None = None
+    ) -> list[dict[str, Any]]:
         """Fuzzy-search catalog by name, description, and tags."""
         catalog = self.load_catalog()
         q = query.lower()
@@ -251,20 +269,23 @@ class KinthicRegistry:
         catalog = self.load_catalog()
 
         # Try catalog lookup first
-        entry = next(
-            (e for e in catalog if e.get("name") == name_or_url), None
-        )
+        entry = next((e for e in catalog if e.get("name") == name_or_url), None)
 
         if entry is None and name_or_url.startswith("https://"):
-            entry = {"name": name_or_url.split("/")[-1].split(".")[0],
-                     "type": "skill" if name_or_url.endswith(".md") else "tool",
-                     "url": name_or_url,
-                     "sha256": "",
-                     "trust_level": "community",
-                     "source": "remote"}
+            entry = {
+                "name": name_or_url.split("/")[-1].split(".")[0],
+                "type": "skill" if name_or_url.endswith(".md") else "tool",
+                "url": name_or_url,
+                "sha256": "",
+                "trust_level": "community",
+                "source": "remote",
+            }
 
         if entry is None:
-            return False, f"'{name_or_url}' not found in catalog. Try: kinthic skills search {name_or_url}"
+            return (
+                False,
+                f"'{name_or_url}' not found in catalog. Try: kinthic skills search {name_or_url}",
+            )
 
         if entry.get("installed"):
             return False, f"'{entry['name']}' is already installed."
@@ -305,7 +326,6 @@ class KinthicRegistry:
             elif plugin_type == "tool":
                 import io
                 import zipfile
-                from pathlib import Path
 
                 plugin_dest = KINTHIC_PLUGINS_TOOLS / entry["name"]
                 plugin_dest.mkdir(parents=True, exist_ok=True)
@@ -315,7 +335,10 @@ class KinthicRegistry:
                 return True, f"Tool plugin '{entry['name']}' installed to {plugin_dest}"
 
             else:
-                return False, f"Cannot auto-install type='{plugin_type}' — install manually."
+                return (
+                    False,
+                    f"Cannot auto-install type='{plugin_type}' — install manually.",
+                )
 
         except Exception as exc:
             return False, f"Install failed: {exc}"
@@ -327,7 +350,10 @@ class KinthicRegistry:
         KINTHIC_SKILLS.mkdir(parents=True, exist_ok=True)
         src_md = PROJECT_ROOT / "skills" / f"{name}.md"
         if not src_md.exists():
-            return False, f"Bundled skill '{name}' not found in package (missing {src_md.name})."
+            return (
+                False,
+                f"Bundled skill '{name}' not found in package (missing {src_md.name}).",
+            )
 
         dest_md = KINTHIC_SKILLS / f"{name}.md"
         shutil.copy2(src_md, dest_md)
@@ -366,7 +392,11 @@ class KinthicRegistry:
 
     def uninstall(self, name: str) -> tuple[bool, str]:
         """Remove an installed skill or tool plugin by name."""
-        from silex.utils.config import KINTHIC_SKILLS, KINTHIC_PLUGINS_TOOLS, KINTHIC_PLUGINS_SKILLS
+        from silex.utils.config import (
+            KINTHIC_SKILLS,
+            KINTHIC_PLUGINS_TOOLS,
+            KINTHIC_PLUGINS_SKILLS,
+        )
 
         catalog = self.load_catalog()
         entry = next((e for e in catalog if e.get("name") == name), None)
@@ -452,6 +482,7 @@ class KinthicRegistry:
             with urllib.request.urlopen(url, timeout=10) as resp:  # noqa: S310
                 raw = resp.read().decode("utf-8")
             import yaml
+
             remote_data = yaml.safe_load(raw) or {}
             remote_entries: list[dict] = remote_data.get("entries", [])
         except Exception as exc:
@@ -487,9 +518,11 @@ class KinthicRegistry:
             return "No results found."
         lines = []
         for e in entries:
-            badge = {"core": "[core]", "verified": "[✓]", "community": "[community]"}.get(
-                e.get("trust_level", "community"), ""
-            )
+            badge = {
+                "core": "[core]",
+                "verified": "[✓]",
+                "community": "[community]",
+            }.get(e.get("trust_level", "community"), "")
             installed = " (installed)" if e.get("installed") else ""
             lines.append(
                 f"  {badge} {e.get('name')} ({e.get('type', '?')}) "

@@ -26,6 +26,7 @@ class McpServerManager:
     def _mcp_available(self) -> bool:
         try:
             import mcp  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -50,8 +51,14 @@ class McpServerManager:
                 await session.initialize()
                 return await fn(session)
 
-    async def call_tool(self, server_name: str, tool_name: str, arguments: dict[str, Any]) -> str:
-        cfg = self._server_configs.get(server_name) or load_mcp_config().get_server(server_name) or {}
+    async def call_tool(
+        self, server_name: str, tool_name: str, arguments: dict[str, Any]
+    ) -> str:
+        cfg = (
+            self._server_configs.get(server_name)
+            or load_mcp_config().get_server(server_name)
+            or {}
+        )
         if not cfg:
             raise RuntimeError(f"Unknown MCP server: {server_name}")
 
@@ -81,6 +88,7 @@ class McpServerManager:
         )
 
         try:
+
             async def _list(session) -> list[dict[str, Any]]:
                 listed = await session.list_tools()
                 return [
@@ -104,7 +112,9 @@ class McpServerManager:
         for tool_def in tool_filter.filter_tools(raw_tools):
             tname = tool_def["name"]
 
-            async def _call(_tool: str, args: dict, _srv: str = name, _tname: str = tname) -> str:
+            async def _call(
+                _tool: str, args: dict, _srv: str = name, _tname: str = tname
+            ) -> str:
                 return await manager.call_tool(_srv, _tname, args)
 
             adapted.append(
@@ -115,7 +125,9 @@ class McpServerManager:
                     input_schema=tool_def.get("inputSchema") or {},
                     call_fn=_call,
                     requires_approval=tname.lower() in approval_list,
-                    risk_level="repo_write" if tname.lower() in approval_list else "read_only",
+                    risk_level="repo_write"
+                    if tname.lower() in approval_list
+                    else "read_only",
                 )
             )
         return adapted

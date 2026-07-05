@@ -14,7 +14,9 @@ import logging
 import os
 import signal
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 log = logging.getLogger("sidecar")
 
 _worker_id = os.environ.get("KINTHIC_WORKER_ID")
@@ -138,7 +140,10 @@ async def handle_client(reader, writer) -> None:
             return
 
         output = (stdout + stderr).decode("utf-8", errors="replace")
-        response = {"output": output, "exit_code": exit_code if exit_code is not None else -1}
+        response = {
+            "output": output,
+            "exit_code": exit_code if exit_code is not None else -1,
+        }
         writer.write(json.dumps(response).encode("utf-8"))
         await writer.drain()
     except Exception as e:

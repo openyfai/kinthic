@@ -66,4 +66,8 @@ class SpawnWorkerTool(BaseTool):
         orchestrator = WorkerOrchestrator.instance()
         handle = await orchestrator.spawn_job(job, lease)
         result = await handle.structured_result()
-        return result.output if result.success else f"{result.output}\n[Worker failed exit_code={result.exit_code}]"
+        return (
+            result.output
+            if result.success
+            else f"{result.output}\n[Worker failed exit_code={result.exit_code}]"
+        )

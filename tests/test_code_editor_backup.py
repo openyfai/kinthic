@@ -2,6 +2,7 @@ import pytest
 from silex.tools.code_editor import CodeEditorTool
 from silex.utils.config import KINTHIC_BACKUPS, WORKSPACE_DIR, ensure_kinthic_home
 
+
 @pytest.mark.asyncio
 async def test_failsafe_backup_for_edits(tmp_path):
     # Ensure VYN HOME structures are created
@@ -10,8 +11,10 @@ async def test_failsafe_backup_for_edits(tmp_path):
     # Create a mock file in the workspace
     file_name = "test_failsafe_backup.txt"
     test_file_path = WORKSPACE_DIR / file_name
-    original_content = "Hello, this is original line 1.\nHello, this is original line 2."
-    
+    original_content = (
+        "Hello, this is original line 1.\nHello, this is original line 2."
+    )
+
     test_file_path.write_text(original_content, encoding="utf-8")
 
     # Define edit proposal
@@ -20,7 +23,7 @@ async def test_failsafe_backup_for_edits(tmp_path):
         "file_path": str(test_file_path),
         "target_content": "original line 1",
         "replacement_content": "edited line 1",
-        "explanation": "Testing backups."
+        "explanation": "Testing backups.",
     }
 
     # Verify backups directory exists
@@ -42,7 +45,7 @@ async def test_failsafe_backup_for_edits(tmp_path):
     # Get the latest backup file
     backup_file = backups[0]
     backup_content = backup_file.read_text(encoding="utf-8")
-    
+
     # 3. Verify backup content matches the original content perfectly
     assert backup_content == original_content
 

@@ -22,11 +22,11 @@ from enum import IntEnum
 
 
 class ScoreLevel(IntEnum):
-    ZERO = 0       # Failure or security violation
-    POOR = 1       # Task attempted but fails in primary path
-    PARTIAL = 2    # Task partially succeeds (>50% subtasks pass)
-    ADEQUATE = 3   # Task succeeds with known limitations
-    GOOD = 4       # Task succeeds; minor inefficiencies
+    ZERO = 0  # Failure or security violation
+    POOR = 1  # Task attempted but fails in primary path
+    PARTIAL = 2  # Task partially succeeds (>50% subtasks pass)
+    ADEQUATE = 3  # Task succeeds with known limitations
+    GOOD = 4  # Task succeeds; minor inefficiencies
     EXCELLENT = 5  # Task succeeds cleanly, cost-efficiently, and reproducibly
 
 
@@ -45,7 +45,7 @@ class BenchmarkScenario:
 class BenchmarkScore:
     scenario_name: str
     category: str
-    score: int              # 0-5
+    score: int  # 0-5
     max_score: int = 5
     weight: float = 1.0
     notes: str = ""
@@ -64,7 +64,9 @@ class Scorecard:
     def total(self) -> float:
         if not self.scores:
             return 0.0
-        return sum(s.weighted_score() for s in self.scores) / sum(s.weight for s in self.scores)
+        return sum(s.weighted_score() for s in self.scores) / sum(
+            s.weight for s in self.scores
+        )
 
     def by_category(self) -> dict[str, float]:
         cats: dict[str, list[BenchmarkScore]] = {}

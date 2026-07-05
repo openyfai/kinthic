@@ -17,7 +17,6 @@ Grouped by the phase that introduced the guarantee being tested:
 from __future__ import annotations
 
 import asyncio
-import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -184,7 +183,17 @@ class TestHostFallbackHardening:
     def test_interpreters_and_package_managers_excluded_from_host_allowlist(self):
         from silex.tools.system import _HOST_FALLBACK_ALLOWED_COMMANDS
 
-        dangerous = {"python", "python3", "pip", "npm", "node", "git", "bash", "sh", "uv"}
+        dangerous = {
+            "python",
+            "python3",
+            "pip",
+            "npm",
+            "node",
+            "git",
+            "bash",
+            "sh",
+            "uv",
+        }
         assert not (dangerous & _HOST_FALLBACK_ALLOWED_COMMANDS), (
             f"Host fallback allowlist must not include: "
             f"{dangerous & _HOST_FALLBACK_ALLOWED_COMMANDS}"
@@ -220,7 +229,9 @@ class TestHostFallbackHardening:
 
         with (
             patch("silex.tools.system.terminal_execution_enabled", return_value=True),
-            patch("silex.tools.system.terminal_host_fallback_enabled", return_value=True),
+            patch(
+                "silex.tools.system.terminal_host_fallback_enabled", return_value=True
+            ),
             patch.object(tool, "_ensure_venv", fake_ensure_venv),
             patch("asyncio.create_subprocess_exec", fake_create_subprocess_exec),
         ):
@@ -241,7 +252,9 @@ class TestHostFallbackHardening:
 
         with (
             patch("silex.tools.system.terminal_execution_enabled", return_value=True),
-            patch("silex.tools.system.terminal_host_fallback_enabled", return_value=False),
+            patch(
+                "silex.tools.system.terminal_host_fallback_enabled", return_value=False
+            ),
         ):
             result = asyncio.run(tool.execute("echo hello"))
 
@@ -258,7 +271,9 @@ class TestHostFallbackHardening:
 
         with (
             patch("silex.tools.system.terminal_execution_enabled", return_value=True),
-            patch("silex.tools.system.terminal_host_fallback_enabled", return_value=False),
+            patch(
+                "silex.tools.system.terminal_host_fallback_enabled", return_value=False
+            ),
         ):
             result = asyncio.run(tool.execute("rm -rf /"))
 
@@ -280,9 +295,15 @@ class TestCrashInjection:
             store.vs.fail_next_add = True
             memory = await store.add_manual("Crash injection test content one")
 
-            assert memory is not None, "SQLite write must succeed even if the vector write fails"
-            row = await db.fetch_one("SELECT * FROM memories WHERE id = ?", (memory.id,))
-            assert row is not None, "Memory must be durably persisted in SQLite despite the Chroma crash"
+            assert memory is not None, (
+                "SQLite write must succeed even if the vector write fails"
+            )
+            row = await db.fetch_one(
+                "SELECT * FROM memories WHERE id = ?", (memory.id,)
+            )
+            assert row is not None, (
+                "Memory must be durably persisted in SQLite despite the Chroma crash"
+            )
 
             # The vector store has no entry yet (the simulated crash prevented it).
             assert memory.id not in store.vs._docs
@@ -302,7 +323,9 @@ class TestCrashInjection:
         via the ChromaDB-only dedup/novelty checks."""
         db, store = await _make_memory_store(tmp_path)
         try:
-            store.vs.add_chunks(["orphaned content"], [{"type": "fact"}], ids=["orphan-1"])
+            store.vs.add_chunks(
+                ["orphaned content"], [{"type": "fact"}], ids=["orphan-1"]
+            )
             assert "orphan-1" in store.vs._docs
 
             healed = await store.reconcile_vector_index()
@@ -367,7 +390,10 @@ class TestConcurrency:
         try:
             n = 25
             results = await asyncio.gather(
-                *[store.add_manual(f"Concurrency test memory number {i}") for i in range(n)],
+                *[
+                    store.add_manual(f"Concurrency test memory number {i}")
+                    for i in range(n)
+                ],
                 return_exceptions=True,
             )
             errors = [r for r in results if isinstance(r, Exception)]
@@ -390,7 +416,9 @@ class TestConcurrency:
         db.WRITE_QUEUE_ENQUEUE_TIMEOUT = 0.2
 
         # Fill the queue so any further put() would normally block forever.
-        await db.write_queue.put(("SELECT 1", (), asyncio.get_event_loop().create_future()))
+        await db.write_queue.put(
+            ("SELECT 1", (), asyncio.get_event_loop().create_future())
+        )
 
         loop = asyncio.get_event_loop()
         start = loop.time()
@@ -411,7 +439,9 @@ class TestConcurrency:
         try:
             db._writer_dead = True
             with pytest.raises(RuntimeError, match="dead"):
-                await db.execute("INSERT INTO goals (id, description, status, priority, created_at, updated_at) VALUES ('x','d','pending','high','t','t')")
+                await db.execute(
+                    "INSERT INTO goals (id, description, status, priority, created_at, updated_at) VALUES ('x','d','pending','high','t','t')"
+                )
         finally:
             db._writer_dead = False
             await db.close()
@@ -480,10 +510,14 @@ class TestCorruptRowResilience:
             memories = await store.all_memories()
             ids = {m.id for m in memories}
             assert good.id in ids
-            assert "corrupt-json-row" in ids, "Row with recoverable bad JSON should still be returned"
+            assert "corrupt-json-row" in ids, (
+                "Row with recoverable bad JSON should still be returned"
+            )
 
             corrupt = next(m for m in memories if m.id == "corrupt-json-row")
-            assert corrupt.tags == [], "Bad JSON must fall back to the safe default, not raise"
+            assert corrupt.tags == [], (
+                "Bad JSON must fall back to the safe default, not raise"
+            )
             assert corrupt.child_memory_ids == []
             assert corrupt.related_memories == []
         finally:
@@ -517,12 +551,16 @@ class TestCorruptRowResilience:
             memories = await store.all_memories()
             ids = {m.id for m in memories}
             assert good.id in ids, "Healthy rows must still be returned"
-            assert "corrupt-enum-row" not in ids, "Row that fails model validation must be skipped, not raised"
+            assert "corrupt-enum-row" not in ids, (
+                "Row that fails model validation must be skipped, not raised"
+            )
         finally:
             await db.close()
 
     @pytest.mark.asyncio
-    async def test_retrieve_context_survives_corrupt_timestamp_in_semantic_pool(self, tmp_path, caplog):
+    async def test_retrieve_context_survives_corrupt_timestamp_in_semantic_pool(
+        self, tmp_path, caplog
+    ):
         """A corrupt created_at timestamp must not raise while the semantic
         pool scores it (it's caught and logged) — retrieval must still
         complete and return the rest of the context."""
@@ -530,7 +568,9 @@ class TestCorruptRowResilience:
 
         db, store = await _make_memory_store(tmp_path)
         try:
-            good = await store.add_manual("Retrieval survives corrupt sibling rows test")
+            good = await store.add_manual(
+                "Retrieval survives corrupt sibling rows test"
+            )
             assert good is not None
 
             await db.execute(
@@ -552,11 +592,18 @@ class TestCorruptRowResilience:
             # Force the semantic pool (which parses created_at) to consider
             # the corrupt row as a hit.
             store.vs.canned_search_results = [
-                {"id": "corrupt-timestamp-row", "content": "x", "metadata": {}, "distance": 0.1}
+                {
+                    "id": "corrupt-timestamp-row",
+                    "content": "x",
+                    "metadata": {},
+                    "distance": 0.1,
+                }
             ]
 
             with caplog.at_level(logging.WARNING, logger="silex.memory"):
-                results = await asyncio.wait_for(store.retrieve_context("test query"), timeout=10.0)
+                results = await asyncio.wait_for(
+                    store.retrieve_context("test query"), timeout=10.0
+                )
 
             # Must not raise, and the healthy memory must still come through.
             ids = {m.id for m in results}
@@ -565,7 +612,8 @@ class TestCorruptRowResilience:
             # The semantic-scoring guard must have caught and logged the bad
             # timestamp rather than letting it propagate as an exception.
             assert any(
-                "malformed memory row" in rec.message and "corrupt-timestamp-row" in rec.message
+                "malformed memory row" in rec.message
+                and "corrupt-timestamp-row" in rec.message
                 for rec in caplog.records
             )
         finally:
@@ -582,9 +630,13 @@ class TestQueryAndContextBudgets:
         try:
             from silex.utils.config import MAX_RETRIEVAL_QUERY_CHARS
 
-            huge_query = "word " * (MAX_RETRIEVAL_QUERY_CHARS)  # far bigger than the cap
+            huge_query = "word " * (
+                MAX_RETRIEVAL_QUERY_CHARS
+            )  # far bigger than the cap
             # Must not raise / hang despite the pathologically long query.
-            results = await asyncio.wait_for(store.retrieve_context(huge_query), timeout=10.0)
+            results = await asyncio.wait_for(
+                store.retrieve_context(huge_query), timeout=10.0
+            )
             assert isinstance(results, list)
         finally:
             await db.close()

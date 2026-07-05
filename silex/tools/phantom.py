@@ -118,7 +118,9 @@ class PhantomTool(BaseTool):
         if suffix == ".py":
             return await self._check_python(phantom_file, run_id)
         elif suffix in {".ts", ".tsx", ".js", ".jsx"}:
-            return await self._check_typescript(phantom_dir, phantom_file, real_path, run_id)
+            return await self._check_typescript(
+                phantom_dir, phantom_file, real_path, run_id
+            )
         else:
             # For unsupported types, just confirm the file was written cleanly
             size = phantom_file.stat().st_size
@@ -133,7 +135,10 @@ class PhantomTool(BaseTool):
         """Run py_compile on the phantom file to catch syntax errors."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                sys.executable, "-m", "py_compile", str(phantom_file),
+                sys.executable,
+                "-m",
+                "py_compile",
+                str(phantom_file),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -189,19 +194,31 @@ class PhantomTool(BaseTool):
         # Create a hidden temp file next to the real file in the actual workspace
         # This allows tsc to resolve relative imports and node_modules correctly.
         temp_file = real_path.with_name(f".phantom_{real_path.name}")
-        
+
         try:
             temp_file.write_text(content, encoding="utf-8")
 
             # On Windows, .cmd files need to be invoked via cmd /c
             import platform as _platform
+
             if _platform.system() == "Windows" and tsc_path.lower().endswith(".cmd"):
-                cmd_args = ["cmd", "/c", tsc_path,
-                            "--noEmit", "--allowJs", "--skipLibCheck",
-                            str(temp_file)]
+                cmd_args = [
+                    "cmd",
+                    "/c",
+                    tsc_path,
+                    "--noEmit",
+                    "--allowJs",
+                    "--skipLibCheck",
+                    str(temp_file),
+                ]
             else:
-                cmd_args = [tsc_path, "--noEmit", "--allowJs", "--skipLibCheck",
-                            str(temp_file)]
+                cmd_args = [
+                    tsc_path,
+                    "--noEmit",
+                    "--allowJs",
+                    "--skipLibCheck",
+                    str(temp_file),
+                ]
 
             proc = await asyncio.create_subprocess_exec(
                 *cmd_args,
@@ -217,11 +234,11 @@ class PhantomTool(BaseTool):
                     f"PHANTOM SUCCESS (run {run_id}): "
                     f"TypeScript/JS in-situ check passed (tsc --noEmit). Safe to apply."
                 )
-            
+
             # Remap the temp filename back to the real filename so the LLM isn't confused
             output = output.replace(temp_file.name, real_path.name)
             output = output.replace(str(temp_file), real_path.name)
-            
+
             return (
                 f"PHANTOM FAILURE (run {run_id}): TypeScript check failed.\n"
                 f"Errors:\n{output}\n\n"

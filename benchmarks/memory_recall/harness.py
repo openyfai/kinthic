@@ -93,7 +93,9 @@ async def retrieve(
     return _top_k(results, limit)
 
 
-async def _retrieve_vector_only(store: MemoryStore, query: str, limit: int) -> list[Memory]:
+async def _retrieve_vector_only(
+    store: MemoryStore, query: str, limit: int
+) -> list[Memory]:
     if not store.vs.is_active or not query.strip():
         return []
     semantic_results = await _run_sync(store.vs.search, query, limit)
@@ -138,7 +140,9 @@ async def _bulk_insert_memories(store: MemoryStore, memories: list[Memory]) -> N
                 mem.id,
                 mem.content,
                 mem.source.value if hasattr(mem.source, "value") else mem.source,
-                mem.memory_type.value if hasattr(mem.memory_type, "value") else mem.memory_type,
+                mem.memory_type.value
+                if hasattr(mem.memory_type, "value")
+                else mem.memory_type,
                 mem.importance,
                 mem.confidence,
                 mem.created_at,
@@ -158,7 +162,9 @@ async def _bulk_insert_memories(store: MemoryStore, memories: list[Memory]) -> N
         vector_texts.append(mem.content)
         vector_metas.append(
             {
-                "type": mem.memory_type.value if hasattr(mem.memory_type, "value") else "semantic",
+                "type": mem.memory_type.value
+                if hasattr(mem.memory_type, "value")
+                else "semantic",
                 "timestamp": datetime.now(timezone.utc).timestamp(),
             }
         )
@@ -239,13 +245,17 @@ async def _seed_benchmark_store(
     needle_ids: dict[str, str] = {}
     needle_memories: list[Memory] = []
     for needle in suite["needles"]:
-        age_days = age_override if age_override is not None else needle.get("age_days", 0)
+        age_days = (
+            age_override if age_override is not None else needle.get("age_days", 0)
+        )
         importance = (
             importance_override
             if importance_override is not None
             else needle.get("importance", 0.5)
         )
-        mem = _build_needle_memory(needle, age_days=float(age_days), importance=float(importance))
+        mem = _build_needle_memory(
+            needle, age_days=float(age_days), importance=float(importance)
+        )
         needle_ids[needle["id"]] = mem.id
         needle_memories.append(mem)
 
@@ -273,12 +283,17 @@ def _score_needle(
     if results:
         top = results[0]
         top_matches = _matches_needle(top, needle)
-        partial = all(fragment.lower() in top.content.lower() for fragment in needle["must_contain"])
+        partial = all(
+            fragment.lower() in top.content.lower()
+            for fragment in needle["must_contain"]
+        )
         nr.false_positive_top1 = partial and not top_matches
     return nr
 
 
-def _aggregate_needles(needles: list[NeedleResult], k_values: list[int]) -> dict[str, Any]:
+def _aggregate_needles(
+    needles: list[NeedleResult], k_values: list[int]
+) -> dict[str, Any]:
     n = len(needles) or 1
     latencies = [n.latency_ms for n in needles]
     out: dict[str, Any] = {
@@ -296,9 +311,7 @@ def _aggregate_needles(needles: list[NeedleResult], k_values: list[int]) -> dict
     }
     for k in k_values:
         key = f"hit_at_{k}"
-        out[key] = round(
-            sum(1 for n in needles if n.hit_at.get(str(k))) / n, 4
-        )
+        out[key] = round(sum(1 for n in needles if n.hit_at.get(str(k))) / n, 4)
     return out
 
 
@@ -341,13 +354,16 @@ async def run_condition(
 
         for mode in modes:
             needle_results: list[NeedleResult] = []
+
             async def _noop_bulk(_ids):  # noqa: ANN001
                 return None
 
             store.update_access_bulk = _noop_bulk  # type: ignore[method-assign]
             for needle in suite["needles"]:
                 t0 = time.perf_counter()
-                results = await retrieve(store, needle["query"], mode, limit=max(k_values))
+                results = await retrieve(
+                    store, needle["query"], mode, limit=max(k_values)
+                )
                 elapsed = (time.perf_counter() - t0) * 1000
                 nr = _score_needle(results, needle, k_values)
                 nr.latency_ms = round(elapsed, 2)
@@ -383,9 +399,7 @@ def render_report(payload: dict[str, Any]) -> str:
     for condition in payload["conditions"]:
         lines.append(f"## Condition: `{condition['name']}`")
         lines.append("")
-        lines.append(
-            "| Baseline | Hit@5 | Hit@12 | MRR | p50 ms | p95 ms | FP@1 |"
-        )
+        lines.append("| Baseline | Hit@5 | Hit@12 | MRR | p50 ms | p95 ms | FP@1 |")
         lines.append("|---|---:|---:|---:|---:|---:|---:|")
         for mode in BASELINE_MODES:
             if mode not in condition["baselines"]:
@@ -430,6 +444,7 @@ async def run_benchmark(
     # Probe vector availability once
     try:
         import chromadb  # noqa: F401
+
         vector_active = True
     except ImportError:
         vector_active = False
@@ -478,7 +493,9 @@ def tempfile_mkdtemp() -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Kinthic memory recall benchmark")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--noise", type=int, default=None, help="Override noise memory count")
+    parser.add_argument(
+        "--noise", type=int, default=None, help="Override noise memory count"
+    )
     parser.add_argument(
         "--conditions",
         nargs="*",
@@ -486,7 +503,9 @@ def main(argv: list[str] | None = None) -> int:
         help="Condition names to run (default: all)",
     )
     parser.add_argument("--output", type=Path, default=None, help="JSON output path")
-    parser.add_argument("--report", type=Path, default=None, help="Markdown report path")
+    parser.add_argument(
+        "--report", type=Path, default=None, help="Markdown report path"
+    )
     parser.add_argument(
         "--track",
         choices=["retrieval", "mcp"],
@@ -557,7 +576,9 @@ async def run_mcp_benchmark(
             condition,
             bench_dir=bench_dir,
         )
-        condition_payloads.append({"name": condition["name"], "baselines": {"mcp_recall": mcp_scores}})
+        condition_payloads.append(
+            {"name": condition["name"], "baselines": {"mcp_recall": mcp_scores}}
+        )
 
     payload: dict[str, Any] = {
         "benchmark": "memory_recall_mcp",

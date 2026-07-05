@@ -14,7 +14,6 @@ Polish additions:
 
 from __future__ import annotations
 
-import asyncio
 import json
 from datetime import datetime, timezone
 from math import exp
@@ -34,6 +33,7 @@ from silex.utils.config import (
 from silex.memory.vector_store import VectorStore
 import hashlib
 
+
 async def _run_sync(fn, /, *args, **kwargs):
     """Run blocking work in a worker thread (anyio-safe for MCP HTTP transport)."""
     import anyio.to_thread
@@ -41,6 +41,8 @@ async def _run_sync(fn, /, *args, **kwargs):
     if kwargs:
         return await anyio.to_thread.run_sync(lambda: fn(*args, **kwargs))
     return await anyio.to_thread.run_sync(fn, *args)
+
+
 from silex.utils.logger import setup_logger
 from silex.storage.graph_buffer import GraphTransactionBuffer
 
@@ -83,19 +85,29 @@ class MemoryStore:
         """
         if not self.vs.is_active:
             return
-        content_type = memory.memory_type.value if isinstance(memory.memory_type, MemoryType) else memory.memory_type
+        content_type = (
+            memory.memory_type.value
+            if isinstance(memory.memory_type, MemoryType)
+            else memory.memory_type
+        )
         try:
             await _run_sync(
                 self.vs.add_chunks,
                 [memory.content],
-                [{"type": content_type, "timestamp": datetime.now(timezone.utc).timestamp()}],
+                [
+                    {
+                        "type": content_type,
+                        "timestamp": datetime.now(timezone.utc).timestamp(),
+                    }
+                ],
                 ids=[memory.id],
             )
         except Exception as e:
             log.error(
                 "Vector store write failed for %s after SQLite commit; "
                 "will be backfilled by the next reconciliation pass: %s",
-                memory.id, e,
+                memory.id,
+                e,
             )
 
     async def _check_fts5(self) -> bool:
@@ -120,7 +132,12 @@ class MemoryStore:
         """Store a memory and return structured admission outcome (MCP/API transparency)."""
         if await self._is_duplicate(memory.content):
             log.debug(f"Skipped duplicate memory: {memory.content[:40]}...")
-            return {"accepted": False, "memory": None, "reason": "duplicate", "amac_score": None}
+            return {
+                "accepted": False,
+                "memory": None,
+                "reason": "duplicate",
+                "amac_score": None,
+            }
 
         async def novelty_checker(cand: str) -> float:
             if self.vs.is_active:
@@ -129,10 +146,17 @@ class MemoryStore:
                     if results and "distance" in results[0]:
                         return results[0]["distance"]
                 except Exception as e:
-                    log.warning("Vector search rejected novelty candidate, defaulting to 1.0 novelty: %s", e)
+                    log.warning(
+                        "Vector search rejected novelty candidate, defaulting to 1.0 novelty: %s",
+                        e,
+                    )
             return 1.0
 
-        content_type = memory.memory_type.value if isinstance(memory.memory_type, MemoryType) else memory.memory_type
+        content_type = (
+            memory.memory_type.value
+            if isinstance(memory.memory_type, MemoryType)
+            else memory.memory_type
+        )
         prov_dict = memory.provenance if isinstance(memory.provenance, dict) else {}
         source_context = prov_dict.get("context", "")
         session_id = prov_dict.get("session_id", None)
@@ -141,7 +165,12 @@ class MemoryStore:
         guard_result = self.guard.validate_write_attempt(memory.id, memory.content)
         if not guard_result["allowed"]:
             log.warning(f"MemoryGuard rejected memory write for {memory.id}")
-            return {"accepted": False, "memory": None, "reason": "guard_blocked", "amac_score": None}
+            return {
+                "accepted": False,
+                "memory": None,
+                "reason": "guard_blocked",
+                "amac_score": None,
+            }
 
         if guard_result["flagged"]:
             memory.confidence *= 0.5
@@ -159,7 +188,9 @@ class MemoryStore:
 
         if not amac_result["admitted"]:
             score = amac_result.get("composite_score")
-            log.info(f"Memory rejected by A-MAC (Score: {score:.2f}): {memory.content[:40]}...")
+            log.info(
+                f"Memory rejected by A-MAC (Score: {score:.2f}): {memory.content[:40]}..."
+            )
             return {
                 "accepted": False,
                 "memory": None,
@@ -194,14 +225,17 @@ class MemoryStore:
         memory.content = amac_result.get("sanitized_content", memory.content)
 
         import math
+
         composite_score = amac_result.get("composite_score", 0.0)
         if math.isnan(composite_score):
             composite_score = 0.0
-            
+
         integrity_hash = hashlib.sha256(
-            f"{memory.id}|{memory.content}|{composite_score}".encode("utf-8", errors="replace")
+            f"{memory.id}|{memory.content}|{composite_score}".encode(
+                "utf-8", errors="replace"
+            )
         ).hexdigest()
-        
+
         mapped_type = "fact"
         if content_type in ("preference", "normative", "character"):
             mapped_type = "preference"
@@ -210,7 +244,9 @@ class MemoryStore:
         elif content_type == "transient":
             mapped_type = "transient"
 
-        content_fingerprint = hashlib.sha256(memory.content.strip().lower().encode()).hexdigest()
+        content_fingerprint = hashlib.sha256(
+            memory.content.strip().lower().encode()
+        ).hexdigest()
 
         async def _write_sqlite_rows() -> None:
             await self.buffer.stage_memory(memory)
@@ -273,7 +309,9 @@ class MemoryStore:
             # the vector upsert together once this data is actually durable.
             pass
 
-        log.debug(f"Stored memory (A-MAC {composite_score:.2f}): {memory.content[:60]}...")
+        log.debug(
+            f"Stored memory (A-MAC {composite_score:.2f}): {memory.content[:60]}..."
+        )
         return memory
 
     async def get(self, memory_id: str) -> Memory | None:
@@ -325,7 +363,8 @@ class MemoryStore:
                 # the next full reconciliation pass happens to notice it.
                 log.error(
                     "Vector store delete failed for %s (SQLite already committed); queuing for retry: %s",
-                    memory_id, e,
+                    memory_id,
+                    e,
                 )
                 try:
                     await self.db.execute(
@@ -333,7 +372,11 @@ class MemoryStore:
                         (memory_id, datetime.now(timezone.utc).timestamp()),
                     )
                 except Exception as queue_exc:
-                    log.error("Failed to queue vector-delete retry for %s: %s", memory_id, queue_exc)
+                    log.error(
+                        "Failed to queue vector-delete retry for %s: %s",
+                        memory_id,
+                        queue_exc,
+                    )
 
         log.info(f"Deleted memory: {row['content'][:40]}...")
         return True
@@ -360,11 +403,17 @@ class MemoryStore:
             try:
                 await _run_sync(self.vs.delete_by_ids, [memory_id])
                 await self.db.execute(
-                    "DELETE FROM pending_vector_deletes WHERE memory_id = ?", (memory_id,)
+                    "DELETE FROM pending_vector_deletes WHERE memory_id = ?",
+                    (memory_id,),
                 )
                 succeeded += 1
             except Exception as e:
-                log.warning("Retry of pending vector delete for %s failed (attempt %d): %s", memory_id, row["attempts"] + 1, e)
+                log.warning(
+                    "Retry of pending vector delete for %s failed (attempt %d): %s",
+                    memory_id,
+                    row["attempts"] + 1,
+                    e,
+                )
                 try:
                     await self.db.execute(
                         "UPDATE pending_vector_deletes SET attempts = attempts + 1 WHERE memory_id = ?",
@@ -462,7 +511,14 @@ class MemoryStore:
         """Search memories by keyword (for the :search command)."""
         return await self._search_relevant(query, limit=50)
 
-    async def add_manual(self, content: str, importance: float = 0.5, level: int = 1, child_memory_ids: list[str] = None, tags: list[str] | None = None) -> Memory | None:
+    async def add_manual(
+        self,
+        content: str,
+        importance: float = 0.5,
+        level: int = 1,
+        child_memory_ids: list[str] = None,
+        tags: list[str] | None = None,
+    ) -> Memory | None:
         """Add a memory manually from user command or pruner flush.
 
         Bypasses A-MAC threshold and duplicate check (intentional), but still
@@ -477,7 +533,9 @@ class MemoryStore:
         synthesis was silently never written.
         """
         # Apply injection guard even on manual/system memories
-        guard_result = self.guard.validate_write_attempt(f"manual-{content[:32]}", content)
+        guard_result = self.guard.validate_write_attempt(
+            f"manual-{content[:32]}", content
+        )
         if not guard_result["allowed"]:
             log.warning("MemoryGuard blocked add_manual content: %s...", content[:40])
             return None
@@ -564,7 +622,9 @@ class MemoryStore:
         # Pool 3: Relevant (keyword search)
         keyword_results = []
         if query.strip():
-            keyword_results = await self._search_relevant(query, MAX_RELEVANT_MEMORIES * 2)
+            keyword_results = await self._search_relevant(
+                query, MAX_RELEVANT_MEMORIES * 2
+            )
             for m in keyword_results:
                 candidates[m.id] = m
 
@@ -572,24 +632,31 @@ class MemoryStore:
         semantic_results = []
         semantic_memories = []
         if query.strip() and self.vs.is_active:
-            semantic_results = await _run_sync(self.vs.search, query, MAX_RELEVANT_MEMORIES * 2)
+            semantic_results = await _run_sync(
+                self.vs.search, query, MAX_RELEVANT_MEMORIES * 2
+            )
             semantic_ids = [res["id"] for res in semantic_results if res.get("id")]
             if semantic_ids:
                 placeholders = ",".join("?" * len(semantic_ids))
                 rows = await self.db.fetch_all(
                     f"SELECT * FROM memories WHERE id IN ({placeholders}) AND archived_at IS NULL",
-                    tuple(semantic_ids)
+                    tuple(semantic_ids),
                 )
                 import math
+
                 now_ts = datetime.now(timezone.utc).timestamp()
                 for row in rows:
-                    res = next((r for r in semantic_results if r["id"] == row["id"]), None)
+                    res = next(
+                        (r for r in semantic_results if r["id"] == row["id"]), None
+                    )
                     if not res:
                         continue
                     try:
                         created_at = datetime.fromisoformat(row["created_at"])
                         age_days = (now_ts - created_at.timestamp()) / 86400.0
-                        adjusted_score = (1.0 - res.get("distance", 1.0)) * math.exp(-age_days / 180.0)
+                        adjusted_score = (1.0 - res.get("distance", 1.0)) * math.exp(
+                            -age_days / 180.0
+                        )
                         if adjusted_score > 0.1:
                             m = self._row_to_memory(row)
                             if m is not None:
@@ -598,7 +665,11 @@ class MemoryStore:
                     except Exception as exc:
                         # A single malformed timestamp/row must not abort retrieval
                         # for the whole turn — skip just this candidate.
-                        log.warning("Skipping malformed memory row %s during semantic scoring: %s", row.get("id"), exc)
+                        log.warning(
+                            "Skipping malformed memory row %s during semantic scoring: %s",
+                            row.get("id"),
+                            exc,
+                        )
 
         # Reciprocal Rank Fusion (RRF) for hybrid search relevance blending
         rrf_scores = {}
@@ -606,26 +677,39 @@ class MemoryStore:
             # Rank keyword results by TF-IDF keyword relevance
             def get_keyword_relevance(m):
                 query_words = {w.lower() for w in query.split() if len(w) > 2}
-                content_words_list = [w.lower() for w in m.content.split() if len(w) > 2]
+                content_words_list = [
+                    w.lower() for w in m.content.split() if len(w) > 2
+                ]
                 if not query_words:
                     return 0.0
                 matching_terms = query_words & set(content_words_list)
                 matching_term_count = len(matching_terms)
-                matching_term_freq = sum(content_words_list.count(w) for w in matching_terms)
+                matching_term_freq = sum(
+                    content_words_list.count(w) for w in matching_terms
+                )
                 import math
-                return (matching_term_count / len(query_words)) * math.log(1 + matching_term_freq)
 
-            keyword_sorted = sorted(keyword_results, key=get_keyword_relevance, reverse=True)
+                return (matching_term_count / len(query_words)) * math.log(
+                    1 + matching_term_freq
+                )
+
+            keyword_sorted = sorted(
+                keyword_results, key=get_keyword_relevance, reverse=True
+            )
             keyword_ranks = {m.id: idx + 1 for idx, m in enumerate(keyword_sorted)}
 
             # Rank semantic results by vector similarity distance
             semantic_ranks = {}
             if self.vs.is_active and semantic_results:
+
                 def get_semantic_distance(m):
                     res = next((r for r in semantic_results if r["id"] == m.id), None)
                     return res["distance"] if res and "distance" in res else 1.0
+
                 semantic_sorted = sorted(semantic_memories, key=get_semantic_distance)
-                semantic_ranks = {m.id: idx + 1 for idx, m in enumerate(semantic_sorted)}
+                semantic_ranks = {
+                    m.id: idx + 1 for idx, m in enumerate(semantic_sorted)
+                }
 
             # Compute RRF score (k = 60)
             all_relevant_ids = set(keyword_ranks.keys()) | set(semantic_ranks.keys())
@@ -652,13 +736,17 @@ class MemoryStore:
                     f" WHERE memory_id IN ({placeholders})",
                     tuple(ids),
                 )
-                amac_scores = {r["memory_id"]: float(r["composite_score"]) for r in amac_rows}
+                amac_scores = {
+                    r["memory_id"]: float(r["composite_score"]) for r in amac_rows
+                }
             except Exception:
                 pass
 
         result = sorted(
             candidates.values(),
-            key=lambda m: self._retrieval_score(m, query, rrf_scores, amac_scores.get(m.id, 0.5)),
+            key=lambda m: self._retrieval_score(
+                m, query, rrf_scores, amac_scores.get(m.id, 0.5)
+            ),
             reverse=True,
         )
 
@@ -708,7 +796,9 @@ class MemoryStore:
         Keyword relevance search: FTS5 (BM25) when available, LIKE fallback.
         """
         query = query[:MAX_RETRIEVAL_QUERY_CHARS]
-        keywords = [kw.strip().lower() for kw in query.split() if len(kw.strip()) > 2][: self._MAX_FTS_KEYWORDS]
+        keywords = [kw.strip().lower() for kw in query.split() if len(kw.strip()) > 2][
+            : self._MAX_FTS_KEYWORDS
+        ]
         if not keywords:
             return []
 
@@ -729,7 +819,9 @@ class MemoryStore:
                         f" ORDER BY importance DESC",
                         tuple(ids),
                     )
-                    return [m for r in rows if (m := self._row_to_memory(r)) is not None]
+                    return [
+                        m for r in rows if (m := self._row_to_memory(r)) is not None
+                    ]
             except Exception as exc:
                 log.debug("FTS5 search failed, falling back to LIKE: %s", exc)
                 self._fts5_available = None  # reset so next call retries
@@ -757,6 +849,7 @@ class MemoryStore:
         Centered around 0.5 so memories without an A-MAC record are neutral.
         """
         import math
+
         query_words = {w.lower() for w in query.split() if len(w) > 2}
         content_words_list = [w.lower() for w in memory.content.split() if len(w) > 2]
         relevance = 0.0
@@ -765,8 +858,12 @@ class MemoryStore:
         elif query_words:
             matching_terms = query_words & set(content_words_list)
             matching_term_count = len(matching_terms)
-            matching_term_freq = sum(content_words_list.count(w) for w in matching_terms)
-            relevance = (matching_term_count / len(query_words)) * math.log(1 + matching_term_freq)
+            matching_term_freq = sum(
+                content_words_list.count(w) for w in matching_terms
+            )
+            relevance = (matching_term_count / len(query_words)) * math.log(
+                1 + matching_term_freq
+            )
 
         age_days = 20.7944  # fallback to achieve exp(-age_days/30) = 0.5
         try:
@@ -809,7 +906,7 @@ class MemoryStore:
     async def _is_duplicate(self, content: str) -> bool:
         """
         Check if a very similar memory already exists.
-        
+
         Uses vector semantic similarity to catch rephrased facts.
         Falls back to word overlap if VectorStore is offline.
         """
@@ -886,11 +983,15 @@ class MemoryStore:
             WHERE (julianday('now') - julianday(last_accessed)) > ?
               AND archived_at IS NULL
             """,
-            (decay_factor, days)
+            (decay_factor, days),
         )
-        log.info(f"Decayed importance of memories untouched in {days} days by factor {decay_factor}.")
+        log.info(
+            f"Decayed importance of memories untouched in {days} days by factor {decay_factor}."
+        )
 
-    async def decay_graph_entropy(self, days: int = 14, decay_factor: float = 0.8, absolute_threshold: float = 0.1):
+    async def decay_graph_entropy(
+        self, days: int = 14, decay_factor: float = 0.8, absolute_threshold: float = 0.1
+    ):
         """Phase 2 Patch: Decays confidence of unaccessed graph nodes. Hard-deletes obsolete nodes to prevent vector saturation."""
         await self.db.execute(
             """
@@ -898,17 +999,19 @@ class MemoryStore:
             SET confidence = confidence * ?
             WHERE (julianday('now') - julianday(last_validated)) > ?
             """,
-            (decay_factor, days)
+            (decay_factor, days),
         )
-        
+
         await self.db.execute(
             """
             DELETE FROM knowledge_nodes
             WHERE confidence < ?
             """,
-            (absolute_threshold,)
+            (absolute_threshold,),
         )
-        log.warning(f"Graph Entropy Decay executed. Penalized {days}-day old nodes. Hard-purged nodes below {absolute_threshold} confidence.")
+        log.warning(
+            f"Graph Entropy Decay executed. Penalized {days}-day old nodes. Hard-purged nodes below {absolute_threshold} confidence."
+        )
 
     # ------------------------------------------------------------------
     # Helpers
@@ -933,11 +1036,17 @@ class MemoryStore:
         """
         try:
             provenance = self._safe_json_loads(row.get("provenance_json"), {})
-            signature = provenance.get("hmac_signature") if isinstance(provenance, dict) else None
+            signature = (
+                provenance.get("hmac_signature")
+                if isinstance(provenance, dict)
+                else None
+            )
             if signature and not self.guard.validate_read_attempt(
                 row["id"], row["content"], signature
             ):
-                log.warning("MemoryGuard rejected tampered memory on read: %s", row["id"])
+                log.warning(
+                    "MemoryGuard rejected tampered memory on read: %s", row["id"]
+                )
                 return None
 
             return Memory(
@@ -958,8 +1067,11 @@ class MemoryStore:
                 archived_at=row.get("archived_at"),
             )
         except Exception as exc:
-            log.error("Skipping corrupt memory row %s: %s", row.get("id", "<unknown>"), exc)
+            log.error(
+                "Skipping corrupt memory row %s: %s", row.get("id", "<unknown>"), exc
+            )
             return None
+
     # ------------------------------------------------------------------
     # Semantic Profiles (Phase 7)
     # ------------------------------------------------------------------
@@ -975,11 +1087,13 @@ class MemoryStore:
                 "objective_proxies": json.loads(row["objective_proxies"]),
                 "context_tags": json.loads(row["context_tags"]),
                 "confidence": row["confidence"],
-                "updated_at": row["updated_at"]
+                "updated_at": row["updated_at"],
             }
         return None
 
-    async def save_semantic_profile(self, term: str, objective_proxies: list[str], confidence: float = 0.5):
+    async def save_semantic_profile(
+        self, term: str, objective_proxies: list[str], confidence: float = 0.5
+    ):
         """Save or update a semantic profile."""
         now = datetime.now(timezone.utc).isoformat()
         await self.db.execute(
@@ -991,12 +1105,14 @@ class MemoryStore:
                 confidence = excluded.confidence,
                 updated_at = excluded.updated_at
             """,
-            (term.lower(), json.dumps(objective_proxies), confidence, now)
+            (term.lower(), json.dumps(objective_proxies), confidence, now),
         )
 
     async def get_all_semantic_profiles(self) -> dict[str, list[str]]:
         """Retrieve all learned semantic mappings."""
-        rows = await self.db.fetch_all("SELECT term, objective_proxies FROM semantic_profiles")
+        rows = await self.db.fetch_all(
+            "SELECT term, objective_proxies FROM semantic_profiles"
+        )
         return {row["term"]: json.loads(row["objective_proxies"]) for row in rows}
 
     async def get_vector_drift_count(self) -> int:
@@ -1009,7 +1125,9 @@ class MemoryStore:
         if not self.vs.is_active:
             return 0
         try:
-            rows = await self.db.fetch_all("SELECT id FROM memories WHERE archived_at IS NULL")
+            rows = await self.db.fetch_all(
+                "SELECT id FROM memories WHERE archived_at IS NULL"
+            )
             valid_ids = {row["id"] for row in rows}
             existing = self.vs.collection.get(include=[])
             existing_ids = set(existing.get("ids", []))

@@ -11,6 +11,7 @@ from silex.utils.logger import setup_logger
 
 log = setup_logger("silex.tools.directives")
 
+
 class UpdateDirectivesTool(BaseTool):
     """Updates the core directives file with new unbreakable rules."""
 
@@ -21,7 +22,7 @@ class UpdateDirectivesTool(BaseTool):
     schema = {
         "instruction": {
             "type": "string",
-            "description": "What to add, remove, or change in the core directives."
+            "description": "What to add, remove, or change in the core directives.",
         }
     }
 
@@ -42,7 +43,7 @@ class UpdateDirectivesTool(BaseTool):
             current_content = ""
             if KINTHIC_DIRECTIVES_FILE.exists():
                 current_content = KINTHIC_DIRECTIVES_FILE.read_text(encoding="utf-8")
-                
+
             prompt = (
                 "You are updating the VYN Core Directives markdown file. "
                 "This file contains unbreakable rules and behavioral guidelines. "
@@ -50,14 +51,14 @@ class UpdateDirectivesTool(BaseTool):
                 f"Instruction: {instruction}\n\n"
                 "Output ONLY the new markdown content for the file, nothing else."
             )
-            
+
             response = await self.llm.think(
                 system_prompt="You are a precise editor. Output only the final markdown content.",
-                user_input=f"Current Content:\n{current_content}\n\n{prompt}"
+                user_input=f"Current Content:\n{current_content}\n\n{prompt}",
             )
-            
+
             new_content = response.response.strip()
-            
+
             # Remove any markdown code block wrappers if the LLM added them
             if new_content.startswith("```md"):
                 new_content = new_content[5:]
@@ -67,25 +68,26 @@ class UpdateDirectivesTool(BaseTool):
                 new_content = new_content[3:]
             if new_content.endswith("```"):
                 new_content = new_content[:-3]
-                
+
             new_content = new_content.strip()
-            
+
             if len(new_content) > 5000:
                 return f"Error: New directives content exceeds 5000 bytes (got {len(new_content)}). Request rejected."
-                
+
             if KINTHIC_DIRECTIVES_FILE.exists():
                 import shutil
                 from datetime import datetime
                 from silex.utils.config import KINTHIC_BACKUPS
+
                 KINTHIC_BACKUPS.mkdir(parents=True, exist_ok=True)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 backup_path = KINTHIC_BACKUPS / f"directives_{timestamp}.bak"
                 shutil.copy2(KINTHIC_DIRECTIVES_FILE, backup_path)
                 log.info(f"Directives backup created: {backup_path}")
-            
+
             KINTHIC_DIRECTIVES_FILE.write_text(new_content, encoding="utf-8")
             return f"Successfully updated Core Directives. New size: {len(new_content)} bytes."
-            
+
         except Exception as e:
             log.error(f"Failed to update directives: {e}")
             return f"Error: Failed to update directives: {str(e)}"

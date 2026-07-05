@@ -65,6 +65,7 @@ def _get_fernet():
     except ImportError:
         return None
     import base64
+
     if not KINTHIC_HMAC_KEY.exists():
         return None
     try:
@@ -75,6 +76,7 @@ def _get_fernet():
         return Fernet(base64.urlsafe_b64encode(key))
     except Exception:
         return None
+
 
 def _read_secrets(path: Path, default: dict[str, Any]) -> dict[str, Any]:
     if not path.exists():
@@ -92,6 +94,7 @@ def _read_secrets(path: Path, default: dict[str, Any]) -> dict[str, Any]:
     except json.JSONDecodeError:
         return json.loads(json.dumps(default))
 
+
 def _write_secrets(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     json_text = json.dumps(payload, indent=2, sort_keys=True)
@@ -101,7 +104,7 @@ def _write_secrets(path: Path, payload: dict[str, Any]) -> None:
         path.write_text(encrypted.decode("utf-8"), encoding="utf-8")
     else:
         path.write_text(json_text, encoding="utf-8")
-    
+
     if os.name != "nt":
         try:
             os.chmod(path, 0o600)
@@ -156,7 +159,9 @@ def default_secrets() -> dict[str, Any]:
 class RuntimeSettingsStore:
     """Simple local JSON-backed settings and secrets store."""
 
-    def __init__(self, settings_path: Path = SETTINGS_PATH, secrets_path: Path = SECRETS_PATH):
+    def __init__(
+        self, settings_path: Path = SETTINGS_PATH, secrets_path: Path = SECRETS_PATH
+    ):
         self.settings_path = settings_path
         self.secrets_path = secrets_path
         _ensure_private_file(self.settings_path)
@@ -166,10 +171,19 @@ class RuntimeSettingsStore:
         data = _read_json(self.settings_path, default_settings())
         merged = default_settings()
         merged.update(data)
-        merged["security"] = {**default_settings()["security"], **data.get("security", {})}
-        merged["telegram"] = {**default_settings()["telegram"], **data.get("telegram", {})}
+        merged["security"] = {
+            **default_settings()["security"],
+            **data.get("security", {}),
+        }
+        merged["telegram"] = {
+            **default_settings()["telegram"],
+            **data.get("telegram", {}),
+        }
         merged["usage"] = {**default_settings()["usage"], **data.get("usage", {})}
-        merged["identity"] = {**default_settings()["identity"], **data.get("identity", {})}
+        merged["identity"] = {
+            **default_settings()["identity"],
+            **data.get("identity", {}),
+        }
         merged["providers"] = data.get("providers", {})
         return merged
 
@@ -185,7 +199,10 @@ class RuntimeSettingsStore:
         if "identity" in payload:
             merged["identity"] = {**current.get("identity", {}), **payload["identity"]}
         if "providers" in payload:
-            merged["providers"] = {**current.get("providers", {}), **payload["providers"]}
+            merged["providers"] = {
+                **current.get("providers", {}),
+                **payload["providers"],
+            }
         merged["updated_at"] = _now()
         _write_json(self.settings_path, merged)
         return merged
@@ -201,16 +218,23 @@ class RuntimeSettingsStore:
         current = self.load_secrets()
         merged = {**current, **payload}
         if "providers" in payload:
-            merged["providers"] = {**current.get("providers", {}), **payload["providers"]}
+            merged["providers"] = {
+                **current.get("providers", {}),
+                **payload["providers"],
+            }
         merged["updated_at"] = _now()
         _write_secrets(self.secrets_path, merged)
         return merged
 
     def get_provider_secret(self, provider: str, key: str = "api_key") -> str:
         secrets_payload = self.load_secrets()
-        return str(secrets_payload.get("providers", {}).get(provider, {}).get(key, "") or "")
+        return str(
+            secrets_payload.get("providers", {}).get(provider, {}).get(key, "") or ""
+        )
 
-    def set_provider_secret(self, provider: str, value: str, key: str = "api_key") -> None:
+    def set_provider_secret(
+        self, provider: str, value: str, key: str = "api_key"
+    ) -> None:
         secrets_payload = self.load_secrets()
         provider_secrets = dict(secrets_payload.get("providers", {}).get(provider, {}))
         provider_secrets[key] = value
@@ -235,7 +259,9 @@ class RuntimeSettingsStore:
         settings = self.load_settings()
         secrets_payload = self.load_secrets()
         provider = settings.get("provider", "gemini")
-        provider_secret = bool(secrets_payload.get("providers", {}).get(provider, {}).get("api_key"))
+        provider_secret = bool(
+            secrets_payload.get("providers", {}).get(provider, {}).get("api_key")
+        )
         if provider == "ollama":
             provider_secret = True
         web_api_key = bool(secrets_payload.get("web_api_key"))
@@ -245,8 +271,12 @@ class RuntimeSettingsStore:
             "model": settings.get("model"),
             "provider_configured": provider_secret,
             "web_api_key_configured": web_api_key,
-            "paired_telegram_users": len(settings.get("telegram", {}).get("paired_users", [])),
-            "telegram_public_mode": bool(settings.get("telegram", {}).get("public_mode", False)),
+            "paired_telegram_users": len(
+                settings.get("telegram", {}).get("paired_users", [])
+            ),
+            "telegram_public_mode": bool(
+                settings.get("telegram", {}).get("public_mode", False)
+            ),
         }
 
     def create_pair_code(self, ttl_minutes: int = 10) -> str:
@@ -254,21 +284,28 @@ class RuntimeSettingsStore:
         code = secrets.token_hex(3).upper()
         pair_codes = list(settings.get("telegram", {}).get("pair_codes", []))
         pair_codes = [
-            entry for entry in pair_codes
+            entry
+            for entry in pair_codes
             if entry.get("expires_at", "") > _now() and not entry.get("consumed_at")
         ]
-        pair_codes.append({
-            "code": code,
-            "created_at": _now(),
-            "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes)).isoformat(),
-            "consumed_at": None,
-            "paired_user_id": None,
-        })
+        pair_codes.append(
+            {
+                "code": code,
+                "created_at": _now(),
+                "expires_at": (
+                    datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes)
+                ).isoformat(),
+                "consumed_at": None,
+                "paired_user_id": None,
+            }
+        )
         settings.setdefault("telegram", {})["pair_codes"] = pair_codes
         self.save_settings(settings)
         return code
 
-    def consume_pair_code(self, code: str, user_id: int, username: str | None = None) -> bool:
+    def consume_pair_code(
+        self, code: str, user_id: int, username: str | None = None
+    ) -> bool:
         code = code.strip().upper()
         settings = self.load_settings()
         telegram = settings.setdefault("telegram", {})
@@ -276,7 +313,11 @@ class RuntimeSettingsStore:
         now = _now()
         matched = False
         for entry in pair_codes:
-            if entry.get("code") == code and not entry.get("consumed_at") and entry.get("expires_at", "") > now:
+            if (
+                entry.get("code") == code
+                and not entry.get("consumed_at")
+                and entry.get("expires_at", "") > now
+            ):
                 entry["consumed_at"] = now
                 entry["paired_user_id"] = user_id
                 matched = True
@@ -285,36 +326,47 @@ class RuntimeSettingsStore:
             return False
 
         paired_users = telegram.setdefault("paired_users", [])
-        if not any(int(user.get("user_id", 0)) == int(user_id) for user in paired_users):
-            paired_users.append({
-                "user_id": int(user_id),
-                "username": username or "",
-                "paired_at": now,
-            })
+        if not any(
+            int(user.get("user_id", 0)) == int(user_id) for user in paired_users
+        ):
+            paired_users.append(
+                {
+                    "user_id": int(user_id),
+                    "username": username or "",
+                    "paired_at": now,
+                }
+            )
         telegram["pair_codes"] = pair_codes
         self.save_settings(settings)
         return True
 
-    def add_paired_telegram_user(self, user_id: int, username: str | None = None) -> None:
+    def add_paired_telegram_user(
+        self, user_id: int, username: str | None = None
+    ) -> None:
         """Directly add a user to the paired users list (used by magic handshake)."""
         settings = self.load_settings()
         telegram = settings.setdefault("telegram", {})
         paired_users = telegram.setdefault("paired_users", [])
         now = _now()
-        
-        if not any(int(user.get("user_id", 0)) == int(user_id) for user in paired_users):
-            paired_users.append({
-                "user_id": int(user_id),
-                "username": username or "",
-                "paired_at": now,
-            })
+
+        if not any(
+            int(user.get("user_id", 0)) == int(user_id) for user in paired_users
+        ):
+            paired_users.append(
+                {
+                    "user_id": int(user_id),
+                    "username": username or "",
+                    "paired_at": now,
+                }
+            )
             self.save_settings(settings)
 
     def revoke_telegram_user(self, user_id: int) -> None:
         settings = self.load_settings()
         telegram = settings.setdefault("telegram", {})
         telegram["paired_users"] = [
-            user for user in telegram.get("paired_users", [])
+            user
+            for user in telegram.get("paired_users", [])
             if int(user.get("user_id", 0)) != int(user_id)
         ]
         self.save_settings(settings)
@@ -324,7 +376,10 @@ class RuntimeSettingsStore:
         telegram = settings.get("telegram", {})
         if telegram.get("public_mode"):
             return True
-        return any(int(user.get("user_id", 0)) == int(user_id) for user in telegram.get("paired_users", []))
+        return any(
+            int(user.get("user_id", 0)) == int(user_id)
+            for user in telegram.get("paired_users", [])
+        )
 
     def list_telegram_users(self) -> list[dict[str, Any]]:
         return list(self.load_settings().get("telegram", {}).get("paired_users", []))

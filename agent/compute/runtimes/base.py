@@ -5,6 +5,7 @@ Abstract Base class for all worker isolation runtimes.
 from abc import ABC, abstractmethod
 from typing import Any
 
+
 class BaseRuntime(ABC):
     """
     Abstract interface for executing processes inside an isolated runtime

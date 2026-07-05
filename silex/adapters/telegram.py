@@ -1,4 +1,5 @@
 """Telegram messaging adapter for Kinthic."""
+
 from __future__ import annotations
 
 import os
@@ -71,11 +72,7 @@ class TelegramAdapter(MessageAdapter):
         self._loop = cognitive_loop
         _active_loop = cognitive_loop
 
-        app = (
-            ApplicationBuilder()
-            .token(token)
-            .build()
-        )
+        app = ApplicationBuilder().token(token).build()
 
         app.add_handler(CommandHandler("start", _start_command))
         app.add_handler(CommandHandler("whoami", _whoami_command))
@@ -90,19 +87,20 @@ class TelegramAdapter(MessageAdapter):
         app.add_handler(CommandHandler("pair", _pair_command))
         app.add_handler(
             MessageHandler(
-                (filters.TEXT | filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND,
+                (filters.TEXT | filters.PHOTO | filters.Document.ALL)
+                & ~filters.COMMAND,
                 _handle_message,
             )
         )
 
         print("\n🚀 Starting Kinthic Telegram adapter...")
         _print_security_status()
-        
+
         await app.initialize()
         app.job_queue.run_repeating(_poll_notifications, interval=5, first=2)
         await app.start()
         await app.updater.start_polling()
-        
+
         # Keep app reference to avoid GC
         self._app = app
 
@@ -129,17 +127,25 @@ async def _pair_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE") 
     user = update.effective_user
     paired = settings_store.consume_pair_code(code, user.id, user.username)
     if paired:
-        await update.message.reply_text("Pairing successful. You can now use this Kinthic bot.")
+        await update.message.reply_text(
+            "Pairing successful. You can now use this Kinthic bot."
+        )
     else:
         await update.message.reply_text("That pairing code is invalid or expired.")
 
 
-async def _start_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE") -> None:
+async def _start_command(
+    update: "Update", context: "ContextTypes.DEFAULT_TYPE"
+) -> None:
     user_id = update.effective_user.id
     if context.args:
         code = context.args[0].strip().upper()
-        if settings_store.consume_pair_code(code, user_id, update.effective_user.username):
-            await update.message.reply_text("Pairing successful. Kinthic is now linked to your Telegram account.")
+        if settings_store.consume_pair_code(
+            code, user_id, update.effective_user.username
+        ):
+            await update.message.reply_text(
+                "Pairing successful. Kinthic is now linked to your Telegram account."
+            )
             return
     await update.message.reply_text(
         "👋 Hello! I am Kinthic — a local-first cognitive agent.\n\n"
@@ -151,7 +157,9 @@ async def _start_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE")
     )
 
 
-async def _whoami_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE") -> None:
+async def _whoami_command(
+    update: "Update", context: "ContextTypes.DEFAULT_TYPE"
+) -> None:
     user = update.effective_user
     await update.message.reply_text(
         f"Telegram user: `{user.id}`\nUsername: `{user.username or 'unknown'}`",
@@ -159,14 +167,22 @@ async def _whoami_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE"
     )
 
 
-async def _logout_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE") -> None:
+async def _logout_command(
+    update: "Update", context: "ContextTypes.DEFAULT_TYPE"
+) -> None:
     settings_store.revoke_telegram_user(update.effective_user.id)
-    await update.message.reply_text("This Telegram account has been unpaired from Kinthic.")
+    await update.message.reply_text(
+        "This Telegram account has been unpaired from Kinthic."
+    )
 
 
-async def _approvals_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE") -> None:
+async def _approvals_command(
+    update: "Update", context: "ContextTypes.DEFAULT_TYPE"
+) -> None:
     if not telegram_user_allowed(update.effective_user.id):
-        await update.message.reply_text("Access denied. Pair this account before requesting approvals.")
+        await update.message.reply_text(
+            "Access denied. Pair this account before requesting approvals."
+        )
         return
     loop = get_active_loop()
     if loop is None:
@@ -175,9 +191,13 @@ async def _approvals_command(update: "Update", context: "ContextTypes.DEFAULT_TY
     await _send_pending_approvals(update, loop)
 
 
-async def _status_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE") -> None:
+async def _status_command(
+    update: "Update", context: "ContextTypes.DEFAULT_TYPE"
+) -> None:
     if not telegram_user_allowed(update.effective_user.id):
-        await update.message.reply_text("Access denied. Pair this account before requesting status.")
+        await update.message.reply_text(
+            "Access denied. Pair this account before requesting status."
+        )
         return
     loop = get_active_loop()
     if loop is None:
@@ -194,7 +214,9 @@ async def _status_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE"
     )
 
 
-async def _usage_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE") -> None:
+async def _usage_command(
+    update: "Update", context: "ContextTypes.DEFAULT_TYPE"
+) -> None:
     if not telegram_user_allowed(update.effective_user.id):
         await update.message.reply_text("Access denied.")
         return
@@ -202,26 +224,28 @@ async def _usage_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE")
     if loop is None:
         await update.message.reply_text("Cognitive engine not ready.")
         return
-    
+
     summary = await loop.usage.summary()
     totals = summary.get("totals", {})
     models = summary.get("models", [])
-    
+
     lines = ["**📊 Usage & Cost Report**\n"]
     lines.append(f"**Total Requests:** {totals.get('requests', 0)}")
     lines.append(f"**Total Tokens In:** {totals.get('input_tokens', 0):,}")
     lines.append(f"**Total Tokens Out:** {totals.get('output_tokens', 0):,}")
     lines.append(f"**Estimated Cost:** ${totals.get('estimated_cost_usd', 0.0):.4f}\n")
-    
+
     if models:
         lines.append("**Top Models:**")
         for m in models[:3]:
             lines.append(f"• {m['model']} (${m.get('estimated_cost_usd', 0.0):.4f})")
-            
+
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
-async def _remember_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE") -> None:
+async def _remember_command(
+    update: "Update", context: "ContextTypes.DEFAULT_TYPE"
+) -> None:
     if not telegram_user_allowed(update.effective_user.id):
         await update.message.reply_text("Access denied.")
         return
@@ -229,26 +253,26 @@ async def _remember_command(update: "Update", context: "ContextTypes.DEFAULT_TYP
     if loop is None:
         await update.message.reply_text("Cognitive engine not ready.")
         return
-        
+
     query = " ".join(context.args).strip()
     if not query:
         await update.message.reply_text("Usage: /remember <query>")
         return
-        
+
     safe_query = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     results = await loop.memory_store.db.fetch_all(
         "SELECT content, importance, confidence FROM aria_memories WHERE content LIKE ? ESCAPE '\\' ORDER BY importance DESC, confidence DESC LIMIT 5",
-        (f"%{safe_query}%",)
+        (f"%{safe_query}%",),
     )
-    
+
     if not results:
         await update.message.reply_text("No memories found matching that query.")
         return
-        
+
     lines = [f"**Memories matching '{query}':**\n"]
     for i, r in enumerate(results, 1):
         lines.append(f"{i}. {r['content']} (imp: {r['importance']}/5)")
-        
+
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
@@ -256,7 +280,9 @@ async def _approval_decision_command(
     update: "Update", context: "ContextTypes.DEFAULT_TYPE", decision: str
 ) -> None:
     if not telegram_user_allowed(update.effective_user.id):
-        await update.message.reply_text("Access denied. Pair this account before resolving approvals.")
+        await update.message.reply_text(
+            "Access denied. Pair this account before resolving approvals."
+        )
         return
     loop = get_active_loop()
     if loop is None:
@@ -274,18 +300,26 @@ async def _approval_decision_command(
     ok = await loop.tool_registry.resolve_approval(
         match["id"], "approved" if decision == "approve" else "rejected"
     )
-    await update.message.reply_text("Approval updated." if ok else "Failed to update approval.")
+    await update.message.reply_text(
+        "Approval updated." if ok else "Failed to update approval."
+    )
 
 
-async def _approve_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE") -> None:
+async def _approve_command(
+    update: "Update", context: "ContextTypes.DEFAULT_TYPE"
+) -> None:
     await _approval_decision_command(update, context, "approve")
 
 
-async def _reject_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE") -> None:
+async def _reject_command(
+    update: "Update", context: "ContextTypes.DEFAULT_TYPE"
+) -> None:
     await _approval_decision_command(update, context, "reject")
 
 
-async def _skills_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE") -> None:
+async def _skills_command(
+    update: "Update", context: "ContextTypes.DEFAULT_TYPE"
+) -> None:
     if not telegram_user_allowed(update.effective_user.id):
         await update.message.reply_text("Access denied.")
         return
@@ -305,21 +339,27 @@ async def _skills_command(update: "Update", context: "ContextTypes.DEFAULT_TYPE"
 
 _pairing_attempts = {}
 
-async def _handle_message(update: "Update", context: "ContextTypes.DEFAULT_TYPE") -> None:
+
+async def _handle_message(
+    update: "Update", context: "ContextTypes.DEFAULT_TYPE"
+) -> None:
     if not update.message:
         return
     user_text = update.message.text or update.message.caption or ""
 
     user_id = update.effective_user.id
-    
+
     # Rate limit un-paired users (max 5 attempts per 60s)
     if not telegram_user_allowed(user_id):
         import time
+
         now = time.time()
         attempts = _pairing_attempts.get(user_id, [])
         attempts = [t for t in attempts if now - t < 60]
         if len(attempts) >= 5:
-            await update.message.reply_text("Rate limit exceeded. Please try again later.")
+            await update.message.reply_text(
+                "Rate limit exceeded. Please try again later."
+            )
             return
         attempts.append(now)
         _pairing_attempts[user_id] = attempts
@@ -337,7 +377,9 @@ async def _handle_message(update: "Update", context: "ContextTypes.DEFAULT_TYPE"
     ):
         file = await context.bot.get_file(update.message.document.file_id)
         img_bytes = await file.download_as_bytearray()
-        images = [{"mime": update.message.document.mime_type, "bytes": bytes(img_bytes)}]
+        images = [
+            {"mime": update.message.document.mime_type, "bytes": bytes(img_bytes)}
+        ]
 
     if not user_text and not images:
         return
@@ -367,14 +409,16 @@ async def _handle_message(update: "Update", context: "ContextTypes.DEFAULT_TYPE"
 
     loop = get_active_loop()
     if loop is None:
-        await update.message.reply_text("Cognitive engine is still starting. Try again shortly.")
+        await update.message.reply_text(
+            "Cognitive engine is still starting. Try again shortly."
+        )
         return
 
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
     try:
         cognitive = await loop.process(user_text, images=images)
-        
+
         # Message Splitting for Telegram's 4096 char limit
         MAX_LEN = 4000
         text_to_send = cognitive.response
@@ -391,11 +435,11 @@ async def _handle_message(update: "Update", context: "ContextTypes.DEFAULT_TYPE"
                 else:
                     if current_chunk:
                         chunks.append(current_chunk.strip())
-                    
+
                     if len(p) > MAX_LEN:
                         # Hard split if a single paragraph is massive
                         for i in range(0, len(p), MAX_LEN):
-                            chunks.append(p[i:i+MAX_LEN])
+                            chunks.append(p[i : i + MAX_LEN])
                         current_chunk = ""
                     else:
                         current_chunk = p + "\n\n"
@@ -404,12 +448,18 @@ async def _handle_message(update: "Update", context: "ContextTypes.DEFAULT_TYPE"
 
         try:
             for i, chunk in enumerate(chunks):
-                prefix = f"[{i+1}/{len(chunks)}]\n" if len(chunks) > 1 else ""
+                prefix = f"[{i + 1}/{len(chunks)}]\n" if len(chunks) > 1 else ""
                 await update.message.reply_text(prefix + chunk, parse_mode="Markdown")
         except Exception as parse_error:
-            log.error("Markdown parse failed, falling back to plain text: %s", parse_error)
+            log.error(
+                "Markdown parse failed, falling back to plain text: %s", parse_error
+            )
             for i, chunk in enumerate(chunks):
-                prefix = f"[{i+1}/{len(chunks)}] *(Markdown formatting stripped)*\n\n" if len(chunks) > 1 else "*(Markdown formatting stripped)*\n\n"
+                prefix = (
+                    f"[{i + 1}/{len(chunks)}] *(Markdown formatting stripped)*\n\n"
+                    if len(chunks) > 1
+                    else "*(Markdown formatting stripped)*\n\n"
+                )
                 await update.message.reply_text(prefix + chunk)
     except Exception as exc:
         log.error("Error processing Telegram message: %s", exc)
@@ -455,7 +505,9 @@ async def _poll_notifications(context: "ContextTypes.DEFAULT_TYPE") -> None:
                     await context.bot.send_message(chat_id=chat_id, text=row["message"])
                     sent_ok = True
                 except Exception as send_err:
-                    log.warning("Could not deliver notification to %s: %s", chat_id, send_err)
+                    log.warning(
+                        "Could not deliver notification to %s: %s", chat_id, send_err
+                    )
 
             if sent_ok or not chat_ids:
                 await db.execute(

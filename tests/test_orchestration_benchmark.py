@@ -22,7 +22,9 @@ class OrchestrationBenchmark:
         self.scores: dict[str, float] = {}
 
     def record(self, category: str, passed: bool, weight: float = 1.0) -> None:
-        self.scores[category] = self.scores.get(category, 0.0) + (weight if passed else 0.0)
+        self.scores[category] = self.scores.get(category, 0.0) + (
+            weight if passed else 0.0
+        )
 
     def total(self) -> float:
         return sum(self.scores.values())
@@ -31,6 +33,7 @@ class OrchestrationBenchmark:
 def _mock_provider(orchestrator, tmp_path, exit_code: int = 0):
     async def mock_provision(lease=None):
         import uuid
+
         wid = f"worker_{uuid.uuid4().hex[:8]}"
         wdir = tmp_path / "workspace" / wid
         wdir.mkdir(parents=True, exist_ok=True)
@@ -38,7 +41,9 @@ def _mock_provider(orchestrator, tmp_path, exit_code: int = 0):
         sandbox.worker_id = wid
         sandbox.workspace_dir = wdir
         sandbox.kill = AsyncMock()
-        sandbox.execute.return_value = f"--- SANDBOX OUTPUT ---\nout\nExit Code: {exit_code}"
+        sandbox.execute.return_value = (
+            f"--- SANDBOX OUTPUT ---\nout\nExit Code: {exit_code}"
+        )
         return sandbox
 
     orchestrator.provider = AsyncMock()
@@ -49,7 +54,9 @@ def _mock_provider(orchestrator, tmp_path, exit_code: int = 0):
 @pytest.mark.asyncio
 async def test_benchmark_security_lease_bypass_denied(tmp_path):
     bench = OrchestrationBenchmark()
-    orch = WorkerOrchestrator(max_workers=2, workspace_root=tmp_path / "ws", project_root=tmp_path / "proj")
+    orch = WorkerOrchestrator(
+        max_workers=2, workspace_root=tmp_path / "ws", project_root=tmp_path / "proj"
+    )
     lease = ActuationLease.issue("b1", "agent", allowed_tools=["safe_tool"])
 
     try:
@@ -64,7 +71,9 @@ async def test_benchmark_security_lease_bypass_denied(tmp_path):
 @pytest.mark.asyncio
 async def test_benchmark_teardown_always_called(tmp_path):
     bench = OrchestrationBenchmark()
-    orch = WorkerOrchestrator(max_workers=2, workspace_root=tmp_path / "ws", project_root=tmp_path / "proj")
+    orch = WorkerOrchestrator(
+        max_workers=2, workspace_root=tmp_path / "ws", project_root=tmp_path / "proj"
+    )
     _mock_provider(orch, tmp_path)
     lease = ActuationLease.issue("b2", "agent", allowed_tools=["run_terminal_command"])
 
@@ -77,17 +86,20 @@ async def test_benchmark_teardown_always_called(tmp_path):
 @pytest.mark.asyncio
 async def test_benchmark_multi_agent_delegation_throughput(tmp_path):
     bench = OrchestrationBenchmark()
-    orch = WorkerOrchestrator(max_workers=4, workspace_root=tmp_path / "ws", project_root=tmp_path / "proj")
+    orch = WorkerOrchestrator(
+        max_workers=4, workspace_root=tmp_path / "ws", project_root=tmp_path / "proj"
+    )
     _mock_provider(orch, tmp_path)
 
     jobs = [
-        WorkerJob.from_command(f"echo task{i}", job_id=f"job_{i}")
-        for i in range(6)
+        WorkerJob.from_command(f"echo task{i}", job_id=f"job_{i}") for i in range(6)
     ]
     start = time.monotonic()
     handles = []
     for job in jobs:
-        lease = ActuationLease.issue(job.job_id, "bench", allowed_tools=job.allowed_tools)
+        lease = ActuationLease.issue(
+            job.job_id, "bench", allowed_tools=job.allowed_tools
+        )
         handles.append(await orch.spawn_job(job, lease))
     await asyncio.gather(*(h.result() for h in handles))
     elapsed = time.monotonic() - start
@@ -100,7 +112,9 @@ async def test_benchmark_multi_agent_delegation_throughput(tmp_path):
 @pytest.mark.asyncio
 async def test_benchmark_nonzero_exit_recovery_semantics(tmp_path):
     bench = OrchestrationBenchmark()
-    orch = WorkerOrchestrator(max_workers=1, workspace_root=tmp_path / "ws", project_root=tmp_path / "proj")
+    orch = WorkerOrchestrator(
+        max_workers=1, workspace_root=tmp_path / "ws", project_root=tmp_path / "proj"
+    )
     _mock_provider(orch, tmp_path, exit_code=2)
     lease = ActuationLease.issue("b3", "agent", allowed_tools=["run_terminal_command"])
 

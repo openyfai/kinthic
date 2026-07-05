@@ -42,12 +42,14 @@ async def test_registry_strips_unexpected_args():
     registry.tools = {}
     registry.register(EchoTool())
 
-    result = await registry.execute(ToolCall(
-        tool_name="echo",
-        arguments=json.dumps({"text": "hello", "unexpected": "drop me"}),
-        expected_outcome="echoes",
-        rationale="exercise schema validation",
-    ))
+    result = await registry.execute(
+        ToolCall(
+            tool_name="echo",
+            arguments=json.dumps({"text": "hello", "unexpected": "drop me"}),
+            expected_outcome="echoes",
+            rationale="exercise schema validation",
+        )
+    )
 
     assert result.success is True
     assert result.actual_outcome == "Echo: hello"
@@ -58,12 +60,14 @@ async def test_registry_unknown_tool_fails():
     registry = ToolRegistry()
     registry.tools = {}
 
-    result = await registry.execute(ToolCall(
-        tool_name="missing",
-        arguments=json.dumps({}),
-        expected_outcome="nothing",
-        rationale="exercise unknown tool path",
-    ))
+    result = await registry.execute(
+        ToolCall(
+            tool_name="missing",
+            arguments=json.dumps({}),
+            expected_outcome="nothing",
+            rationale="exercise unknown tool path",
+        )
+    )
 
     assert result.success is False
     assert result.error == "Tool not found"

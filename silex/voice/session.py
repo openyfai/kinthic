@@ -4,6 +4,7 @@ silex/voice/session.py — Voice I/O mode orchestrator.
 Replaces the text keyboard input loop with:
   listen() → transcribe → cognitive_loop.process() → speak(response)
 """
+
 from __future__ import annotations
 import asyncio
 import logging

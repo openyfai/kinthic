@@ -30,7 +30,9 @@ def test_mcp_config_enabled_servers(tmp_path, monkeypatch):
         "servers:\n  a:\n    enabled: true\n    command: echo\n  b:\n    enabled: false\n",
         encoding="utf-8",
     )
-    cfg = McpConfig(cfg_path, {"servers": {"a": {"enabled": True}, "b": {"enabled": False}}})
+    cfg = McpConfig(
+        cfg_path, {"servers": {"a": {"enabled": True}, "b": {"enabled": False}}}
+    )
     assert list(cfg.enabled_servers().keys()) == ["a"]
 
 

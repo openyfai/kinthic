@@ -11,6 +11,7 @@ Fallback chain:
   If the primary provider raises RateLimitError, AuthError, or TimeoutError,
   SmartRouter tries the next provider in the fallback_chain that has a valid key.
 """
+
 from __future__ import annotations
 import logging
 from typing import Literal
@@ -24,8 +25,21 @@ RoutingMode = Literal["auto", "speed", "quality", "local"]
 DEFAULT_FALLBACK_CHAIN = ["gemini", "anthropic", "openai", "ollama"]
 
 # These exception message substrings indicate a retryable provider failure.
-_SWITCH_SIGNALS = {"rate limit", "429", "quota", "auth", "401", "403",
-                   "invalid api key", "timeout", "connection", "500", "502", "503", "504"}
+_SWITCH_SIGNALS = {
+    "rate limit",
+    "429",
+    "quota",
+    "auth",
+    "401",
+    "403",
+    "invalid api key",
+    "timeout",
+    "connection",
+    "500",
+    "502",
+    "503",
+    "504",
+}
 
 
 def _is_switchable_error(exc: Exception) -> bool:
@@ -88,6 +102,7 @@ class SmartRouter:
         # Update fast/reasoning models from this provider's catalog
         try:
             from silex.llm.catalog import get_provider_defaults
+
             defaults = get_provider_defaults(provider_name)
             self._fast_model = defaults["fast_model"]
             self._reasoning_model = defaults["reasoning_model"]
@@ -115,11 +130,30 @@ class SmartRouter:
         # mode == "auto" — keyword + context-size signals (legacy logic preserved)
         lower = user_input.lower()
         reasoning_signals = [
-            "architect", "refactor", "debug", "deep dive", "analyze",
-            "complex", "plan", "strategy", "why", "logic", "optimize",
-            "recursive", "generalize",
+            "architect",
+            "refactor",
+            "debug",
+            "deep dive",
+            "analyze",
+            "complex",
+            "plan",
+            "strategy",
+            "why",
+            "logic",
+            "optimize",
+            "recursive",
+            "generalize",
         ]
-        fast_signals = ["list", "show", "read", "what is", "where is", "hello", "hi", "status"]
+        fast_signals = [
+            "list",
+            "show",
+            "read",
+            "what is",
+            "where is",
+            "hello",
+            "hi",
+            "status",
+        ]
 
         if context_size > 150_000:
             return self._reasoning_model
@@ -146,8 +180,11 @@ class SmartRouter:
         except Exception as exc:
             if not _is_switchable_error(exc):
                 raise
-            log.warning("Provider %s failed (%s), trying fallback chain.",
-                        self._primary_provider_name, exc)
+            log.warning(
+                "Provider %s failed (%s), trying fallback chain.",
+                self._primary_provider_name,
+                exc,
+            )
 
         for provider_name in DEFAULT_FALLBACK_CHAIN:
             if provider_name in tried:
@@ -180,20 +217,30 @@ class SmartRouter:
         result = []
         for profile in self._list_providers():
             has_key = bool(self._get_secret(profile.name, self._settings_store))
-            result.append({
-                "name": profile.name,
-                "label": profile.display_name,
-                "available": has_key,
-                "active": profile.name == self._primary_provider_name,
-                "fast_model": next(
-                    (m["id"] for m in profile.fallback_models if isinstance(m, dict) and m.get("tier") == "fast"),
-                    "unknown"
-                ),
-                "reasoning_model": next(
-                    (m["id"] for m in profile.fallback_models if isinstance(m, dict) and m.get("tier") == "reasoning"),
-                    "unknown"
-                ),
-            })
+            result.append(
+                {
+                    "name": profile.name,
+                    "label": profile.display_name,
+                    "available": has_key,
+                    "active": profile.name == self._primary_provider_name,
+                    "fast_model": next(
+                        (
+                            m["id"]
+                            for m in profile.fallback_models
+                            if isinstance(m, dict) and m.get("tier") == "fast"
+                        ),
+                        "unknown",
+                    ),
+                    "reasoning_model": next(
+                        (
+                            m["id"]
+                            for m in profile.fallback_models
+                            if isinstance(m, dict) and m.get("tier") == "reasoning"
+                        ),
+                        "unknown",
+                    ),
+                }
+            )
         return result
 
     def get_proxy(self):
@@ -213,7 +260,11 @@ class SmartRouter:
             log.debug("Skipping provider %s — no API key found.", provider_name)
             return None
         try:
-            from silex.llm.registry import get_provider_profile, get_provider_client_class
+            from silex.llm.registry import (
+                get_provider_profile,
+                get_provider_client_class,
+            )
+
             profile = get_provider_profile(provider_name)
             client_class = get_provider_client_class(provider_name)
             if not profile or not client_class:
@@ -261,4 +312,3 @@ class SmartRouterProxy:
         return await self._router.call_with_fallback(
             lambda client: client.complete_text(*args, **kwargs)
         )
-

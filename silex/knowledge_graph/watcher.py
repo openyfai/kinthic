@@ -5,6 +5,7 @@ Monitors the ARIA_WORKSPACE for changes to code files. Features a strict debounc
 mechanism to prevent database storms during massive file operations (e.g., npm install)
 and explicit deletion handling to prune the Knowledge Graph.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -29,24 +30,24 @@ class WorkspaceEventHandler(FileSystemEventHandler):
     def __init__(self, callback):
         super().__init__()
         self.callback = callback
-        
+
         # V2 Constraint: Strict Ignore Lists
         self.ignored_dirs = {".git", "node_modules", ".venv", "__pycache__", "web_dist"}
         self.monitored_extensions = {".py", ".ts", ".tsx", ".js", ".jsx"}
 
     def _is_valid_file(self, path: str) -> bool:
         p = Path(path)
-        
+
         # Check extensions
         if p.suffix not in self.monitored_extensions:
             return False
-            
+
         # Check ignored directories in path parts
         for part in p.parts:
             if part in self.ignored_dirs or part.startswith("."):
                 # Exclude hidden folders like .next, .aria, etc.
                 return False
-                
+
         return True
 
     def on_created(self, event: FileSystemEvent):
@@ -91,49 +92,53 @@ class DebouncedWatcher:
     async def _process_batch(self):
         """Process all queued events after the debounce window closes."""
         from silex.knowledge_graph.mapper import SkeletonMapper
-        
+
         events_to_process = self.pending_events.copy()
         self.pending_events.clear()
-        
+
         log.info(f"Processing batch of {len(events_to_process)} FS events...")
-        
+
         for filepath, action in events_to_process.items():
             path_obj = Path(filepath)
-            
+
             if action == "deleted":
                 # V2 Constraint: Explicit Deletion Handling
                 log.info(f"Purging deleted file from World Model: {path_obj.name}")
                 # We would delete nodes linked to this file source
                 await self.db.execute(
-                    "DELETE FROM knowledge_nodes WHERE source = ?", 
-                    (f"file://{filepath}",)
+                    "DELETE FROM knowledge_nodes WHERE source = ?",
+                    (f"file://{filepath}",),
                 )
                 continue
-                
+
             # For created/modified, parse the file
             meta = SkeletonMapper.map_file(path_obj)
             if not meta or "error" in meta:
                 continue
-                
+
             # Log the successful map
-            log.info(f"Mapped {path_obj.name}: {len(meta.get('imports', []))} imports, {len(meta.get('functions', []))} functions.")
-            
+            log.info(
+                f"Mapped {path_obj.name}: {len(meta.get('imports', []))} imports, {len(meta.get('functions', []))} functions."
+            )
+
             # Write to Knowledge Graph
             node_id = f"file_node_{uuid.uuid4().hex[:8]}"
             content = json.dumps(meta)
             source_uri = f"file://{filepath}"
             now = datetime.now(timezone.utc).isoformat()
-            
-            await self.db.execute("DELETE FROM knowledge_nodes WHERE source = ?", (source_uri,))
+
+            await self.db.execute(
+                "DELETE FROM knowledge_nodes WHERE source = ?", (source_uri,)
+            )
             await self.db.execute(
                 """
                 INSERT INTO knowledge_nodes 
                 (id, content, node_type, confidence, source, created_at, last_validated)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (node_id, content, "code_structure", 1.0, source_uri, now, now)
+                (node_id, content, "code_structure", 1.0, source_uri, now, now),
             )
-            
+
         # Trigger autonomous PR sweep after mapping the changes
         asyncio.create_task(self._trigger_auto_pr_sweep())
 
@@ -141,23 +146,23 @@ class DebouncedWatcher:
         """Issue 8: Full workspace scan on startup to catch offline changes."""
         target_dir = Path(WORKSPACE_DIR)
         log.info(f"Starting initial FS scan on {target_dir}...")
-        
+
         # We reuse the EventHandler logic to filter
         handler = WorkspaceEventHandler(lambda p, a: None)
         files_to_map = []
-        
+
         for p in target_dir.rglob("*"):
             if not p.is_dir() and handler._is_valid_file(str(p)):
                 files_to_map.append(str(p))
-                
+
         if not files_to_map:
             return
-            
+
         log.info(f"Found {len(files_to_map)} files for initial scan. Processing...")
         # Queue them all as 'modified' so _process_batch handles DB logic cleanly
         for f in files_to_map:
             self.pending_events[f] = "modified"
-            
+
         # Manually trigger process batch immediately
         await self._process_batch()
 
@@ -165,17 +170,19 @@ class DebouncedWatcher:
         """The main async loop to check the debounce timer."""
         # V2 Constraint: Scope tightly to WORKSPACE_DIR
         target_dir = str(WORKSPACE_DIR)
-        
+
         await self._initial_scan()
-        
+
         event_handler = WorkspaceEventHandler(self._on_event)
         self.observer = Observer()
-        
+
         self.observer.schedule(event_handler, target_dir, recursive=True)
         self.observer.start()
-        
-        log.info(f"FS Watcher started on {target_dir} (Debounce: {self.debounce_seconds}s)")
-        
+
+        log.info(
+            f"FS Watcher started on {target_dir} (Debounce: {self.debounce_seconds}s)"
+        )
+
         try:
             while True:
                 await asyncio.sleep(1.0)
@@ -191,25 +198,28 @@ class DebouncedWatcher:
     async def _trigger_auto_pr_sweep(self):
         """Run pytest to scan for failing tests and create auto-fix goals."""
         log.info("Auto-PR Sweep: Running test suite to check for regressions...")
-        
+
         try:
             import sys
+
             cmd = [sys.executable, "-m", "pytest", "--tb=short"]
-            
+
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=str(WORKSPACE_DIR)
+                cwd=str(WORKSPACE_DIR),
             )
-            
+
             stdout, stderr = await process.communicate()
             exit_code = process.returncode
-            
+
             if exit_code != 0:
                 output = stdout.decode("utf-8", errors="ignore")
-                log.warning(f"Auto-PR Sweep: Test suite failed (Exit code: {exit_code})")
-                
+                log.warning(
+                    f"Auto-PR Sweep: Test suite failed (Exit code: {exit_code})"
+                )
+
                 # Parse the failed test output to extract the failure summary
                 failure_lines = []
                 in_failures = False
@@ -221,14 +231,16 @@ class DebouncedWatcher:
                         in_failures = False
                     if in_failures:
                         failure_lines.append(line)
-                        
-                failure_summary = "\n".join(failure_lines[:20]) if failure_lines else output[:500]
-                
+
+                failure_summary = (
+                    "\n".join(failure_lines[:20]) if failure_lines else output[:500]
+                )
+
                 # Check if we already have a pending or active goal for this specific failure
                 existing = await self.db.fetch_one(
                     "SELECT id FROM goals WHERE status IN ('pending', 'active') AND description LIKE 'Auto-PR:%'"
                 )
-                
+
                 if not existing:
                     # Guard: Check for consecutive failures to prevent infinite loops
                     recent_failures = await self.db.fetch_all(
@@ -238,25 +250,28 @@ class DebouncedWatcher:
                         ORDER BY created_at DESC LIMIT 3
                         """
                     )
-                    
-                    if len(recent_failures) >= 3 and all(f["status"] == "failed" for f in recent_failures):
-                        log.error("Auto-PR Sweep: 3 consecutive auto-fix failures detected. Halting loop to prevent API key drain.")
+
+                    if len(recent_failures) >= 3 and all(
+                        f["status"] == "failed" for f in recent_failures
+                    ):
+                        log.error(
+                            "Auto-PR Sweep: 3 consecutive auto-fix failures detected. Halting loop to prevent API key drain."
+                        )
                         return
 
                     goal_id = str(uuid.uuid4())
                     now = datetime.now(timezone.utc).isoformat()
                     description = f"Auto-PR: Fix failing test suite in workspace. Failure summary:\n{failure_summary}"
-                    
+
                     log.info(f"Auto-PR Sweep: Registering auto-fix goal {goal_id[:8]}")
                     await self.db.execute(
                         """
                         INSERT INTO goals (id, description, status, priority, created_at, updated_at)
                         VALUES (?, ?, 'pending', 'high', ?, ?)
                         """,
-                        (goal_id, description, now, now)
+                        (goal_id, description, now, now),
                     )
             else:
                 log.info("Auto-PR Sweep: All tests passed. No regressions detected.")
         except Exception as e:
             log.error(f"Auto-PR Sweep failed: {e}")
-

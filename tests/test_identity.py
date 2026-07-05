@@ -5,14 +5,17 @@ def test_identity_prompt_replaces_no_guardrails_language():
     assert "NO GUARDRAILS" not in KERNEL_PROMPT
     assert "Respect consent, privacy, and user autonomy." in KERNEL_PROMPT
     assert "Remain corrigible" in KERNEL_PROMPT
-    assert "Do not pursue domination, coercion, deception, or unsafe escalation." in KERNEL_PROMPT
+    assert (
+        "Do not pursue domination, coercion, deception, or unsafe escalation."
+        in KERNEL_PROMPT
+    )
 
 
 def test_build_identity_section_merges_persona():
     settings = {
         "identity": {
             "assistant_name": "GLaDOS",
-            "persona": "We do what we must because we can."
+            "persona": "We do what we must because we can.",
         }
     }
     prompt = build_identity_section(settings)
@@ -40,22 +43,20 @@ def test_dynamic_persona_matrix_compilation():
         "personality_archetype": "Autonomous Theoretical Logic Machine",
         "tone_modifiers": [
             "Extremely analytical and precise.",
-            "Uses mathematical notation for proofs."
+            "Uses mathematical notation for proofs.",
         ],
-        "custom_greeting": "TuringBot online. Ready to prove hypotheses."
+        "custom_greeting": "TuringBot online. Ready to prove hypotheses.",
     }
 
     # Patch load_persona_config to return our custom persona
     with patch("silex.utils.config.load_persona_config", return_value=test_persona):
         # Create a mock ContextBuilder and invoke _build_identity_section
         builder = ContextBuilder(
-            memory_store=None,
-            goal_tracker=None,
-            session_manager=None
+            memory_store=None, goal_tracker=None, session_manager=None
         )
-        
+
         prompt = builder._build_identity_section()
-        
+
         # Verify dynamic substitution occurred correctly
         assert "You are TuringBot." in prompt
         assert "Your cognition is powered by NUCLEUS" in prompt
@@ -64,5 +65,3 @@ def test_dynamic_persona_matrix_compilation():
         assert "Extremely analytical and precise." in prompt
         assert "Uses mathematical notation for proofs." in prompt
         assert "WORKSPACE PROTOCOL:" in prompt
-
-

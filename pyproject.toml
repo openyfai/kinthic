@@ -102,5 +102,19 @@ py-modules = []
 include = ["silex*", "scripts*", "plugins*"]
 exclude = ["kinthic-ui*", "tests*", "scratch*", "workspace*"]
 
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = [
+    "E402",  # Allow module-level imports not at top of file (used for lazy-loading provider/optional modules)
+    "E741",  # Allow ambiguous variable name (e.g. 'l' in list comprehensions in test scripts)
+    "E501",  # Allow long lines (prevents warnings on test JSON payloads and inline SQL queries)
+    "F401",  # Ignore unused imports (pre-existing in optional voice/audio modules and tests)
+    "F841",  # Ignore unused local variables (pre-existing in tests and mocks)
+    "F821",  # Ignore undefined name (pre-existing type annotations for unimported modules)
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -48,6 +48,7 @@ class TestShellInjection:
     def test_valid_pid_calls_os_kill(self, tmp_path: Path):
         """A valid integer PID must be killed via os.kill, not subprocess."""
         import json
+
         lock_file = tmp_path / "daemon.lock"
         lock_file.write_text(json.dumps({"pid": 99999}))
 
@@ -69,6 +70,7 @@ class TestShellInjection:
     def test_stale_pid_cleans_up(self, tmp_path: Path):
         """If the PID is valid but the process is dead, clean up without error."""
         import json
+
         lock_file = tmp_path / "daemon.lock"
         lock_file.write_text(json.dumps({"pid": 88888}))
 
@@ -101,6 +103,7 @@ class TestFileReaderSandbox:
         secret.write_text("API_KEY=sk-super-secret")
 
         import silex.tools.file_reader as fr
+
         with patch.object(fr, "_PROJECT_ROOT", workspace):
             tool = fr.FileReaderTool()
             result = asyncio.run(tool.execute(file_path=str(secret)))
@@ -115,6 +118,7 @@ class TestFileReaderSandbox:
         safe_file.write_text("Hello from ARIA")
 
         import silex.tools.file_reader as fr
+
         with patch.object(fr, "_PROJECT_ROOT", workspace):
             tool = fr.FileReaderTool()
             result = asyncio.run(tool.execute(file_path=str(safe_file)))
@@ -129,6 +133,7 @@ class TestFileReaderSandbox:
         env_file.write_text("SECRET=leaked")
 
         import silex.tools.file_reader as fr
+
         with patch.object(fr, "_PROJECT_ROOT", workspace):
             tool = fr.FileReaderTool()
             result = asyncio.run(tool.execute(file_path=str(env_file)))
@@ -162,7 +167,9 @@ class TestTelegramExceptionLogging:
 
         # Mock the cognitive loop to raise when process() is called
         mock_loop = MagicMock()
-        mock_loop.process = AsyncMock(side_effect=RuntimeError("Telegram API rate limited"))
+        mock_loop.process = AsyncMock(
+            side_effect=RuntimeError("Telegram API rate limited")
+        )
 
         # Mock settings that would trigger a proactive message
         mock_store = MagicMock()
@@ -427,6 +434,7 @@ class TestCodeEditorEthicsBypass:
 
 # ── Ultra Fix Tests ──────────────────────────────────────────────────────────
 
+
 class TestUltraFix:
     """Verify that transaction cancellation, interpreter injection, and A-MAC logic are robust."""
 
@@ -434,76 +442,84 @@ class TestUltraFix:
     async def test_transaction_cancellation_safety(self, tmp_path: Path):
         """Proof that cancelled transactions trigger rollbacks, not commits."""
         from silex.storage.database import Database
-        
+
         db_file = tmp_path / "test_cancel.db"
         db = Database(str(db_file))
         await db.connect()
-        
+
         # Insert a goal inside a transaction, then simulate cancellation
         async def task_to_cancel():
             async with db.transaction():
-                await db.execute("INSERT INTO goals (id, description, status, priority, created_at, updated_at) VALUES ('test-id', 'Test description', 'pending', 'high', '2026-06-27T00:00:00Z', '2026-06-27T00:00:00Z')")
+                await db.execute(
+                    "INSERT INTO goals (id, description, status, priority, created_at, updated_at) VALUES ('test-id', 'Test description', 'pending', 'high', '2026-06-27T00:00:00Z', '2026-06-27T00:00:00Z')"
+                )
                 # Wait to trigger cancellation
                 await asyncio.sleep(10.0)
-                
+
         t = asyncio.create_task(task_to_cancel())
         await asyncio.sleep(0.1)
         t.cancel()
-        
+
         try:
             await t
         except asyncio.CancelledError:
             pass
-            
+
         # Verify the row does NOT exist (must be rolled back)
         row = await db.fetch_one("SELECT * FROM goals WHERE id='test-id'")
-        assert row is None, "Vulnerability: Cancelled transaction committed partial writes!"
-        
+        assert row is None, (
+            "Vulnerability: Cancelled transaction committed partial writes!"
+        )
+
         await db.close()
 
     @pytest.mark.asyncio
     async def test_interpreter_inline_blocking(self):
         """Proof that inline code args passed to interpreters are blocked on host fallback."""
         from silex.tools.system import RunTerminalCommandTool
-        
+
         tool = RunTerminalCommandTool()
-        
+
         # Test inline command python bypass attempt
         bypass_cmd = "python -c \"import os; os.system('cat /etc/passwd')\""
-        
+
         # It must raise a PermissionError (sandboxed=True: this test targets the
         # interpreter inline-execution check specifically, which only applies
         # inside the Docker allowlist — the host-fallback allowlist excludes
         # interpreters entirely, see TestHostFallbackHardening below).
         with pytest.raises(PermissionError) as excinfo:
-            tool._check_safety(bypass_cmd, ["python", "-c", "import os; os.system('cat /etc/passwd')"], sandboxed=True)
+            tool._check_safety(
+                bypass_cmd,
+                ["python", "-c", "import os; os.system('cat /etc/passwd')"],
+                sandboxed=True,
+            )
 
-        assert (
-            "inline script execution" in str(excinfo.value)
-            or "metacharacters" in str(excinfo.value)
-        )
+        assert "inline script execution" in str(
+            excinfo.value
+        ) or "metacharacters" in str(excinfo.value)
 
     @pytest.mark.asyncio
     async def test_amac_factual_confidence_and_weights(self):
         """Proof that factual confidence is length-normalized and keyword matching uses boundaries."""
         from silex.memory.admission_control import AdmissionController
-        
+
         controller = AdmissionController()
-        
+
         # 1. Test normalized confidence with a short candidate in a large context
         candidate = "The workspace path is /project/src."
         context = "We initialized the repository today. The workspace path is /project/src. Please configure the environment vars."
-        
+
         confidence = await controller.compute_factual_confidence(candidate, context)
         # Should be exactly 1.0 (perfect match of the candidate string)
         assert confidence == 1.0
-        
+
         # 2. Test utility keyword boundary matching (should not trigger substring match on parts of words)
-        non_matching = "The map is rapid."  # contains 'api' inside 'rapid', but no word 'api'
+        non_matching = (
+            "The map is rapid."  # contains 'api' inside 'rapid', but no word 'api'
+        )
         utility_score = controller.evaluate_future_utility(non_matching)
         assert utility_score == 0.0  # no boundary matches
-        
+
         matching = "We must configure the API endpoint."  # contains 'must', 'api', 'endpoint' as separate words
         utility_score = controller.evaluate_future_utility(matching)
         assert utility_score > 0.0
-

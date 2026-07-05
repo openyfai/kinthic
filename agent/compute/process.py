@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional, Any
 
+
 class WorkerStatus(Enum):
     PENDING = "pending"
     RUNNING = "running"
@@ -14,9 +15,11 @@ class WorkerStatus(Enum):
     FAILED = "failed"
     KILLED = "killed"
 
+
 @dataclass
 class WorkerProcess:
     """Tracks the state and metadata of an active worker sandbox."""
+
     pid: Optional[int]
     status: WorkerStatus
     task_id: str

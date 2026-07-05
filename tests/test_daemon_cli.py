@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import json
 from io import StringIO
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from scripts import cli
 
@@ -128,7 +126,10 @@ def test_proposals_reject_uses_rejected_status():
             pass
 
     with patch("silex.storage.database.Database", FakeDB):
-        with patch("silex.core.meta_reasoning.MetaReasoningEngine", lambda *a, **k: FakeEngine()):
+        with patch(
+            "silex.core.meta_reasoning.MetaReasoningEngine",
+            lambda *a, **k: FakeEngine(),
+        ):
             cli.run_proposals("reject", "abc123")
 
     assert captured.get("status") == "rejected"
@@ -165,7 +166,10 @@ def test_systemd_unit_contains_restart_and_daemon_run():
 
 
 def test_prefetch_skips_without_chromadb(monkeypatch):
-    monkeypatch.setattr("importlib.util.find_spec", lambda name: None if name == "chromadb" else MagicMock())
+    monkeypatch.setattr(
+        "importlib.util.find_spec",
+        lambda name: None if name == "chromadb" else MagicMock(),
+    )
     from silex.ops.prefetch import prefetch_embedding_model
 
     msg = prefetch_embedding_model()

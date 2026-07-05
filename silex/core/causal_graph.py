@@ -53,6 +53,7 @@ _DEFAULT_MAX_DEPTH = 12
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class EpistemicNode:
     """A single typed vertex in the epistemic graph."""
@@ -132,6 +133,7 @@ class CausalEdge:
 # Main class
 # ---------------------------------------------------------------------------
 
+
 class CausalKnowledgeGraphGenerator:
     """
     Manages the epistemic memory graph for the SILEX microkernel.
@@ -177,7 +179,9 @@ class CausalKnowledgeGraphGenerator:
             return True
         except Exception as exc:
             if "UNIQUE constraint" in str(exc).upper() or "unique" in str(exc).lower():
-                log.warning("Epistemic node %s already exists (idempotent skip)", node.node_id)
+                log.warning(
+                    "Epistemic node %s already exists (idempotent skip)", node.node_id
+                )
                 return True  # Idempotent: treat existing node as success
             log.error("Failed to register epistemic node %s: %s", node.node_id, exc)
             return False
@@ -205,7 +209,9 @@ class CausalKnowledgeGraphGenerator:
             return True
         except Exception as exc:
             if "UNIQUE constraint" in str(exc).upper() or "unique" in str(exc).lower():
-                log.warning("Causal edge %s already exists (idempotent skip)", edge.edge_id)
+                log.warning(
+                    "Causal edge %s already exists (idempotent skip)", edge.edge_id
+                )
                 return True
             log.error("Failed to register causal edge %s: %s", edge.edge_id, exc)
             return False
@@ -398,7 +404,9 @@ class CausalKnowledgeGraphGenerator:
             rows = await self.db.fetch_all(query, params)
             return [dict(row) for row in rows]
         except Exception as exc:
-            log.error("get_recent_trajectory failed for session %s: %s", session_id, exc)
+            log.error(
+                "get_recent_trajectory failed for session %s: %s", session_id, exc
+            )
             return []
 
     async def get_dead_ends_for_session(
@@ -474,9 +482,7 @@ class CausalKnowledgeGraphGenerator:
             rows = await cursor.fetchall() if cursor else []
             count = len(rows)
             if count:
-                log.info(
-                    "Archived %d epistemic nodes older than %d days.", count, days
-                )
+                log.info("Archived %d epistemic nodes older than %d days.", count, days)
             return count
         except Exception as exc:
             log.error("archive_old_nodes failed: %s", exc)

@@ -29,7 +29,9 @@ async def test_recall_after_explicit_remember(tmp_path, monkeypatch):
     try:
         write = await svc.remember_explicit(
             ctx,
-            RememberExplicitRequest(content="Staging DB is postgres://staging.internal:5432/kinthic"),
+            RememberExplicitRequest(
+                content="Staging DB is postgres://staging.internal:5432/kinthic"
+            ),
         )
         payload = json.loads(write)
         assert payload["admission"]["accepted"] is True
@@ -54,7 +56,9 @@ async def test_remember_returns_admission_metadata(tmp_path, monkeypatch):
         result = json.loads(
             await svc.remember(
                 ctx,
-                RememberRequest(content="User prefers dark mode in all tools", importance=0.9),
+                RememberRequest(
+                    content="User prefers dark mode in all tools", importance=0.9
+                ),
             )
         )
         assert "admission" in result
@@ -73,8 +77,14 @@ async def test_rate_limit_blocks_excess_calls(tmp_path):
 
 
 def test_memory_to_record_roundtrip():
-    mem = Memory(content="hello world test", source=MemorySource.USER, memory_type=MemoryType.SEMANTIC)
-    rec = memory_to_record(mem, admission=AdmissionInfo(accepted=True, reason="explicit"))
+    mem = Memory(
+        content="hello world test",
+        source=MemorySource.USER,
+        memory_type=MemoryType.SEMANTIC,
+    )
+    rec = memory_to_record(
+        mem, admission=AdmissionInfo(accepted=True, reason="explicit")
+    )
     assert rec.memory_id == mem.id
     assert rec.admission.reason == "explicit"
 
@@ -92,7 +102,9 @@ async def test_concurrent_recall_and_write_no_deadlock(tmp_path, monkeypatch):
         async def writer(i: int):
             await svc.remember_explicit(
                 ctx,
-                RememberExplicitRequest(content=f"Concurrent fact number {i} for testing"),
+                RememberExplicitRequest(
+                    content=f"Concurrent fact number {i} for testing"
+                ),
             )
 
         async def reader():
@@ -112,7 +124,6 @@ async def test_auth_middleware_rejects_missing_key(tmp_path, monkeypatch):
     monkeypatch.setenv("KINTHIC_GATEWAY_AUTH", "1")
     (tmp_path / "runtime").mkdir(parents=True, exist_ok=True)
 
-    from starlette.requests import Request
     from starlette.responses import Response
     from silex.api.server import LocalAuthMiddleware
 
@@ -148,7 +159,9 @@ def test_mcp_tool_registration():
         async def retrieve_relevant_context(self, *a, **k):
             return []
 
-    ctx = McpServerContext(memory=_Mem(), kg=_Kg(), client_id="test", audit=McpAuditLog())
+    ctx = McpServerContext(
+        memory=_Mem(), kg=_Kg(), client_id="test", audit=McpAuditLog()
+    )
     mcp = create_mcp_stdio(ctx)
     assert mcp is not None
 
@@ -165,7 +178,9 @@ async def test_forget_without_confirm_returns_structured_error(tmp_path, monkeyp
 
         raw = await svc.forget(
             ctx,
-            ForgetRequest(memory_id="00000000-0000-0000-0000-000000000000", confirm=False),
+            ForgetRequest(
+                memory_id="00000000-0000-0000-0000-000000000000", confirm=False
+            ),
         )
         payload = json.loads(raw)
         assert payload["code"] == "confirmation_required"

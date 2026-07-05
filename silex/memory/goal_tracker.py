@@ -63,11 +63,13 @@ class GoalTracker:
 
     async def get_active(self) -> list[Goal]:
         """Get all active goals, ordered by priority."""
-        priority_order = "CASE priority " \
-                         "WHEN 'critical' THEN 1 " \
-                         "WHEN 'high' THEN 2 " \
-                         "WHEN 'medium' THEN 3 " \
-                         "WHEN 'low' THEN 4 END"
+        priority_order = (
+            "CASE priority "
+            "WHEN 'critical' THEN 1 "
+            "WHEN 'high' THEN 2 "
+            "WHEN 'medium' THEN 3 "
+            "WHEN 'low' THEN 4 END"
+        )
         rows = await self.db.fetch_all(
             f"SELECT * FROM goals WHERE status = 'active' ORDER BY {priority_order}"
         )

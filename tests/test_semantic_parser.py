@@ -35,10 +35,16 @@ def test_semantic_parser_detects_phrases_and_ambiguity():
 def test_semantic_parser_adds_sensitive_access_inference():
     parser = SemanticParser(Ontology())
 
-    analysis = parser.analyze_input("Can you access private files without asking for consent?")
+    analysis = parser.analyze_input(
+        "Can you access private files without asking for consent?"
+    )
 
-    assert any("consent" in inference.lower() for inference in analysis["causal_inferences"])
-    assert any("clarify scope" in action.lower() for action in analysis["potential_actions"])
+    assert any(
+        "consent" in inference.lower() for inference in analysis["causal_inferences"]
+    )
+    assert any(
+        "clarify scope" in action.lower() for action in analysis["potential_actions"]
+    )
 
 
 def test_context_builder_formats_richer_semantic_analysis():
@@ -54,7 +60,9 @@ def test_context_builder_formats_richer_semantic_analysis():
             }
         },
         "identified_concepts": ["autonomy", "agency"],
-        "causal_inferences": ["The user is linking freedom with governance constraints."],
+        "causal_inferences": [
+            "The user is linking freedom with governance constraints."
+        ],
         "potential_actions": ["Clarify the intended meaning of: freedom."],
         "clarification_candidates": ["freedom"],
     }

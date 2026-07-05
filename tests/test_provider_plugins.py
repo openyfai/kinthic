@@ -30,15 +30,16 @@ def test_manual_registration():
                 "label": "Test Model 1",
                 "tier": "fast",
             },
-        )
+        ),
     )
-    
+
     class MockClient(BaseLLMProvider):
         def connect(self):
             pass
+
         async def complete_json(self, **kwargs):
             pass
-            
+
     register_provider(custom_profile, MockClient)
 
     profile = get_provider_profile("test-manual-prov")
@@ -62,7 +63,9 @@ def test_broken_plugin_does_not_crash_boot():
 
         # Write invalid Python syntax to trigger a loading error
         client_file = plugin_path / "client.py"
-        client_file.write_text("class BrokenProviderProfile: invalid syntax here ->", encoding="utf-8")
+        client_file.write_text(
+            "class BrokenProviderProfile: invalid syntax here ->", encoding="utf-8"
+        )
 
         # Try importing the broken client — it must gracefully handle the failure
         res = _import_plugin_client("broken-provider", client_file)
@@ -79,21 +82,27 @@ def test_sys_modules_namespace_collision_protection():
         p1 = Path(tmp_dir) / "gemini-test"
         p1.mkdir()
         c1 = p1 / "client.py"
-        c1.write_text("from silex.llm.base import BaseLLMProvider\nclass A(BaseLLMProvider):\n  def connect(self): pass\n  async def complete_json(self, **kwargs): pass", encoding="utf-8")
-        
+        c1.write_text(
+            "from silex.llm.base import BaseLLMProvider\nclass A(BaseLLMProvider):\n  def connect(self): pass\n  async def complete_json(self, **kwargs): pass",
+            encoding="utf-8",
+        )
+
         p2 = Path(tmp_dir) / "anthropic-test"
         p2.mkdir()
         c2 = p2 / "client.py"
-        c2.write_text("from silex.llm.base import BaseLLMProvider\nclass B(BaseLLMProvider):\n  def connect(self): pass\n  async def complete_json(self, **kwargs): pass", encoding="utf-8")
-        
+        c2.write_text(
+            "from silex.llm.base import BaseLLMProvider\nclass B(BaseLLMProvider):\n  def connect(self): pass\n  async def complete_json(self, **kwargs): pass",
+            encoding="utf-8",
+        )
+
         cls1 = _import_plugin_client("gemini-test", c1)
         cls2 = _import_plugin_client("anthropic-test", c2)
-        
+
         assert cls1 is not None
         assert cls2 is not None
         assert cls1.__name__ == "A"
         assert cls2.__name__ == "B"
-        
+
         assert "plugins.providers.gemini-test.client" in sys.modules
         assert "plugins.providers.anthropic-test.client" in sys.modules
 
@@ -110,16 +119,19 @@ def test_azure_openai_client_initialization():
         display_name="Azure OpenAI",
         env_vars=("AZURE_OPENAI_API_KEY",),
         base_url="https://my-resource.openai.azure.com/openai/deployments/my-dep/v1",
-        api_mode="chat_completions"
+        api_mode="chat_completions",
     )
 
     with tempfile.TemporaryDirectory() as tmp:
-        store = RuntimeSettingsStore(settings_path=Path(tmp)/"settings.json", secrets_path=Path(tmp)/"secrets.json")
+        store = RuntimeSettingsStore(
+            settings_path=Path(tmp) / "settings.json",
+            secrets_path=Path(tmp) / "secrets.json",
+        )
         store.save_settings({"provider": "azure", "model": "gpt-4o"})
         store.set_provider_secret("azure", "test-key")
 
         provider = OpenAICompatibleProvider(profile, settings_store=store)
-        
+
         with patch("openai.AsyncAzureOpenAI") as mock_azure:
             provider.connect()
             kwargs = mock_azure.call_args[1]
@@ -133,10 +145,13 @@ def test_azure_openai_client_initialization():
         display_name="Azure OpenAI",
         env_vars=("AZURE_OPENAI_API_KEY",),
         base_url="https://my-resource.openai.azure.com/openai/responses?api-version=2023-05-15",
-        api_mode="chat_completions"
+        api_mode="chat_completions",
     )
     with tempfile.TemporaryDirectory() as tmp:
-        store = RuntimeSettingsStore(settings_path=Path(tmp)/"settings.json", secrets_path=Path(tmp)/"secrets.json")
+        store = RuntimeSettingsStore(
+            settings_path=Path(tmp) / "settings.json",
+            secrets_path=Path(tmp) / "secrets.json",
+        )
         store.save_settings({"provider": "azure", "model": "gpt-4o"})
         provider = OpenAICompatibleProvider(profile_with_version, settings_store=store)
         with patch("openai.AsyncAzureOpenAI") as mock_azure:
@@ -144,7 +159,6 @@ def test_azure_openai_client_initialization():
             kwargs = mock_azure.call_args[1]
             assert kwargs["azure_endpoint"] == "https://my-resource.openai.azure.com"
             assert kwargs["api_version"] == "2023-05-15"
-
 
 
 def test_lm_studio_json_schema_routing_and_reasoning_fallback():
@@ -163,15 +177,18 @@ def test_lm_studio_json_schema_routing_and_reasoning_fallback():
         display_name="LM Studio",
         env_vars=(),
         base_url="http://127.0.0.1:1234/v1",
-        api_mode="chat_completions"
+        api_mode="chat_completions",
     )
 
     with tempfile.TemporaryDirectory() as tmp:
-        store = RuntimeSettingsStore(settings_path=Path(tmp)/"settings.json", secrets_path=Path(tmp)/"secrets.json")
+        store = RuntimeSettingsStore(
+            settings_path=Path(tmp) / "settings.json",
+            secrets_path=Path(tmp) / "secrets.json",
+        )
         store.save_settings({"provider": "lm_studio", "model": "some-model"})
 
         provider = OpenAICompatibleProvider(profile, settings_store=store)
-        
+
         # Connect client
         with patch("openai.AsyncOpenAI"):
             provider.connect()
@@ -181,24 +198,24 @@ def test_lm_studio_json_schema_routing_and_reasoning_fallback():
         mock_choice.message.content = ""
         # Mock reasoning content (fallback scenario)
         mock_choice.message.reasoning_content = '{"val": 42}'
-        
+
         mock_response = MagicMock()
         mock_response.choices = [mock_choice]
         mock_response.usage = None
-        
+
         provider.client.chat.completions.create = AsyncMock(return_value=mock_response)
-        
+
         import asyncio
+
         # Run completion
-        res = asyncio.run(provider.complete_json(
-            schema=Schema,
-            system_prompt="sys",
-            user_input="user",
-            temperature=0.0
-        ))
-        
+        res = asyncio.run(
+            provider.complete_json(
+                schema=Schema, system_prompt="sys", user_input="user", temperature=0.0
+            )
+        )
+
         assert res.val == 42
-        
+
         # Verify JSON schema was sent in kwargs
         create_call_args = provider.client.chat.completions.create.call_args[1]
         assert "response_format" in create_call_args
@@ -232,11 +249,14 @@ def test_strict_structured_outputs_and_azure_blueprints():
         display_name="Azure OpenAI",
         env_vars=(),
         base_url="https://test-resource.openai.azure.com/openai/deployments/dep/v1",
-        api_mode="chat_completions"
+        api_mode="chat_completions",
     )
 
     with tempfile.TemporaryDirectory() as tmp:
-        store = RuntimeSettingsStore(settings_path=Path(tmp)/"settings.json", secrets_path=Path(tmp)/"secrets.json")
+        store = RuntimeSettingsStore(
+            settings_path=Path(tmp) / "settings.json",
+            secrets_path=Path(tmp) / "secrets.json",
+        )
         store.save_settings({"provider": "azure", "model": "gpt-4o"})
 
         provider = OpenAICompatibleProvider(profile, settings_store=store)
@@ -252,31 +272,33 @@ def test_strict_structured_outputs_and_azure_blueprints():
 
         provider.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        res = asyncio.run(provider.complete_json(
-            schema=StrictSchema,
-            system_prompt="Initial system instructions",
-            user_input="hello"
-        ))
+        res = asyncio.run(
+            provider.complete_json(
+                schema=StrictSchema,
+                system_prompt="Initial system instructions",
+                user_input="hello",
+            )
+        )
 
         assert res.reasoning == "thought"
         assert res.memories[0].from_concept == "A"
 
         # Verify chat completion kwargs
         create_call_args = provider.client.chat.completions.create.call_args[1]
-        
+
         # 1. Enforced Strict Structured Outputs Check
         assert "response_format" in create_call_args
         rf = create_call_args["response_format"]
         assert rf["type"] == "json_schema"
         assert rf["json_schema"]["strict"] is True
-        
+
         schema_dict = rf["json_schema"]["schema"]
         assert schema_dict["additionalProperties"] is False
         assert "reasoning" in schema_dict["required"]
         assert "action" in schema_dict["required"]
         assert "description" in schema_dict["required"]
         assert "memories" in schema_dict["required"]
-        
+
         # Nested Object Strict Check
         mem_schema = schema_dict["$defs"]["MockMemory"]
         assert mem_schema["additionalProperties"] is False
@@ -295,5 +317,3 @@ def test_strict_structured_outputs_and_azure_blueprints():
         assert "to_concept" in system_content
         assert "relationship" in system_content
         assert "evidence" in system_content
-
-

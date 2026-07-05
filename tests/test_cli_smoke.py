@@ -25,7 +25,9 @@ def test_doctor_command_reports_status(tmp_path: Path):
         settings_path=tmp_path / "settings.json",
         secrets_path=tmp_path / "secrets.json",
     )
-    store.save_settings({"setup_completed": True, "provider": "ollama", "model": "llama3.1"})
+    store.save_settings(
+        {"setup_completed": True, "provider": "ollama", "model": "llama3.1"}
+    )
 
     buffer = StringIO()
     with patch("scripts.cli.RuntimeSettingsStore", return_value=store):

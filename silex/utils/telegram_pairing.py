@@ -41,7 +41,7 @@ class TelegramPairingSession:
         async with httpx.AsyncClient() as client:
             offset = 0
             start_time = asyncio.get_event_loop().time()
-            
+
             while asyncio.get_event_loop().time() - start_time < timeout_s:
                 try:
                     resp = await client.get(
@@ -56,19 +56,19 @@ class TelegramPairingSession:
                         offset = update["update_id"] + 1
                         message = update.get("message", {})
                         text = message.get("text", "")
-                        
+
                         # Check if the message contains our secret
                         if self.pairing_secret in text:
                             chat_id = message["chat"]["id"]
                             # Send the final greeting
                             await self.send_greeting(chat_id)
                             return chat_id
-                            
+
                 except Exception:
                     pass
-                
+
                 await asyncio.sleep(1)
-            
+
             raise TimeoutError("Pairing timed out. Please try again.")
 
     async def send_greeting(self, chat_id: int):

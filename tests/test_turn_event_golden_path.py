@@ -73,7 +73,9 @@ async def test_golden_path_turn_event_sequence() -> None:
 
 
 @pytest.mark.asyncio
-async def test_turn_emitter_mirror_legacy_worker_and_approval(tmp_path, monkeypatch) -> None:
+async def test_turn_emitter_mirror_legacy_worker_and_approval(
+    tmp_path, monkeypatch
+) -> None:
     from silex.ui import ink_bridge as ib
 
     kinthic_dir = tmp_path / ".kinthic"
@@ -86,8 +88,12 @@ async def test_turn_emitter_mirror_legacy_worker_and_approval(tmp_path, monkeypa
     bridge._enabled = True
 
     emitter = TurnEmitter(bridge.emit, turn_id="turn_mirror", mirror_legacy=True)
-    await emitter.approval_request("a1", "spawn_worker", "sandbox_write", "needs approval")
-    await emitter.subagent("w1", "running", objective="test", worker_class="cognitive_worker")
+    await emitter.approval_request(
+        "a1", "spawn_worker", "sandbox_write", "needs approval"
+    )
+    await emitter.subagent(
+        "w1", "running", objective="test", worker_class="cognitive_worker"
+    )
 
     lines = [json.loads(l) for l in path.read_text().strip().splitlines()]
     types = [l["type"] for l in lines]

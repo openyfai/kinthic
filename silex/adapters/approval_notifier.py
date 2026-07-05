@@ -5,12 +5,9 @@ from silex.utils.logger import setup_logger
 
 log = setup_logger("silex.adapters.approval_notifier")
 
+
 async def notify_approval_required(
-    db: Database,
-    approval_id: str,
-    tool_name: str,
-    risk_level: str,
-    reason: str
+    db: Database, approval_id: str, tool_name: str, risk_level: str, reason: str
 ) -> None:
     """
     Inserts a row into the notifications table to push an approval request
@@ -18,9 +15,9 @@ async def notify_approval_required(
     """
     if not db:
         return
-        
+
     prefix = approval_id.split("-")[0]
-    
+
     # Message template matching the design spec
     message = (
         f"⚠️ **Approval Required**\n\n"
@@ -30,7 +27,7 @@ async def notify_approval_required(
         f"{reason}\n\n"
         f"Type `/approve {prefix}` or `/reject {prefix}`"
     )
-    
+
     try:
         await db.execute(
             """
@@ -42,8 +39,8 @@ async def notify_approval_required(
                 "approval_request",
                 message,
                 0,
-                datetime.now(timezone.utc).isoformat()
-            )
+                datetime.now(timezone.utc).isoformat(),
+            ),
         )
         log.info(f"Queued approval notification for {tool_name} ({prefix})")
     except Exception as e:

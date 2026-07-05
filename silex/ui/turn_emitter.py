@@ -51,85 +51,106 @@ class TurnEmitter:
 
     async def _mirror(self, event: TurnEvent) -> None:
         """Keep legacy Ink reducers working during migration."""
-        if event.phase in (TurnPhase.ROUTING, TurnPhase.CONTEXT, TurnPhase.TOOL, TurnPhase.RESPONSE):
+        if event.phase in (
+            TurnPhase.ROUTING,
+            TurnPhase.CONTEXT,
+            TurnPhase.TOOL,
+            TurnPhase.RESPONSE,
+        ):
             status = event.title or event.phase.value
             detail = event.detail or None
-            await self._emit({
-                "type": "thinking",
-                "data": {"status": status, "detail": detail},
-            })
+            await self._emit(
+                {
+                    "type": "thinking",
+                    "data": {"status": status, "detail": detail},
+                }
+            )
         elif event.phase == TurnPhase.SUBAGENT:
             p = event.payload
-            await self._emit({
-                "type": "worker",
-                "data": {
-                    "worker_id": p.get("worker_id", "unknown"),
-                    "lifecycle": p.get("lifecycle", "running"),
-                    "objective": p.get("objective", event.detail),
-                    "parent_id": p.get("parent_id"),
-                    "ancestry_chain": p.get("ancestry_chain", []),
-                    "worker_class": p.get("worker_class", "worker"),
-                    "detail": p.get("detail", ""),
-                    "exit_code": p.get("exit_code"),
-                    "turns_used": p.get("turns_used"),
-                    "tokens_used": p.get("tokens_used"),
-                    "timestamp": p.get("timestamp", time.time()),
-                    "event_id": p.get("event_id", f"evt_{event.seq}"),
-                },
-            })
+            await self._emit(
+                {
+                    "type": "worker",
+                    "data": {
+                        "worker_id": p.get("worker_id", "unknown"),
+                        "lifecycle": p.get("lifecycle", "running"),
+                        "objective": p.get("objective", event.detail),
+                        "parent_id": p.get("parent_id"),
+                        "ancestry_chain": p.get("ancestry_chain", []),
+                        "worker_class": p.get("worker_class", "worker"),
+                        "detail": p.get("detail", ""),
+                        "exit_code": p.get("exit_code"),
+                        "turns_used": p.get("turns_used"),
+                        "tokens_used": p.get("tokens_used"),
+                        "timestamp": p.get("timestamp", time.time()),
+                        "event_id": p.get("event_id", f"evt_{event.seq}"),
+                    },
+                }
+            )
         elif event.phase == TurnPhase.APPROVAL:
             p = event.payload
             if p.get("resolved"):
-                await self._emit({
-                    "type": "approval_resolved",
-                    "data": {
-                        "approval_id": p.get("approval_id", ""),
-                        "approved": bool(p.get("approved")),
-                    },
-                })
+                await self._emit(
+                    {
+                        "type": "approval_resolved",
+                        "data": {
+                            "approval_id": p.get("approval_id", ""),
+                            "approved": bool(p.get("approved")),
+                        },
+                    }
+                )
             else:
-                await self._emit({
-                    "type": "approval_requested",
-                    "data": {
-                        "approval_id": p.get("approval_id", ""),
-                        "tool_name": p.get("tool_name", event.title),
-                        "risk_level": p.get("risk_level", "unknown"),
-                        "reason": p.get("reason", event.detail),
-                        "arguments_preview": p.get("arguments_preview", {}),
-                        "requested_at": p.get("requested_at", time.time()),
-                    },
-                })
+                await self._emit(
+                    {
+                        "type": "approval_requested",
+                        "data": {
+                            "approval_id": p.get("approval_id", ""),
+                            "tool_name": p.get("tool_name", event.title),
+                            "risk_level": p.get("risk_level", "unknown"),
+                            "reason": p.get("reason", event.detail),
+                            "arguments_preview": p.get("arguments_preview", {}),
+                            "requested_at": p.get("requested_at", time.time()),
+                        },
+                    }
+                )
         elif event.phase == TurnPhase.MEMORY:
             p = event.payload
-            await self._emit({
-                "type": "memory_write",
-                "data": {
-                    "count": int(p.get("count", 0)),
-                    "items": list(p.get("items") or []),
-                },
-            })
+            await self._emit(
+                {
+                    "type": "memory_write",
+                    "data": {
+                        "count": int(p.get("count", 0)),
+                        "items": list(p.get("items") or []),
+                    },
+                }
+            )
         elif event.phase == TurnPhase.SUMMARY:
             p = event.payload
-            await self._emit({
-                "type": "telemetry",
-                "data": {
-                    "latencyMs": int(p.get("latencyMs", 0)),
-                    "tokens": int(p.get("tokens", 0)),
-                    "memoriesWritten": int(p.get("memoriesWritten", 0)),
-                    "toolsExecuted": int(p.get("toolsExecuted", 0)),
-                },
-            })
+            await self._emit(
+                {
+                    "type": "telemetry",
+                    "data": {
+                        "latencyMs": int(p.get("latencyMs", 0)),
+                        "tokens": int(p.get("tokens", 0)),
+                        "memoriesWritten": int(p.get("memoriesWritten", 0)),
+                        "toolsExecuted": int(p.get("toolsExecuted", 0)),
+                    },
+                }
+            )
         elif event.phase == TurnPhase.ERROR:
-            await self._emit({
-                "type": "error",
-                "data": {"message": event.detail or event.title},
-            })
+            await self._emit(
+                {
+                    "type": "error",
+                    "data": {"message": event.detail or event.title},
+                }
+            )
 
     async def emit_raw(self, msg: dict[str, Any]) -> None:
         await self._emit(msg)
 
     async def user_message(self, text: str) -> TurnEvent:
-        return await self._next(TurnPhase.USER, "You", detail=text, payload={"text": text})
+        return await self._next(
+            TurnPhase.USER, "You", detail=text, payload={"text": text}
+        )
 
     async def routing(self, detail: str) -> TurnEvent:
         return await self._next(TurnPhase.ROUTING, "routing", detail=detail)
@@ -138,13 +159,17 @@ class TurnEmitter:
         return await self._next(TurnPhase.CONTEXT, "context", detail=detail)
 
     async def tool_start(self, tool_name: str, detail: str = "") -> TurnEvent:
-        return await self._next(TurnPhase.TOOL, tool_name, detail=detail or f"{tool_name} started")
+        return await self._next(
+            TurnPhase.TOOL, tool_name, detail=detail or f"{tool_name} started"
+        )
 
     async def tool_progress(self, tool_name: str, detail: str) -> TurnEvent:
         return await self._next(TurnPhase.TOOL, tool_name, detail=detail)
 
     async def tool_done(self, tool_name: str, detail: str = "") -> TurnEvent:
-        return await self._next(TurnPhase.TOOL, tool_name, detail=detail or f"{tool_name} done")
+        return await self._next(
+            TurnPhase.TOOL, tool_name, detail=detail or f"{tool_name} done"
+        )
 
     async def subagent(
         self,

@@ -1,4 +1,5 @@
 """Discord messaging adapter for Kinthic."""
+
 from __future__ import annotations
 
 import os
@@ -141,7 +142,9 @@ class DiscordAdapter(MessageAdapter):
             # deliberate exception (its only purpose is letting a new user
             # discover their own Discord ID for onboarding).
             content = message.content.strip()
-            is_start_command = content.split()[0].lower() == "!start" if content else False
+            is_start_command = (
+                content.split()[0].lower() == "!start" if content else False
+            )
 
             if not discord_user_allowed(message.author.id) and not is_start_command:
                 if content.startswith("!"):
@@ -163,7 +166,9 @@ class DiscordAdapter(MessageAdapter):
 
             loop = get_active_loop()
             if loop is None:
-                await message.reply("Cognitive engine is still starting. Try again shortly.")
+                await message.reply(
+                    "Cognitive engine is still starting. Try again shortly."
+                )
                 return
 
             async with message.channel.typing():
@@ -182,6 +187,7 @@ class DiscordAdapter(MessageAdapter):
 
         _print_security_status()
         import asyncio
+
         asyncio.create_task(bot.start(token))
         self._bot = bot
 

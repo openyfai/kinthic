@@ -49,9 +49,13 @@ class HypothesisEngine:
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                stored.id, stored.claim, stored.reasoning,
-                stored.status, stored.confidence,
-                stored.created_at, stored.resolved_at,
+                stored.id,
+                stored.claim,
+                stored.reasoning,
+                stored.status,
+                stored.confidence,
+                stored.created_at,
+                stored.resolved_at,
             ),
         )
 

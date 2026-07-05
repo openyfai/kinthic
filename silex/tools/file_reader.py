@@ -25,8 +25,12 @@ _PROJECT_ROOT = WORKSPACE_DIR
 
 # Patterns that are ALWAYS blocked, even inside the project root
 _BLOCKED_NAMES = {
-    ".env", ".env.local", ".env.production", ".env.development",
-    ".git", ".gitignore",
+    ".env",
+    ".env.local",
+    ".env.production",
+    ".env.development",
+    ".git",
+    ".gitignore",
 }
 _BLOCKED_PREFIXES = {".env"}  # Catches .env.anything
 _BLOCKED_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv", ".kinthic"}
@@ -42,7 +46,10 @@ def _is_path_safe(path: Path) -> tuple[bool, str]:
     try:
         path.relative_to(_PROJECT_ROOT)
     except ValueError:
-        return False, f"Access denied — path is outside the project directory ({_PROJECT_ROOT.name}/)."
+        return (
+            False,
+            f"Access denied — path is outside the project directory ({_PROJECT_ROOT.name}/).",
+        )
 
     # 2. No dotfiles / sensitive files
     if path.name in _BLOCKED_NAMES:
@@ -50,7 +57,10 @@ def _is_path_safe(path: Path) -> tuple[bool, str]:
 
     for prefix in _BLOCKED_PREFIXES:
         if path.name.startswith(prefix):
-            return False, f"Access denied — files starting with '{prefix}' are restricted."
+            return (
+                False,
+                f"Access denied — files starting with '{prefix}' are restricted.",
+            )
 
     # 3. No path component should be a blocked directory
     for part in path.parts:
@@ -98,7 +108,7 @@ class FileReaderTool(BaseTool):
             return f"Error: Path is not a file: {path}"
 
         try:
-            async with aiofiles.open(path, mode='r', encoding='utf-8') as f:
+            async with aiofiles.open(path, mode="r", encoding="utf-8") as f:
                 # Read up to first 10,000 characters to prevent context overflow
                 content = await f.read(10000)
 

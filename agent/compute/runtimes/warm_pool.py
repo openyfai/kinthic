@@ -23,11 +23,18 @@ except ImportError:
 
 log = logging.getLogger("agent.warm_pool")
 
+
 def _local_fallback_allowed() -> bool:
     return os.environ.get("KINTHIC_ALLOW_LOCAL_FALLBACK", "").lower() in (
-        "1", "true", "yes", "on",
+        "1",
+        "true",
+        "yes",
+        "on",
     ) or os.environ.get("KINTHIC_DEV_MODE", "").lower() in (
-        "1", "true", "yes", "on",
+        "1",
+        "true",
+        "yes",
+        "on",
     )
 
 
@@ -53,6 +60,7 @@ class WarmDockerSandbox(SandboxInstance):
         self._default_timeout = default_timeout
 
         from agent.security.path_guardian import FilesystemPathGuardian
+
         self._guardian = FilesystemPathGuardian(workspace_dir)
         self._project_guardian = FilesystemPathGuardian(project_root)
 
@@ -90,6 +98,7 @@ class WarmDockerSandbox(SandboxInstance):
             )
 
         import json
+
         writer = None
         try:
             reader, writer = await asyncio.wait_for(
@@ -114,7 +123,9 @@ class WarmDockerSandbox(SandboxInstance):
             exit_code = response.get("exit_code", -1)
             return f"--- SANDBOX OUTPUT (Warm UDS) ---\n{output}\n--- END OUTPUT ---\nExit Code: {exit_code}"
         except asyncio.TimeoutError:
-            return f"Error: Sidecar command timed out after {timeout_seconds:.0f} seconds."
+            return (
+                f"Error: Sidecar command timed out after {timeout_seconds:.0f} seconds."
+            )
         except Exception as e:
             log.error("UDS execution failed for worker %s: %s", self._worker_id, e)
             return (
@@ -161,6 +172,7 @@ class LocalFallbackSandbox(SandboxInstance):
         self._active_process: Optional[asyncio.subprocess.Process] = None
 
         from agent.security.path_guardian import FilesystemPathGuardian
+
         self._guardian = FilesystemPathGuardian(workspace_dir)
         self._project_guardian = FilesystemPathGuardian(project_root)
 
@@ -187,7 +199,6 @@ class LocalFallbackSandbox(SandboxInstance):
 
         if not lease.validate("run_terminal_command"):
             return "Security Violation: Invalid or expired actuation lease."
-
 
         timeout_seconds = 60.0
         if hasattr(lease, "expires_at"):
@@ -249,7 +260,9 @@ class DockerWarmPoolManager(IsolationProvider):
             try:
                 self.client = docker.from_env()
                 try:
-                    existing = self.client.containers.list(all=True, filters={"label": "kinthic.managed=true"})
+                    existing = self.client.containers.list(
+                        all=True, filters={"label": "kinthic.managed=true"}
+                    )
                     for c in existing:
                         log.info("Scavenging leaked container: %s", c.name)
                         try:
@@ -261,7 +274,9 @@ class DockerWarmPoolManager(IsolationProvider):
                         except Exception:
                             pass
                 except Exception as scavenger_error:
-                    log.warning("Scavenger failed to clean up containers: %s", scavenger_error)
+                    log.warning(
+                        "Scavenger failed to clean up containers: %s", scavenger_error
+                    )
             except Exception as e:
                 log.warning("Docker not available for Warm Pool: %s", e)
 
@@ -286,10 +301,20 @@ class DockerWarmPoolManager(IsolationProvider):
                 self.client.containers.run(
                     image="python:3.11-alpine",
                     name="kinthic_egress_proxy",
-                    command=["python", "-u", "/project/agent/security/network_proxy.py"],
+                    command=[
+                        "python",
+                        "-u",
+                        "/project/agent/security/network_proxy.py",
+                    ],
                     volumes={
-                        str(self.project_root.resolve()): {"bind": "/project", "mode": "ro"},
-                        str(Path.home() / ".kinthic" / "workers"): {"bind": "/kinthic/workers", "mode": "ro"},
+                        str(self.project_root.resolve()): {
+                            "bind": "/project",
+                            "mode": "ro",
+                        },
+                        str(Path.home() / ".kinthic" / "workers"): {
+                            "bind": "/kinthic/workers",
+                            "mode": "ro",
+                        },
                     },
                     environment={
                         # Safe here only because kinthic_sandbox is an internal
@@ -337,12 +362,14 @@ class DockerWarmPoolManager(IsolationProvider):
             "KINTHIC_SIDECAR_DEFAULT_TIMEOUT": str(int(timeout_seconds)),
         }
         if not network_disabled:
-            env.update({
-                "HTTP_PROXY": "http://kinthic_egress_proxy:8080",
-                "HTTPS_PROXY": "http://kinthic_egress_proxy:8080",
-                "http_proxy": "http://kinthic_egress_proxy:8080",
-                "https_proxy": "http://kinthic_egress_proxy:8080",
-            })
+            env.update(
+                {
+                    "HTTP_PROXY": "http://kinthic_egress_proxy:8080",
+                    "HTTPS_PROXY": "http://kinthic_egress_proxy:8080",
+                    "http_proxy": "http://kinthic_egress_proxy:8080",
+                    "https_proxy": "http://kinthic_egress_proxy:8080",
+                }
+            )
 
         try:
             container = await asyncio.to_thread(
@@ -350,9 +377,15 @@ class DockerWarmPoolManager(IsolationProvider):
                 image="python:3.11-alpine",
                 command=["python", "-u", "/project/agent/compute/sidecar_daemon.py"],
                 volumes={
-                    str(self.project_root.resolve()): {"bind": "/project", "mode": "ro"},
+                    str(self.project_root.resolve()): {
+                        "bind": "/project",
+                        "mode": "ro",
+                    },
                     str(workspace_dir.resolve()): {"bind": "/workspace", "mode": "rw"},
-                    str(run_dir.resolve()): {"bind": "/run/kinthic_sockets", "mode": "rw"},
+                    str(run_dir.resolve()): {
+                        "bind": "/run/kinthic_sockets",
+                        "mode": "rw",
+                    },
                 },
                 environment=env,
                 working_dir="/workspace",
@@ -392,7 +425,9 @@ class DockerWarmPoolManager(IsolationProvider):
                     sandbox = await self._spawn_container(network_disabled=True)
                     if sandbox:
                         await self._pool.put(sandbox)
-                        log.debug("Replenished warm pool. Pool size: %d", self._pool.qsize())
+                        log.debug(
+                            "Replenished warm pool. Pool size: %d", self._pool.qsize()
+                        )
                     else:
                         await asyncio.sleep(5)
                 else:

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import time
 import json
-from pathlib import Path
 from pydantic import BaseModel, Field
 
 from silex.storage.database import Database
@@ -22,16 +21,34 @@ log = setup_logger("silex.autonomy.skill_synthesizer")
 
 
 class SkillSynthesisResult(BaseModel):
-    skill_name: str = Field(..., description="A short, descriptive, lower_snake_case name for the skill.")
-    description: str = Field(..., description="A clear description of what the skill does.")
-    skill_md: str = Field(..., description="The complete SKILL.md file contents including YAML frontmatter.")
-    python_script: str = Field(..., description="The full parameterized python script content to execute the skill. Leave empty if no script is needed.")
-    dependencies: list[str] = Field(default_factory=list, description="List of pip dependencies required by the script.")
+    skill_name: str = Field(
+        ..., description="A short, descriptive, lower_snake_case name for the skill."
+    )
+    description: str = Field(
+        ..., description="A clear description of what the skill does."
+    )
+    skill_md: str = Field(
+        ...,
+        description="The complete SKILL.md file contents including YAML frontmatter.",
+    )
+    python_script: str = Field(
+        ...,
+        description="The full parameterized python script content to execute the skill. Leave empty if no script is needed.",
+    )
+    dependencies: list[str] = Field(
+        default_factory=list,
+        description="List of pip dependencies required by the script.",
+    )
 
 
 class PreferenceValidationResult(BaseModel):
-    is_safe: bool = Field(..., description="True if the skill is safe and doesn't contradict user preferences.")
-    contradiction_reason: str = Field(..., description="Explanation if a contradiction was found, else empty.")
+    is_safe: bool = Field(
+        ...,
+        description="True if the skill is safe and doesn't contradict user preferences.",
+    )
+    contradiction_reason: str = Field(
+        ..., description="Explanation if a contradiction was found, else empty."
+    )
 
 
 class GenesisSynthesizer:
@@ -50,7 +67,7 @@ class GenesisSynthesizer:
         Finds one un-synthesized successful trajectory and processes it.
         """
         log.info("GenesisSynthesizer: Checking for new successful trajectories...")
-        
+
         # 1. Fetch un-synthesized trajectory
         row = await self.db.fetch_one(
             """
@@ -62,34 +79,39 @@ class GenesisSynthesizer:
         )
         if not row:
             return None
-            
+
         trajectory_id = row["trajectory_id"]
         task_desc = row["task_description"]
-        
+
         # Fetch steps
         steps = await self.db.fetch_all(
             "SELECT * FROM trajectory_steps WHERE trajectory_id = ? ORDER BY step_order ASC",
-            (trajectory_id,)
+            (trajectory_id,),
         )
-        
+
         if len(steps) < 2:
             # Too short to be a meaningful skill, skip it
             await self._mark_synthesized(trajectory_id, "skipped_too_short")
             return None
-            
-        log.info(f"GenesisSynthesizer: Processing trajectory {trajectory_id} ('{task_desc}')")
-        
+
+        log.info(
+            f"GenesisSynthesizer: Processing trajectory {trajectory_id} ('{task_desc}')"
+        )
+
         steps_summary = []
         for s in steps:
-            steps_summary.append({
-                "action": s["action_name"],
-                "input": s["tool_input"],
-                "output": s["execution_output"][:500] + ("..." if len(s["execution_output"]) > 500 else "")
-            })
-            
+            steps_summary.append(
+                {
+                    "action": s["action_name"],
+                    "input": s["tool_input"],
+                    "output": s["execution_output"][:500]
+                    + ("..." if len(s["execution_output"]) > 500 else ""),
+                }
+            )
+
         # 2. Extract User Preferences / World Model for Contradiction Checking
         prefs = await self._get_user_preferences()
-        
+
         # 3. Call LLM to synthesize the skill
         system_prompt = (
             "You are Kinthic's Genesis Skill Synthesizer.\n"
@@ -102,27 +124,28 @@ class GenesisSynthesizer:
             "---\nname: skill_name\ndescription: Brief description\nversion: 1.0.0\nauthor: genesis\n---\n"
             "# Usage\n...\n"
         )
-        
-        user_input = json.dumps({
-            "task": task_desc,
-            "steps": steps_summary,
-            "user_preferences": prefs
-        }, indent=2)
-        
+
+        user_input = json.dumps(
+            {"task": task_desc, "steps": steps_summary, "user_preferences": prefs},
+            indent=2,
+        )
+
         try:
             synthesis: SkillSynthesisResult = await self.llm.complete_json(
                 schema=SkillSynthesisResult,
                 system_prompt=system_prompt,
                 user_input=user_input,
-                temperature=0.2
+                temperature=0.2,
             )
-            
+
             # 4. Validate against Contradictions
             if not await self._validate_skill(synthesis, prefs):
-                log.warning(f"GenesisSynthesizer: Skill {synthesis.skill_name} failed preference validation. Discarding.")
+                log.warning(
+                    f"GenesisSynthesizer: Skill {synthesis.skill_name} failed preference validation. Discarding."
+                )
                 await self._mark_synthesized(trajectory_id, "failed_validation")
                 return None
-                
+
             # 5. Admit via A-MAC (writes to KINTHIC_SKILLS/<name>/SKILL.md)
             body = synthesis.skill_md
             if body.startswith("---"):
@@ -172,15 +195,19 @@ class GenesisSynthesizer:
                 f"{trajectory_id} (A-MAC={score:.2f})."
             )
             return synthesis.skill_name
-            
+
         except Exception as e:
-            log.error(f"GenesisSynthesizer: Failed to synthesize skill for {trajectory_id}: {e}")
+            log.error(
+                f"GenesisSynthesizer: Failed to synthesize skill for {trajectory_id}: {e}"
+            )
             return None
 
     async def _get_user_preferences(self) -> str:
         """Extract high-level user preferences from the graph or profile."""
         try:
-            row = await self.db.fetch_one("SELECT global_preferences FROM user_profiles WHERE user_id = 'default'")
+            row = await self.db.fetch_one(
+                "SELECT global_preferences FROM user_profiles WHERE user_id = 'default'"
+            )
             if row and row["global_preferences"]:
                 return str(row["global_preferences"])
         except Exception:
@@ -196,22 +223,24 @@ class GenesisSynthesizer:
             "using forbidden languages/tools)? If it is safe, return is_safe=true."
         )
         user_in = f"PREFERENCES:\n{prefs}\n\nSKILL NAME:\n{skill.skill_name}\n\nSKILL_MD:\n{skill.skill_md}\n\nSCRIPT:\n{skill.python_script}"
-        
+
         try:
             val: PreferenceValidationResult = await self.llm.complete_json(
                 schema=PreferenceValidationResult,
                 system_prompt=prompt,
                 user_input=user_in,
-                temperature=0.0
+                temperature=0.0,
             )
             if not val.is_safe:
-                log.warning(f"Skill validation contradiction: {val.contradiction_reason}")
+                log.warning(
+                    f"Skill validation contradiction: {val.contradiction_reason}"
+                )
             return val.is_safe
         except Exception:
-            return True # Fail open on validation error
+            return True  # Fail open on validation error
 
     async def _mark_synthesized(self, trajectory_id: str, skill_name: str) -> None:
         await self.db.execute(
             "INSERT INTO synthesized_trajectories (trajectory_id, skill_name, synthesized_at) VALUES (?, ?, ?)",
-            (trajectory_id, skill_name, time.time())
+            (trajectory_id, skill_name, time.time()),
         )

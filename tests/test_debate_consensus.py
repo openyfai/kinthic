@@ -2,11 +2,14 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 from silex.core.debate import DebateEngine, ConsensusCritique, ConsensusDebateResponse
 
+
 class FakeLLM:
     def __init__(self):
         self.call_count = 0
 
-    async def complete_json(self, schema, system_prompt, user_input, temperature, request_kind):
+    async def complete_json(
+        self, schema, system_prompt, user_input, temperature, request_kind
+    ):
         self.call_count += 1
         # SystemArchitect, StaffEngineer, SecurityAuditor
         # Return high scores on round 2 or if we mock consensus
@@ -15,11 +18,12 @@ class FakeLLM:
             role="Expert",
             score=score,
             critique="Looks okay.",
-            suggestions=["Make it more modular."]
+            suggestions=["Make it more modular."],
         )
 
     async def think(self, system_prompt, user_input, temperature=None):
         return MagicMock(response="def new_code():\n    pass")
+
 
 @pytest.mark.asyncio
 async def test_run_consensus_debate():
@@ -29,7 +33,7 @@ async def test_run_consensus_debate():
 
     response = await engine.run_consensus_debate(
         draft_code="def code(): pass",
-        goal_description="Create a simple helper function"
+        goal_description="Create a simple helper function",
     )
 
     assert isinstance(response, ConsensusDebateResponse)

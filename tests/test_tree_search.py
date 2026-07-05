@@ -3,11 +3,19 @@ from unittest.mock import AsyncMock, MagicMock
 from silex.core.tree_search import LATSNode, LanguageAgentTreeSearch
 from silex.models.schemas import CognitiveResponse, CritiqueResponse, CritiqueScore
 
+
 class FakeLLM:
     def __init__(self):
         self.connect = MagicMock()
 
-    async def think(self, system_prompt, user_input, images=None, model_override=None, temperature=None):
+    async def think(
+        self,
+        system_prompt,
+        user_input,
+        images=None,
+        model_override=None,
+        temperature=None,
+    ):
         return CognitiveResponse(
             reasoning="Thinking...",
             response="Draft response from model",
@@ -17,6 +25,7 @@ class FakeLLM:
             confidence=0.9,
             tool_calls=[],
         )
+
 
 @pytest.mark.asyncio
 async def test_lats_node_ucb1():
@@ -33,17 +42,18 @@ async def test_lats_node_ucb1():
     assert child.value == 0.8
     assert child.ucb1() > child.value
 
+
 @pytest.mark.asyncio
 async def test_lats_search_success():
     # Setup mock cognitive loop
     mock_loop = AsyncMock()
     mock_loop.llm = FakeLLM()
-    
+
     # Mock MemoryStore
     mock_memory = AsyncMock()
     mock_memory.retrieve_context.return_value = []
     mock_loop.memory = mock_memory
-    
+
     # Mock ResponseCritic
     mock_critic = AsyncMock()
     mock_critic.critique.return_value = CritiqueResponse(

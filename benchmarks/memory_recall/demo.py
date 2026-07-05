@@ -62,7 +62,9 @@ async def demo() -> None:
         query = "What's the staging Postgres URL?"
         print(f"Turn 6 — recall without re-pasting the URL:\n  > {query}\n")
         t0 = time.perf_counter()
-        recalled = json.loads(await svc.recall(ctx, RecallRequest(query=query, limit=5)))
+        recalled = json.loads(
+            await svc.recall(ctx, RecallRequest(query=query, limit=5))
+        )
         ms = (time.perf_counter() - t0) * 1000
         hits = [
             m["content"]

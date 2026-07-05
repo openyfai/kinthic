@@ -130,7 +130,11 @@ class ToolError(BaseModel):
 
 def memory_to_record(memory, *, admission: AdmissionInfo | None = None) -> MemoryRecord:
     """Convert a Memory ORM model to a stable MCP record."""
-    mtype = memory.memory_type.value if hasattr(memory.memory_type, "value") else str(memory.memory_type)
+    mtype = (
+        memory.memory_type.value
+        if hasattr(memory.memory_type, "value")
+        else str(memory.memory_type)
+    )
     src = memory.source.value if hasattr(memory.source, "value") else str(memory.source)
     return MemoryRecord(
         memory_id=memory.id,

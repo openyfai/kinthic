@@ -5,7 +5,13 @@ import time
 from base64 import b64encode
 from typing import Any
 
-from silex.llm.base import BaseLLMProvider, SchemaT, retry_on_transient, repair_json, ProviderProfile
+from silex.llm.base import (
+    BaseLLMProvider,
+    SchemaT,
+    retry_on_transient,
+    repair_json,
+    ProviderProfile,
+)
 from silex.runtime.usage import UsageTracker
 from silex.runtime.settings import RuntimeSettingsStore
 from silex.llm.catalog import calculate_cost_usd
@@ -24,7 +30,7 @@ def _make_schema_strict(obj: Any) -> Any:
         res = {}
         for k, v in obj.items():
             res[k] = _make_schema_strict(v)
-        
+
         if res.get("type") == "object":
             res["additionalProperties"] = False
             if "properties" in res:
@@ -40,7 +46,7 @@ def _generate_json_blueprint(schema: type) -> str:
     """Generate a clean structural JSON blueprint of the Pydantic schema, detailing exact field names."""
     try:
         schema_dict = schema.model_json_schema()
-        
+
         def resolve_ref(ref: str, root_defs: dict) -> dict:
             if not ref:
                 return {}
@@ -52,7 +58,7 @@ def _generate_json_blueprint(schema: type) -> str:
             if "$ref" in field_schema:
                 ref_schema = resolve_ref(field_schema["$ref"], root_defs)
                 return get_type_desc(ref_schema, root_defs)
-            
+
             t = field_schema.get("type", "any")
             if "anyOf" in field_schema:
                 types = []
@@ -67,19 +73,33 @@ def _generate_json_blueprint(schema: type) -> str:
 
         root_defs = schema_dict.get("$defs", {})
 
-        def build_blueprint_node(properties: dict, required_fields: list, root_defs: dict) -> dict:
+        def build_blueprint_node(
+            properties: dict, required_fields: list, root_defs: dict
+        ) -> dict:
             node = {}
             for name, prop in properties.items():
                 is_req = " (required)" if name in required_fields else " (optional)"
                 prop_type = get_type_desc(prop, root_defs)
-                
+
                 if prop.get("type") == "array" and "items" in prop:
                     items = prop["items"]
                     if "$ref" in items:
                         ref_schema = resolve_ref(items["$ref"], root_defs)
-                        node[name] = [build_blueprint_node(ref_schema.get("properties", {}), ref_schema.get("required", []), root_defs)]
+                        node[name] = [
+                            build_blueprint_node(
+                                ref_schema.get("properties", {}),
+                                ref_schema.get("required", []),
+                                root_defs,
+                            )
+                        ]
                     elif "properties" in items:
-                        node[name] = [build_blueprint_node(items.get("properties", {}), items.get("required", []), root_defs)]
+                        node[name] = [
+                            build_blueprint_node(
+                                items.get("properties", {}),
+                                items.get("required", []),
+                                root_defs,
+                            )
+                        ]
                     else:
                         node[name] = [f"({items.get('type', 'any')})"]
                 elif prop_type == "object" or ("properties" in prop):
@@ -91,37 +111,46 @@ def _generate_json_blueprint(schema: type) -> str:
                         sub_req = ref_schema.get("required", [])
                     node[name] = build_blueprint_node(sub_props, sub_req, root_defs)
                 else:
-                    node[name] = f"({prop_type}){is_req} - {prop.get('description', '')}"
+                    node[name] = (
+                        f"({prop_type}){is_req} - {prop.get('description', '')}"
+                    )
             return node
 
         blueprint = build_blueprint_node(
             schema_dict.get("properties", {}),
             schema_dict.get("required", []),
-            root_defs
+            root_defs,
         )
         return json.dumps(blueprint, indent=2)
     except Exception as e:
         log.warning("Failed to generate blueprint dynamically: %s", e)
-        return json.dumps({
-            "reasoning": "(string) (required) - ARIA's internal thought process.",
-            "working_scratchpad": "(string | null) (optional) - temporary workspace.",
-            "response": "(string) (required) - Clear, direct response to show the user.",
-            "new_memories": [{
-                "content": "(string) (required) - Fact/knowledge to remember.",
-                "importance": "(number) (required) - Rating 1 to 5.",
-                "from_concept": "(string) (required) - Concept key link.",
-                "to_concept": "(string) (required) - Concept key link.",
-                "relationship": "(string) (required) - Relationship type.",
-                "evidence": "(string) (required) - Why the relationship exists."
-            }],
-            "goal_updates": [{
-                "goal_id": "(string) (required) - ID of the goal.",
-                "description": "(string) (required) - Description of goal.",
-                "action": "(string) (required) - 'create', 'complete', 'abandon' or 'progress'"
-            }],
-            "self_reflection": "(string) (required) - Honests metacognitive self reflection.",
-            "confidence": "(number) (required) - Confidence metric from 0.0 to 1.0."
-        }, indent=2)
+        return json.dumps(
+            {
+                "reasoning": "(string) (required) - ARIA's internal thought process.",
+                "working_scratchpad": "(string | null) (optional) - temporary workspace.",
+                "response": "(string) (required) - Clear, direct response to show the user.",
+                "new_memories": [
+                    {
+                        "content": "(string) (required) - Fact/knowledge to remember.",
+                        "importance": "(number) (required) - Rating 1 to 5.",
+                        "from_concept": "(string) (required) - Concept key link.",
+                        "to_concept": "(string) (required) - Concept key link.",
+                        "relationship": "(string) (required) - Relationship type.",
+                        "evidence": "(string) (required) - Why the relationship exists.",
+                    }
+                ],
+                "goal_updates": [
+                    {
+                        "goal_id": "(string) (required) - ID of the goal.",
+                        "description": "(string) (required) - Description of goal.",
+                        "action": "(string) (required) - 'create', 'complete', 'abandon' or 'progress'",
+                    }
+                ],
+                "self_reflection": "(string) (required) - Honests metacognitive self reflection.",
+                "confidence": "(number) (required) - Confidence metric from 0.0 to 1.0.",
+            },
+            indent=2,
+        )
 
 
 class OpenAICompatibleProvider(BaseLLMProvider):
@@ -153,15 +182,19 @@ class OpenAICompatibleProvider(BaseLLMProvider):
 
     def connect(self) -> None:
         import os
+
         is_azure = self.provider_name == "azure" or "openai.azure.com" in self.base_url
         if is_azure:
             try:
                 from openai import AsyncAzureOpenAI
             except ImportError as exc:
-                raise RuntimeError("Install aria[providers] to use OpenAI-compatible providers.") from exc
+                raise RuntimeError(
+                    "Install aria[providers] to use OpenAI-compatible providers."
+                ) from exc
 
             # Parse and clean Azure Endpoint URL (extract scheme and host, ignoring paths/queries)
             from urllib.parse import urlparse, parse_qs
+
             parsed = urlparse(self.base_url)
             endpoint = f"{parsed.scheme}://{parsed.netloc}"
 
@@ -180,19 +213,29 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 api_version=api_version,
                 default_headers=self.extra_headers or None,
             )
-            log.info("Azure OpenAI provider ready: %s (%s)", self.provider_name, self.default_model)
+            log.info(
+                "Azure OpenAI provider ready: %s (%s)",
+                self.provider_name,
+                self.default_model,
+            )
         else:
             try:
                 from openai import AsyncOpenAI
             except ImportError as exc:
-                raise RuntimeError("Install aria[providers] to use OpenAI-compatible providers.") from exc
+                raise RuntimeError(
+                    "Install aria[providers] to use OpenAI-compatible providers."
+                ) from exc
 
             self._client = AsyncOpenAI(
                 api_key=self.api_key or "local-aria",
                 base_url=self.base_url,
                 default_headers=self.extra_headers or None,
             )
-            log.info("OpenAI-compatible provider ready: %s (%s)", self.provider_name, self.default_model)
+            log.info(
+                "OpenAI-compatible provider ready: %s (%s)",
+                self.provider_name,
+                self.default_model,
+            )
 
     @property
     def client(self):
@@ -200,12 +243,15 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             raise RuntimeError(f"{self.provider_name} client not connected.")
         return self._client
 
-    def _simplify_schema_for_grammar(self, schema_dict: dict[str, Any]) -> dict[str, Any]:
+    def _simplify_schema_for_grammar(
+        self, schema_dict: dict[str, Any]
+    ) -> dict[str, Any]:
         import copy
+
         schema = copy.deepcopy(schema_dict)
         schema.pop("$defs", None)
         schema.pop("definitions", None)
-        
+
         def walk(obj: Any) -> Any:
             if isinstance(obj, dict):
                 obj.pop("description", None)
@@ -284,10 +330,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             simplified_schema = self._simplify_schema_for_grammar(schema_dict)
             create_kwargs["response_format"] = {
                 "type": "json_schema",
-                "json_schema": {
-                    "name": schema.__name__,
-                    "schema": simplified_schema
-                }
+                "json_schema": {"name": schema.__name__, "schema": simplified_schema},
             }
         elif is_openai or is_azure:
             strict_schema = _make_schema_strict(schema.model_json_schema())
@@ -296,8 +339,8 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 "json_schema": {
                     "name": schema.__name__,
                     "strict": True,
-                    "schema": strict_schema
-                }
+                    "schema": strict_schema,
+                },
             }
         else:
             create_kwargs["response_format"] = {"type": "json_object"}
@@ -305,6 +348,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         # Apply profile-specific overrides
         if self.provider_profile:
             from silex.llm.base import OMIT_TEMPERATURE
+
             if self.provider_profile.fixed_temperature is OMIT_TEMPERATURE:
                 pass
             elif self.provider_profile.fixed_temperature is not None:
@@ -317,8 +361,10 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 base_url=self.base_url,
             )
 
-            extra_body_additions, top_level_kwargs = self.provider_profile.build_api_kwargs_extras(
-                model=model,
+            extra_body_additions, top_level_kwargs = (
+                self.provider_profile.build_api_kwargs_extras(
+                    model=model,
+                )
             )
             extra_body.update(extra_body_additions)
             create_kwargs.update(top_level_kwargs)
@@ -335,7 +381,11 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             response = await self.client.chat.completions.create(**create_kwargs)
             choice = response.choices[0].message
             content = choice.content or ""
-            if not content.strip() and hasattr(choice, "reasoning_content") and choice.reasoning_content:
+            if (
+                not content.strip()
+                and hasattr(choice, "reasoning_content")
+                and choice.reasoning_content
+            ):
                 content = choice.reasoning_content
             if not content.strip():
                 content = "{}"

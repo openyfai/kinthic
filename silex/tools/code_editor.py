@@ -83,7 +83,7 @@ class CodeEditorTool(BaseTool):
         "file_path": "string (relative path to the file inside the workspace)",
         "target_content": "string (the exact block of code to replace. Leave empty to overwrite the entire file)",
         "replacement_content": "string (the new code to insert)",
-        "explanation": "string (why you are making this change)"
+        "explanation": "string (why you are making this change)",
     }
 
     async def execute(self, **kwargs) -> str:
@@ -126,7 +126,7 @@ class CodeEditorTool(BaseTool):
             "target_content": target_content,
             "replacement_content": replacement_content,
             "explanation": explanation,
-            "status": "pending"
+            "status": "pending",
         }
 
         # ALL edits go to the pending queue. The ethics engine and approval
@@ -168,7 +168,9 @@ class CodeEditorTool(BaseTool):
         if proposal["target_content"] and full_path.exists():
             with open(full_path, "r", encoding="utf-8") as f:
                 current_code = f.read()
-            new_code = current_code.replace(proposal["target_content"], proposal["replacement_content"], 1)
+            new_code = current_code.replace(
+                proposal["target_content"], proposal["replacement_content"], 1
+            )
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(new_code)
         else:
@@ -219,20 +221,29 @@ class ApplyEditTool(BaseTool):
                     # Try manual operator key challenge via CLI terminal shell
                     import sys
                     import random
+
                     if sys.stdin.isatty():
                         challenge = str(random.randint(1000, 9999))
-                        print(f"\n[SECURITY] OPERATOR KEY CHALLENGE REQUIRED TO APPROVE EDIT {edit_id}")
-                        print(f"Please type the following challenge code to confirm: {challenge}")
+                        print(
+                            f"\n[SECURITY] OPERATOR KEY CHALLENGE REQUIRED TO APPROVE EDIT {edit_id}"
+                        )
+                        print(
+                            f"Please type the following challenge code to confirm: {challenge}"
+                        )
                         try:
                             user_input = input("Enter code: ").strip()
                             if user_input == challenge:
                                 print("[SECURITY] Challenge successful. Edit approved.")
                                 edit["status"] = "approved"
                                 # Update pending edits file with the approved status
-                                with open(PENDING_EDITS_FILE, "w", encoding="utf-8") as f:
+                                with open(
+                                    PENDING_EDITS_FILE, "w", encoding="utf-8"
+                                ) as f:
                                     json.dump(pending, f, indent=4)
                             else:
-                                return "ERROR: Operator challenge failed. Edit rejected."
+                                return (
+                                    "ERROR: Operator challenge failed. Edit rejected."
+                                )
                         except Exception as e:
                             return f"ERROR during operator challenge: {e}"
                     else:
@@ -257,17 +268,26 @@ class ApplyEditTool(BaseTool):
                     if edit.get("status") != "approved":
                         import sys
                         import random
+
                         if sys.stdin.isatty():
                             challenge = str(random.randint(1000, 9999))
-                            print("\n[SECURITY] OPERATOR KEY CHALLENGE REQUIRED TO APPROVE ALL PENDING EDITS")
-                            print(f"Please type the following challenge code to confirm: {challenge}")
+                            print(
+                                "\n[SECURITY] OPERATOR KEY CHALLENGE REQUIRED TO APPROVE ALL PENDING EDITS"
+                            )
+                            print(
+                                f"Please type the following challenge code to confirm: {challenge}"
+                            )
                             try:
                                 user_input = input("Enter code: ").strip()
                                 if user_input == challenge:
-                                    print("[SECURITY] Challenge successful. All edits approved.")
+                                    print(
+                                        "[SECURITY] Challenge successful. All edits approved."
+                                    )
                                     for e in pending:
                                         e["status"] = "approved"
-                                    with open(PENDING_EDITS_FILE, "w", encoding="utf-8") as f:
+                                    with open(
+                                        PENDING_EDITS_FILE, "w", encoding="utf-8"
+                                    ) as f:
                                         json.dump(pending, f, indent=4)
                                     break
                                 else:
@@ -285,6 +305,3 @@ class ApplyEditTool(BaseTool):
 
         except Exception as e:
             return f"ERROR applying edit: {str(e)}"
-
-
-

@@ -7,17 +7,19 @@ from silex.core.cognitive_loop import CognitiveLoop
 from silex.models.schemas import CognitiveResponse, ToolCall, ToolResult
 from silex.utils.config import WORKSPACE_DIR
 
+
 class FakeCritic:
     async def critique(self, **kwargs):
         return SimpleNamespace(
             is_acceptable=True,
             scores=SimpleNamespace(accuracy=1.0, depth=1.0, honesty=1.0),
-            feedback="Great work."
+            feedback="Great work.",
         )
 
     @staticmethod
     def geometric_score(accuracy: float, depth: float, honesty: float) -> float:
         return (accuracy * depth * honesty) ** (1.0 / 3.0)
+
 
 class FakeToolUsingGemini:
     def __init__(self):
@@ -28,8 +30,11 @@ class FakeToolUsingGemini:
 
     async def complete_json(self, *args, **kwargs):
         from silex.core.taste import TasteResponse, TasteScores
+
         return TasteResponse(
-            scores=TasteScores(simplicity=1.0, performance=1.0, robustness=1.0, security=1.0),
+            scores=TasteScores(
+                simplicity=1.0, performance=1.0, robustness=1.0, security=1.0
+            ),
             feedback="Tasteful design.",
             is_tasteful=True,
         )
@@ -73,10 +78,10 @@ class FakeToolUsingGemini:
                         tool_name="web_search",
                         arguments=json.dumps({"query": "latest OpenYF version"}),
                         expected_outcome="Information about OpenYF latest version.",
-                        rationale="Find the latest version info."
+                        rationale="Find the latest version info.",
                     )
                 ],
-                working_scratchpad="Need to search for latest OpenYF version."
+                working_scratchpad="Need to search for latest OpenYF version.",
             )
         else:
             # Pass 2: Final response incorporating tool results
@@ -94,8 +99,9 @@ class FakeToolUsingGemini:
                 hypotheses=[],
                 hypothesis_resolutions=[],
                 tool_calls=[],
-                working_scratchpad="Search finished. Returning 1.0.0."
+                working_scratchpad="Search finished. Returning 1.0.0.",
             )
+
 
 @pytest.mark.asyncio
 async def test_agentic_eval_harness_simulation(tmp_path):
@@ -103,7 +109,7 @@ async def test_agentic_eval_harness_simulation(tmp_path):
     db_path = tmp_path / "vyn_eval.db"
     vector_path = tmp_path / "vector_db"
     traces_file = WORKSPACE_DIR / "telemetry_traces.jsonl"
-    
+
     # Clean previous traces if any to avoid bleed
     if traces_file.exists():
         try:
@@ -116,18 +122,20 @@ async def test_agentic_eval_harness_simulation(tmp_path):
         loop.db.db_path = str(db_path)
         loop.llm = FakeToolUsingGemini()
         loop.critic = FakeCritic()
-        
+
         # De-active chroma and complex components for fast test run
         loop.context_builder.pruner = None
         loop.context_builder.generalization_engine = None
         loop.context_builder.tool_registry = None
 
         # Setup mock tool execution output
-        mock_execute = AsyncMock(return_value=ToolResult(
-            tool_name="web_search",
-            actual_outcome="Version 1.0.0 is available.",
-            success=True
-        ))
+        mock_execute = AsyncMock(
+            return_value=ToolResult(
+                tool_name="web_search",
+                actual_outcome="Version 1.0.0 is available.",
+                success=True,
+            )
+        )
         loop.tool_registry.execute = mock_execute
 
         # Connect and initialize session
@@ -138,29 +146,34 @@ async def test_agentic_eval_harness_simulation(tmp_path):
         try:
             # Run the cognitive process
             response = await loop.process("Check the latest OpenYF version info.")
-            
+
             # Assertions on cognitive loop response
             assert response.response == "The latest version is 1.0.0."
             assert loop.session.current.turn_count == 1
 
             # Assert tool execution was invoked correctly
             mock_execute.assert_called_once()
-            
+
             # Verify database states:
             # 1. Turn registered in turns table
-            turn_rows = await loop.db.fetch_all("SELECT * FROM turns WHERE session_id = ?", (loop.session.current.id,))
+            turn_rows = await loop.db.fetch_all(
+                "SELECT * FROM turns WHERE session_id = ?", (loop.session.current.id,)
+            )
             assert len(turn_rows) == 1
             assert turn_rows[0]["response"] == "The latest version is 1.0.0."
-            
+
             # 2. Checkpoints are successfully cleaned up/deleted
-            checkpoint_rows = await loop.db.fetch_all("SELECT * FROM turn_checkpoints WHERE session_id = ?", (loop.session.current.id,))
+            checkpoint_rows = await loop.db.fetch_all(
+                "SELECT * FROM turn_checkpoints WHERE session_id = ?",
+                (loop.session.current.id,),
+            )
             assert len(checkpoint_rows) == 0
 
             # 3. Telemetry traces were properly generated in JSONL
             assert traces_file.exists()
             with open(traces_file, "r", encoding="utf-8") as f:
                 lines = [json.loads(line) for line in f]
-                
+
             span_names = [span["name"] for span in lines]
             assert "build_context" in span_names
             assert "llm_pass_1" in span_names

@@ -16,7 +16,12 @@ from agent.compute.isolation_provider import IsolationProvider, SandboxInstance
 from agent.compute.process import WorkerProcess, WorkerStatus
 from agent.compute.runtimes.warm_pool import DockerWarmPoolManager
 from agent.jobs import WorkerJob, WorkerJobResult
-from agent.telemetry.schema import WorkerEvent, WorkerLifecycle, append_replay_record, emit_worker_event
+from agent.telemetry.schema import (
+    WorkerEvent,
+    WorkerLifecycle,
+    append_replay_record,
+    emit_worker_event,
+)
 
 log = logging.getLogger("agent.orchestrator")
 
@@ -58,10 +63,16 @@ class WorkerHandle:
         if self._structured_result is not None:
             return self._structured_result
         exit_match = re.search(r"Exit Code: (-?\d+)", output)
-        exit_code = int(exit_match.group(1)) if exit_match else (-1 if "Error:" in output else 0)
+        exit_code = (
+            int(exit_match.group(1))
+            if exit_match
+            else (-1 if "Error:" in output else 0)
+        )
         success = self.process.status == WorkerStatus.DONE and exit_code == 0
         job_id = self.job.job_id if self.job else self.task_id
-        lineage = [self.job.parent_task_id] if self.job and self.job.parent_task_id else []
+        lineage = (
+            [self.job.parent_task_id] if self.job and self.job.parent_task_id else []
+        )
         self._structured_result = WorkerJobResult(
             job_id=job_id,
             worker_id=self.task_id,
@@ -100,7 +111,11 @@ class WorkerOrchestrator:
         event_emitter: Optional[Callable[[dict[str, Any]], Awaitable[None]]] = None,
     ) -> None:
         self.max_workers = max_workers
-        self.workspace_root = Path(workspace_root) if workspace_root else Path.home() / ".kinthic" / "workspace"
+        self.workspace_root = (
+            Path(workspace_root)
+            if workspace_root
+            else Path.home() / ".kinthic" / "workspace"
+        )
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self._semaphore = asyncio.Semaphore(max_workers)
         self._workers: dict[str, WorkerProcess] = {}
@@ -134,7 +149,9 @@ class WorkerOrchestrator:
             cls._instance = cls()
         return cls._instance
 
-    def set_event_emitter(self, emitter: Callable[[dict[str, Any]], Awaitable[None]]) -> None:
+    def set_event_emitter(
+        self, emitter: Callable[[dict[str, Any]], Awaitable[None]]
+    ) -> None:
         self.event_emitter = emitter
 
     def _validate_lease_for_spawn(self, lease: Any, tools: list[str]) -> Optional[str]:
@@ -199,7 +216,9 @@ class WorkerOrchestrator:
             job=job,
         )
 
-    async def _spawn_cognitive_worker(self, job: WorkerJob, lease: Any) -> "WorkerHandle":
+    async def _spawn_cognitive_worker(
+        self, job: WorkerJob, lease: Any
+    ) -> "WorkerHandle":
         """
         Runs a bounded CognitiveLoop as the worker and wraps the result in a
         WorkerHandle-compatible object so callers don't need to distinguish.
@@ -282,7 +301,7 @@ class WorkerOrchestrator:
                     "turns": result.turns_used,
                     "tokens": result.tokens_used,
                     "timestamp": time.time(),
-                }
+                },
             )
             return result.summary or result.error
 
@@ -357,7 +376,11 @@ class WorkerOrchestrator:
                 process.status = WorkerStatus.RUNNING
                 await emit_worker_event(
                     self.event_emitter,
-                    WorkerEvent(worker_id=worker_id, lifecycle=WorkerLifecycle.RUNNING.value, objective=objective or task[:120]),
+                    WorkerEvent(
+                        worker_id=worker_id,
+                        lifecycle=WorkerLifecycle.RUNNING.value,
+                        objective=objective or task[:120],
+                    ),
                 )
 
                 heartbeat_file = worker_workspace / "heartbeat.txt"
@@ -394,12 +417,17 @@ class WorkerOrchestrator:
                         try:
                             mtime = heartbeat_file.stat().st_mtime
                             if time.time() - mtime > 30.0:
-                                log.warning("Worker %s heartbeat timeout (>30s silent). Killing.", worker_id)
+                                log.warning(
+                                    "Worker %s heartbeat timeout (>30s silent). Killing.",
+                                    worker_id,
+                                )
                                 process.status = WorkerStatus.FAILED
                                 await sandbox.kill()
                                 break
                         except Exception as exc:
-                            log.debug("Heartbeat monitor error for %s: %s", worker_id, exc)
+                            log.debug(
+                                "Heartbeat monitor error for %s: %s", worker_id, exc
+                            )
 
                 async def _wall_clock_timeout() -> None:
                     await asyncio.sleep(timeout_seconds)
@@ -424,7 +452,9 @@ class WorkerOrchestrator:
                     )
 
                     if output.startswith("Security Violation:"):
-                        audit.log_security_violation(worker_id, "PATH_GUARDIAN_BLOCK", output)
+                        audit.log_security_violation(
+                            worker_id, "PATH_GUARDIAN_BLOCK", output
+                        )
                         process.status = WorkerStatus.FAILED
                         exit_code = -1
                     else:
@@ -464,7 +494,13 @@ class WorkerOrchestrator:
                     output_file = worker_workspace / "output.json"
                     try:
                         output_file.write_text(
-                            json.dumps({"task_id": worker_id, "output": output, "exit_code": exit_code}),
+                            json.dumps(
+                                {
+                                    "task_id": worker_id,
+                                    "output": output,
+                                    "exit_code": exit_code,
+                                }
+                            ),
                             encoding="utf-8",
                         )
                     except Exception:
@@ -501,7 +537,9 @@ class WorkerOrchestrator:
                         try:
                             await self.provider.teardown_sandbox(sandbox)
                         except Exception as exc:
-                            log.warning("Sandbox teardown failed for %s: %s", worker_id, exc)
+                            log.warning(
+                                "Sandbox teardown failed for %s: %s", worker_id, exc
+                            )
 
                     self._handles.pop(worker_id, None)
                     self._workers.pop(worker_id, None)
@@ -519,7 +557,9 @@ class WorkerOrchestrator:
         self._handles[worker_id] = handle
         return handle
 
-    async def run_isolated(self, command: str, lease: Any, tool_name: str = "run_terminal_command") -> str:
+    async def run_isolated(
+        self, command: str, lease: Any, tool_name: str = "run_terminal_command"
+    ) -> str:
         """Execute a command in an isolated worker under lease control."""
         if not lease.validate(tool_name):
             from agent.security.audit_logger import get_audit_logger

@@ -1,4 +1,5 @@
 """Base class for messaging platform adapters."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

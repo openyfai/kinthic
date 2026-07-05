@@ -18,25 +18,54 @@ log = setup_logger("silex.memory.indexer")
 
 # Files to ignore during indexing
 IGNORE_DIRS = {
-    ".git", "__pycache__", "node_modules", "dist", ".next", "out",
-    "vector_db", "backups", ".venv", "venv",
+    ".git",
+    "__pycache__",
+    "node_modules",
+    "dist",
+    ".next",
+    "out",
+    "vector_db",
+    "backups",
+    ".venv",
+    "venv",
 }
 IGNORE_NAMES = {
-    ".env", ".env.local", ".env.production", ".env.development",
-    ".aria_pending_edits.json", "package-lock.json",
+    ".env",
+    ".env.local",
+    ".env.production",
+    ".env.development",
+    ".aria_pending_edits.json",
+    "package-lock.json",
 }
 IGNORE_EXTS = {
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".exe", ".pyc",
-    ".db", ".sqlite", ".sqlite3", ".pem", ".key", ".crt", ".pfx", ".p12",
-    ".log", ".lock",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".pdf",
+    ".exe",
+    ".pyc",
+    ".db",
+    ".sqlite",
+    ".sqlite3",
+    ".pem",
+    ".key",
+    ".crt",
+    ".pfx",
+    ".p12",
+    ".log",
+    ".lock",
 }
 MAX_INDEX_FILE_BYTES = 1_000_000
 MANIFEST_PATH = KINTHIC_MANIFEST
+
 
 class WorkspaceIndexer:
     """
     Crawls the workspace and populates the VectorStore with semantically chunked content.
     """
+
     _lock = threading.Lock()
     _running = False
 
@@ -78,12 +107,14 @@ class WorkspaceIndexer:
                         continue
 
                     full_path = os.path.join(root, file)
-                    if os.path.abspath(full_path) == os.path.abspath(str(self.manifest_path)):
+                    if os.path.abspath(full_path) == os.path.abspath(
+                        str(self.manifest_path)
+                    ):
                         continue
                     if os.path.getsize(full_path) > MAX_INDEX_FILE_BYTES:
                         continue
                     rel_path = os.path.relpath(full_path, self.root_dir)
-                    
+
                     try:
                         fingerprint = self._fingerprint(full_path)
                         next_manifest[rel_path] = fingerprint
@@ -100,14 +131,16 @@ class WorkspaceIndexer:
                 self.vector_store.delete_by_path(removed_path)
 
             self._save_manifest(self.manifest_path, next_manifest)
-            log.info(f"Indexing complete. Indexed {indexed} changed files; skipped {skipped} unchanged files.")
+            log.info(
+                f"Indexing complete. Indexed {indexed} changed files; skipped {skipped} unchanged files."
+            )
         finally:
             with WorkspaceIndexer._lock:
                 WorkspaceIndexer._running = False
 
     def _index_file(self, full_path: str, rel_path: str, fingerprint: dict):
         """Chunks a single file and adds it to the vector store."""
-        with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
 
         if not content.strip():
@@ -115,18 +148,23 @@ class WorkspaceIndexer:
 
         # Simple chunking by line count for now (approx 1000 chars per chunk)
         chunks = self._chunk_text(content, chunk_size=1500, overlap=200)
-        
+
         metadatas = []
         for i in range(len(chunks)):
-            metadatas.append({
-                "path": rel_path,
-                "chunk_index": i,
-                "total_chunks": len(chunks),
-                "sha256": fingerprint["sha256"],
-                "source": "workspace_index",
-            })
+            metadatas.append(
+                {
+                    "path": rel_path,
+                    "chunk_index": i,
+                    "total_chunks": len(chunks),
+                    "sha256": fingerprint["sha256"],
+                    "source": "workspace_index",
+                }
+            )
 
-        ids = [self._chunk_id(rel_path, fingerprint["sha256"], i) for i in range(len(chunks))]
+        ids = [
+            self._chunk_id(rel_path, fingerprint["sha256"], i)
+            for i in range(len(chunks))
+        ]
         self.vector_store.add_chunks(chunks, metadatas, ids=ids)
 
     def _chunk_text(self, text: str, chunk_size: int, overlap: int) -> List[str]:
@@ -136,7 +174,7 @@ class WorkspaceIndexer:
         while start < len(text):
             end = start + chunk_size
             chunks.append(text[start:end])
-            start += (chunk_size - overlap)
+            start += chunk_size - overlap
         return chunks
 
     @staticmethod
@@ -164,13 +202,18 @@ class WorkspaceIndexer:
         try:
             return json.loads(manifest_path.read_text(encoding="utf-8"))
         except Exception:
-            log.warning("Workspace index manifest was unreadable; rebuilding incrementally.")
+            log.warning(
+                "Workspace index manifest was unreadable; rebuilding incrementally."
+            )
             return {}
 
     @staticmethod
     def _save_manifest(manifest_path, manifest: dict[str, dict]) -> None:
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8"
+        )
+
 
 if __name__ == "__main__":
     # Test execution

@@ -83,11 +83,13 @@ class LanguageAgentTreeSearch:
 
     async def _run_git(self, *args, allow_fail=False) -> str:
         from silex.utils.config import WORKSPACE_DIR
+
         proc = await asyncio.create_subprocess_exec(
-            "git", *args,
+            "git",
+            *args,
             cwd=str(WORKSPACE_DIR),
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await proc.communicate()
         if proc.returncode != 0 and not allow_fail:
@@ -113,8 +115,10 @@ class LanguageAgentTreeSearch:
             status_callback("[bright_cyan]  Initializing Tree Search (LATS)...[/]")
 
         root_id = str(uuid.uuid4())
-        
-        is_git = await self._run_git("rev-parse", "--is-inside-work-tree", allow_fail=True)
+
+        is_git = await self._run_git(
+            "rev-parse", "--is-inside-work-tree", allow_fail=True
+        )
         is_git_repo = is_git.strip() == "true"
 
         orig_branch = ""
@@ -123,31 +127,50 @@ class LanguageAgentTreeSearch:
         root_commit_hash = ""
 
         if is_git_repo:
-            orig_branch = await self._run_git("--no-pager", "rev-parse", "--abbrev-ref", "HEAD")
+            orig_branch = await self._run_git(
+                "--no-pager", "rev-parse", "--abbrev-ref", "HEAD"
+            )
             lats_branch = f"lats_temp_{root_id}"
-            
+
             status_out = await self._run_git("status", "--porcelain", allow_fail=True)
             has_stash = bool(status_out)
             if has_stash:
-                await self._run_git("stash", "push", "-u", "-m", f"lats_pre_stash_{root_id}")
-                
+                await self._run_git(
+                    "stash", "push", "-u", "-m", f"lats_pre_stash_{root_id}"
+                )
+
             await self._run_git("checkout", "-b", "--", lats_branch, allow_fail=True)
             root_commit_hash = await self._run_git("--no-pager", "rev-parse", "HEAD")
 
         best_node = None
         try:
             best_node = await self._search_internal(
-                user_input, system_prompt, images, target_model,
-                status_callback, event_emitter, turn_emitter,
-                executed_tool_ids, root_id, root_commit_hash, is_git_repo
+                user_input,
+                system_prompt,
+                images,
+                target_model,
+                status_callback,
+                event_emitter,
+                turn_emitter,
+                executed_tool_ids,
+                root_id,
+                root_commit_hash,
+                is_git_repo,
             )
             return self._construct_response(best_node)
         finally:
             if is_git_repo:
                 await self._run_git("checkout", "--", orig_branch, allow_fail=True)
                 if best_node and best_node.commit_hash:
-                    await self._run_git("checkout", "--", best_node.commit_hash, allow_fail=True)
-                    await self._run_git("symbolic-ref", "HEAD", f"refs/heads/{orig_branch}", allow_fail=True)
+                    await self._run_git(
+                        "checkout", "--", best_node.commit_hash, allow_fail=True
+                    )
+                    await self._run_git(
+                        "symbolic-ref",
+                        "HEAD",
+                        f"refs/heads/{orig_branch}",
+                        allow_fail=True,
+                    )
                 await self._run_git("branch", "-D", "--", lats_branch, allow_fail=True)
                 if has_stash:
                     await self._run_git("stash", "pop", allow_fail=True)
@@ -164,7 +187,7 @@ class LanguageAgentTreeSearch:
         executed_tool_ids: Optional[List[str]],
         root_id: str,
         root_commit_hash: str,
-        is_git_repo: bool
+        is_git_repo: bool,
     ) -> LATSNode:
 
         with tracer.start_as_current_span("llm_pass_1"):
@@ -189,7 +212,12 @@ class LanguageAgentTreeSearch:
                     f"[magenta]  Root Node: Executing {len(root.tool_calls)} tools...[/]"
                 )
             with tracer.start_as_current_span("tool_execution"):
-                obs_text, any_failures, tool_results, tool_ids = await self.loop._execute_tools(
+                (
+                    obs_text,
+                    any_failures,
+                    tool_results,
+                    tool_ids,
+                ) = await self.loop._execute_tools(
                     root.tool_calls,
                     status_callback,
                     execution_mode="interactive",
@@ -200,7 +228,7 @@ class LanguageAgentTreeSearch:
             all_tool_ids.extend(tool_ids)
             if executed_tool_ids is not None:
                 executed_tool_ids.extend(tool_ids)
-            
+
             # Redraft to incorporate tool results
             if status_callback:
                 status_callback("[bright_cyan]  Root Node: Re-drafting response...[/]")
@@ -218,7 +246,9 @@ class LanguageAgentTreeSearch:
                 root.response = cognitive.response
                 root.reasoning = cognitive.reasoning
             except Exception as e:
-                log.warning("LATS: Root node LLM generation failed after retries: %s", e)
+                log.warning(
+                    "LATS: Root node LLM generation failed after retries: %s", e
+                )
                 root.response = "Generation failed due to malformed payload."
                 root.reasoning = "JSON decoding failed."
                 root.is_acceptable = False
@@ -226,12 +256,14 @@ class LanguageAgentTreeSearch:
 
         # Evaluate root node
         if status_callback:
-            status_callback("[bright_cyan]  Root Node: Running quality evaluation...[/]")
-        
+            status_callback(
+                "[bright_cyan]  Root Node: Running quality evaluation...[/]"
+            )
+
         # Grounding cross-reference
         grounding_memories = await self.loop.memory.retrieve_context(query=user_input)
         memory_nodes = [m.content for m in grounding_memories[:8]]
-        
+
         system_context = "Evaluate the response for logical coherence."
         if root.observation:
             system_context += f"\n\nTOOL EXECUTION RESULTS:\n{root.observation}"
@@ -258,24 +290,30 @@ class LanguageAgentTreeSearch:
             try:
                 await self._run_git("add", "-A")
                 await self._run_git("commit", "-m", f"LATS Root Node {root_id}")
-                root.commit_hash = await self._run_git("--no-pager", "rev-parse", "HEAD")
+                root.commit_hash = await self._run_git(
+                    "--no-pager", "rev-parse", "HEAD"
+                )
             except Exception as e:
                 log.warning("LATS: Failed to commit root tools changes: %s", e)
 
         # Register root node in DB
-        await self._register_node_to_db(root, "decision" if root.tool_calls else "hypothesis")
+        await self._register_node_to_db(
+            root, "decision" if root.tool_calls else "hypothesis"
+        )
         root.visit_count = 1
         root.value_sum = geo_score
 
         # Link executed tools to the resulting root node
         if all_tool_ids and self.loop.session.current:
             for tid in all_tool_ids:
-                await self.loop.causal_kg.register_edge(CausalEdge.new(
-                    source_node_id=tid,
-                    target_node_id=root.node_id,
-                    relation_type="triggered_by",
-                    weight=geo_score
-                ))
+                await self.loop.causal_kg.register_edge(
+                    CausalEdge.new(
+                        source_node_id=tid,
+                        target_node_id=root.node_id,
+                        relation_type="triggered_by",
+                        weight=geo_score,
+                    )
+                )
 
         # Check early termination
         if root.is_acceptable or root.critic_score >= self.critic_threshold:
@@ -287,9 +325,13 @@ class LanguageAgentTreeSearch:
         # 2. Search iterations
         best_node = root
         for iteration in range(1, self.max_iterations + 1):
-            log.info(f"LATS: Starting search iteration {iteration}/{self.max_iterations}")
+            log.info(
+                f"LATS: Starting search iteration {iteration}/{self.max_iterations}"
+            )
             if status_callback:
-                status_callback(f"[bright_cyan]  LATS Iteration {iteration}/{self.max_iterations}...[/]")
+                status_callback(
+                    f"[bright_cyan]  LATS Iteration {iteration}/{self.max_iterations}...[/]"
+                )
 
             # Selection
             selected = root
@@ -298,13 +340,17 @@ class LanguageAgentTreeSearch:
                     selected.children,
                     key=lambda node: node.ucb1(self.exploration_constant),
                 )
-            
-            log.info(f"LATS: Selected node {selected.node_id[:8]} at depth {selected.depth}")
+
+            log.info(
+                f"LATS: Selected node {selected.node_id[:8]} at depth {selected.depth}"
+            )
 
             # Expansion (generate 2 candidate alternative actions)
             if status_callback:
-                status_callback(f"[bright_cyan]  LATS: Expanding node {selected.node_id[:8]}...[/]")
-            
+                status_callback(
+                    f"[bright_cyan]  LATS: Expanding node {selected.node_id[:8]}...[/]"
+                )
+
             candidates = await self._generate_candidates(
                 selected, user_input, system_prompt, target_model, num_candidates=2
             )
@@ -326,7 +372,9 @@ class LanguageAgentTreeSearch:
                     await self._run_git("reset", "--hard", "--", parent_hash)
                     await self._run_git("clean", "-fd")
                 except Exception as e:
-                    log.warning("LATS: Failed to reset workspace to parent state: %s", e)
+                    log.warning(
+                        "LATS: Failed to reset workspace to parent state: %s", e
+                    )
 
                 # Simulation / Evaluation: Execute tool calls if any
                 child_tool_ids = []
@@ -335,7 +383,12 @@ class LanguageAgentTreeSearch:
                         status_callback(
                             f"[magenta]  LATS Branch {idx}: Executing {len(child.tool_calls)} tools...[/]"
                         )
-                    obs_text, any_failures, tool_results, tool_ids = await self.loop._execute_tools(
+                    (
+                        obs_text,
+                        any_failures,
+                        tool_results,
+                        tool_ids,
+                    ) = await self.loop._execute_tools(
                         child.tool_calls,
                         status_callback,
                         execution_mode="interactive",
@@ -351,7 +404,9 @@ class LanguageAgentTreeSearch:
                 try:
                     await self._run_git("add", "-A")
                     await self._run_git("commit", "-m", f"LATS Node {child_id}")
-                    child.commit_hash = await self._run_git("--no-pager", "rev-parse", "HEAD")
+                    child.commit_hash = await self._run_git(
+                        "--no-pager", "rev-parse", "HEAD"
+                    )
                 except Exception as e:
                     log.warning("LATS: Failed to commit child node changes: %s", e)
                     child.commit_hash = parent_hash
@@ -371,7 +426,10 @@ class LanguageAgentTreeSearch:
                         child.response = cognitive_redraft.response
                         child.reasoning = cognitive_redraft.reasoning
                     except Exception as e:
-                        log.warning("LATS: Child node LLM generation failed after retries: %s", e)
+                        log.warning(
+                            "LATS: Child node LLM generation failed after retries: %s",
+                            e,
+                        )
                         child.response = "Generation failed due to malformed payload."
                         child.reasoning = "JSON decoding failed."
 
@@ -379,7 +437,7 @@ class LanguageAgentTreeSearch:
                 child_context = "Evaluate the response for logical coherence."
                 if child.observation:
                     child_context += f"\n\nTOOL EXECUTION RESULTS:\n{child.observation}"
-                
+
                 child_critique = await self.loop.critic.critique(
                     user_input=user_input,
                     system_context=child_context,
@@ -401,29 +459,33 @@ class LanguageAgentTreeSearch:
                 node_type = "decision" if child.tool_calls else "hypothesis"
                 if not child.is_acceptable and child.critic_score < 0.4:
                     node_type = "dead_end"
-                
+
                 await self._register_node_to_db(child, node_type)
-                
+
                 # Register edge
                 relation = "triggered_by"
                 if node_type == "dead_end":
                     relation = "caused_failure_in"
-                await self.loop.causal_kg.register_edge(CausalEdge.new(
-                    source_node_id=selected.node_id,
-                    target_node_id=child.node_id,
-                    relation_type=relation,
-                    weight=child.critic_score
-                ))
+                await self.loop.causal_kg.register_edge(
+                    CausalEdge.new(
+                        source_node_id=selected.node_id,
+                        target_node_id=child.node_id,
+                        relation_type=relation,
+                        weight=child.critic_score,
+                    )
+                )
 
                 # Link tool logs to child
                 if child_tool_ids and self.loop.session.current:
                     for tid in child_tool_ids:
-                        await self.loop.causal_kg.register_edge(CausalEdge.new(
-                            source_node_id=tid,
-                            target_node_id=child.node_id,
-                            relation_type="triggered_by",
-                            weight=child.critic_score
-                        ))
+                        await self.loop.causal_kg.register_edge(
+                            CausalEdge.new(
+                                source_node_id=tid,
+                                target_node_id=child.node_id,
+                                relation_type="triggered_by",
+                                weight=child.critic_score,
+                            )
+                        )
 
                 # Initialize visit count
                 child.visit_count = 1
@@ -436,7 +498,9 @@ class LanguageAgentTreeSearch:
                     best_node = child
 
                 if child.is_acceptable:
-                    log.info(f"LATS: Found acceptable node {child.node_id[:8]}! Stopping search.")
+                    log.info(
+                        f"LATS: Found acceptable node {child.node_id[:8]}! Stopping search."
+                    )
                     break
 
             # Backpropagation
@@ -449,9 +513,13 @@ class LanguageAgentTreeSearch:
             if best_node.is_acceptable:
                 break
 
-        log.info(f"LATS Search finished. Best node: {best_node.node_id[:8]} (Score: {best_node.critic_score:.4f})")
+        log.info(
+            f"LATS Search finished. Best node: {best_node.node_id[:8]} (Score: {best_node.critic_score:.4f})"
+        )
         if status_callback:
-            status_callback(f"[green]  ✔ LATS finished. Best branch score: {best_node.critic_score:.4f}[/]")
+            status_callback(
+                f"[green]  ✔ LATS finished. Best branch score: {best_node.critic_score:.4f}[/]"
+            )
 
         return best_node
 
@@ -464,7 +532,9 @@ class LanguageAgentTreeSearch:
             goal_updates=[],
             self_reflection=best_node.feedback,
             confidence=best_node.critic_score,
-            uncertainty_flags=[] if best_node.is_acceptable else ["suboptimal_critic_score"],
+            uncertainty_flags=[]
+            if best_node.is_acceptable
+            else ["suboptimal_critic_score"],
             uncertainty_tracking=[],
             causal_observations=[],
             contradictions_detected=[],
@@ -483,7 +553,7 @@ class LanguageAgentTreeSearch:
     ) -> List[CognitiveResponse]:
         """Ask LLM to generate alternative corrected actions based on parent feedback."""
         candidates = []
-        
+
         # Build correction instruction
         history_context = (
             f"The previous draft was rejected by the critic. "
@@ -514,25 +584,28 @@ class LanguageAgentTreeSearch:
                     temperature=temp_mod,
                 )
             )
-        
+
         import asyncio
+
         results = await asyncio.gather(*tasks, return_exceptions=True)
         for i, res in enumerate(results):
             if isinstance(res, Exception):
                 log.error(f"Failed to generate candidate {i}: {res}")
             else:
                 candidates.append(res)
-                
+
         # Fallback if no candidates were generated
         if not candidates:
             try:
                 fallback = await self.loop.llm.think(
-                    system_prompt + "\n\nProvide a corrected response.", user_input, model_override=target_model
+                    system_prompt + "\n\nProvide a corrected response.",
+                    user_input,
+                    model_override=target_model,
                 )
                 candidates.append(fallback)
             except Exception as e:
                 log.error(f"Fallback candidate generation failed: {e}")
-            
+
         return candidates
 
     async def _register_node_to_db(self, node: LATSNode, node_type: str) -> None:

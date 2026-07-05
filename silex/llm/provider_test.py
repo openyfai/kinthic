@@ -33,10 +33,15 @@ def humanize_llm_error(exc: BaseException, provider_id: str) -> tuple[str, str, 
     class_name = exc.__class__.__name__.lower()
     status_code = getattr(exc, "status_code", getattr(exc, "code", None))
 
-    if "install openyfai-kinthic" in low or "install kinthic" in low or "install silex" in low or "install aria" in low:
+    if (
+        "install openyfai-kinthic" in low
+        or "install kinthic" in low
+        or "install silex" in low
+        or "install aria" in low
+    ):
         return (
             "Missing optional dependency for this provider.",
-            "Install provider extras: pip install \"openyfai-kinthic[providers]\"",
+            'Install provider extras: pip install "openyfai-kinthic[providers]"',
             "missing_dependency",
         )
     if (
@@ -59,13 +64,20 @@ def humanize_llm_error(exc: BaseException, provider_id: str) -> tuple[str, str, 
             "Wait a minute and retry, or check quota and billing in the provider dashboard.",
             "rate_limited",
         )
-    if "resource exhausted" in low or "quota" in low or "exceeded" in low and "token" in low:
+    if (
+        "resource exhausted" in low
+        or "quota" in low
+        or "exceeded" in low
+        and "token" in low
+    ):
         return (
             "Quota or spending limit may be exceeded.",
             "Check the provider billing page and usage caps.",
             "quota",
         )
-    if "model" in low and ("not found" in low or "does not exist" in low or "unknown model" in low):
+    if "model" in low and (
+        "not found" in low or "does not exist" in low or "unknown model" in low
+    ):
         return (
             "This model name was not accepted.",
             "Pick another model from `kinthic models` or the setup list for this provider.",
@@ -134,7 +146,11 @@ async def ping_provider(
 
     defaults = get_provider_defaults(provider_id)
     model_use = (model_id or "").strip() or defaults["fast_model"]
-    if model_id and provider_id not in ("custom", "ollama", "lm_studio", "azure") and find_model(provider_id, model_use) is None:
+    if (
+        model_id
+        and provider_id not in ("custom", "ollama", "lm_studio", "azure")
+        and find_model(provider_id, model_use) is None
+    ):
         return {
             "ok": False,
             "message": f"Model `{model_use}` is not in Kinthic's catalog for `{provider_id}`.",
@@ -144,7 +160,9 @@ async def ping_provider(
 
     with tempfile.TemporaryDirectory(prefix="kinthic-provider-test-") as tmp:
         tpath = Path(tmp)
-        store = RuntimeSettingsStore(settings_path=tpath / "settings.json", secrets_path=tpath / "secrets.json")
+        store = RuntimeSettingsStore(
+            settings_path=tpath / "settings.json", secrets_path=tpath / "secrets.json"
+        )
         store.save_settings(
             {
                 "setup_completed": True,
@@ -163,7 +181,13 @@ async def ping_provider(
             client.connect()
         except Exception as exc:
             msg, hint, code = humanize_llm_error(exc, provider_id)
-            return {"ok": False, "message": msg, "hint": hint, "code": code, "model": model_use}
+            return {
+                "ok": False,
+                "message": msg,
+                "hint": hint,
+                "code": code,
+                "model": model_use,
+            }
 
         async def _call():
             return await client.complete_json(
@@ -187,7 +211,13 @@ async def ping_provider(
             }
         except Exception as exc:
             msg, hint, code = humanize_llm_error(exc, provider_id)
-            return {"ok": False, "message": msg, "hint": hint, "code": code, "model": model_use}
+            return {
+                "ok": False,
+                "message": msg,
+                "hint": hint,
+                "code": code,
+                "model": model_use,
+            }
 
     return {
         "ok": True,

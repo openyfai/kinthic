@@ -6,6 +6,7 @@ from silex.utils.logger import setup_logger
 
 log = setup_logger("silex.llm.router")
 
+
 class ModelRouter:
     """
     Classifies intent and routes requests to the appropriate fast or reasoning model.
@@ -22,15 +23,32 @@ class ModelRouter:
         user_input_lower = user_input.lower()
 
         reasoning_signals = [
-            "architect", "refactor", "debug", "deep dive", "analyze", 
-            "complex", "plan", "strategy", "why", "logic", "optimize",
-            "recursive", "generalize"
+            "architect",
+            "refactor",
+            "debug",
+            "deep dive",
+            "analyze",
+            "complex",
+            "plan",
+            "strategy",
+            "why",
+            "logic",
+            "optimize",
+            "recursive",
+            "generalize",
         ]
 
         # Simple/Fast Signals
         flash_signals = [
-            "list", "show", "read", "read file", "what is", "where is",
-            "hello", "hi", "status"
+            "list",
+            "show",
+            "read",
+            "read file",
+            "what is",
+            "where is",
+            "hello",
+            "hi",
+            "status",
         ]
 
         # 1. Size-based routing (Huge context needs Pro's stability)

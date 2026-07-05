@@ -23,6 +23,7 @@ Fallback
 ────────
   If Node/npx is not found, the bridge silently no-ops and Rich takes over.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -36,21 +37,23 @@ log = logging.getLogger("silex.ui.ink_bridge")
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
-_HERE      = Path(__file__).resolve().parent
+_HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parent.parent
-_INK_ROOT  = _REPO_ROOT / "kinthic-ink-ui"
-_INK_DIST  = _INK_ROOT / "dist" / "index.js"
-_INK_SRC   = _INK_ROOT / "src" / "index.tsx"
+_INK_ROOT = _REPO_ROOT / "kinthic-ink-ui"
+_INK_DIST = _INK_ROOT / "dist" / "index.js"
+_INK_SRC = _INK_ROOT / "src" / "index.tsx"
 
-_KINTHIC_DIR  = Path.home() / ".kinthic"
-_EVENTS_FILE = _KINTHIC_DIR / "ink_events.ndjson"   # Python → Ink event bus
+_KINTHIC_DIR = Path.home() / ".kinthic"
+_EVENTS_FILE = _KINTHIC_DIR / "ink_events.ndjson"  # Python → Ink event bus
 _COMPILED_UI = _KINTHIC_DIR / "bin" / "kinthic-ui"
 
 
 # ── Capability detection ──────────────────────────────────────────────────────
 
+
 def _build_launch_cmd() -> list[str] | None:
     import shutil
+
     # 1. Check for pre-compiled binary in ~/.kinthic/bin/
     if _COMPILED_UI.exists() and os.access(str(_COMPILED_UI), os.X_OK):
         return [str(_COMPILED_UI)]
@@ -87,6 +90,7 @@ def _diagnose_launch_unavailable() -> str:
 
 # ── Bridge ────────────────────────────────────────────────────────────────────
 
+
 class KinthicInkBridge:
     """
     Async bridge between the Python cognitive loop and the Ink terminal UI.
@@ -103,10 +107,10 @@ class KinthicInkBridge:
         self._metadata: dict[str, Any] = header_metadata or {}
         self._proc: asyncio.subprocess.Process | None = None
         self._reader_task: asyncio.Task | None = None
-        self._user_input_queue: asyncio.Queue[str | None]   = asyncio.Queue()
-        self._auth_queue:       asyncio.Queue[dict]          = asyncio.Queue()
-        self._cancel_queue:     asyncio.Queue[bool]          = asyncio.Queue()
-        self._approval_response_queue: asyncio.Queue[dict]   = asyncio.Queue()
+        self._user_input_queue: asyncio.Queue[str | None] = asyncio.Queue()
+        self._auth_queue: asyncio.Queue[dict] = asyncio.Queue()
+        self._cancel_queue: asyncio.Queue[bool] = asyncio.Queue()
+        self._approval_response_queue: asyncio.Queue[dict] = asyncio.Queue()
         self._enabled: bool = False
         self._use_tcp: bool = False
         self._event_server: asyncio.Server | None = None
@@ -121,7 +125,10 @@ class KinthicInkBridge:
     async def start(self) -> None:
         """Spawn the Ink subprocess, clear the event bus, emit the header."""
         if self._cmd is None:
-            log.warning("kinthic-ink-ui: not available — falling back to Rich. %s", self._fallback_reason)
+            log.warning(
+                "kinthic-ink-ui: not available — falling back to Rich. %s",
+                self._fallback_reason,
+            )
             return
 
         # Prepare the event file: truncate to signal a fresh session start (fallback / debug)
@@ -157,7 +164,9 @@ class KinthicInkBridge:
                 cwd=str(_INK_ROOT) if _INK_ROOT.is_dir() else None,
             )
         except (FileNotFoundError, PermissionError, OSError) as exc:
-            self._fallback_reason = f"Failed to spawn Ink UI command `{self._cmd}`: {exc}"
+            self._fallback_reason = (
+                f"Failed to spawn Ink UI command `{self._cmd}`: {exc}"
+            )
             log.warning("kinthic-ink-ui: spawn failed: %s", exc)
             return
 
@@ -288,38 +297,48 @@ class KinthicInkBridge:
     ) -> None:
         """Surface a pending tool approval in the operator UI."""
         import time
-        await self.emit({
-            "type": "approval_requested",
-            "data": {
-                "approval_id": approval_id,
-                "tool_name": tool_name,
-                "risk_level": risk_level,
-                "reason": reason,
-                "arguments_preview": arguments_preview or {},
-                "requested_at": time.time(),
-            },
-        })
+
+        await self.emit(
+            {
+                "type": "approval_requested",
+                "data": {
+                    "approval_id": approval_id,
+                    "tool_name": tool_name,
+                    "risk_level": risk_level,
+                    "reason": reason,
+                    "arguments_preview": arguments_preview or {},
+                    "requested_at": time.time(),
+                },
+            }
+        )
 
     async def emit_approval_resolved(self, approval_id: str, approved: bool) -> None:
         """Dismiss a resolved approval from the queue."""
-        await self.emit({
-            "type": "approval_resolved",
-            "data": {"approval_id": approval_id, "approved": approved},
-        })
+        await self.emit(
+            {
+                "type": "approval_resolved",
+                "data": {"approval_id": approval_id, "approved": approved},
+            }
+        )
 
-    async def emit_active_goal(self, goal_id: str, description: str, status: str, run_id: str = "") -> None:
+    async def emit_active_goal(
+        self, goal_id: str, description: str, status: str, run_id: str = ""
+    ) -> None:
         """Push the current background goal status to the operator bar."""
         import time
-        await self.emit({
-            "type": "active_goal",
-            "data": {
-                "goal_id": goal_id,
-                "description": description,
-                "status": status,
-                "run_id": run_id,
-                "last_heartbeat": time.time(),
-            },
-        })
+
+        await self.emit(
+            {
+                "type": "active_goal",
+                "data": {
+                    "goal_id": goal_id,
+                    "description": description,
+                    "status": status,
+                    "run_id": run_id,
+                    "last_heartbeat": time.time(),
+                },
+            }
+        )
 
     async def emit_cost_update(
         self,
@@ -329,15 +348,17 @@ class KinthicInkBridge:
         model: str = "",
     ) -> None:
         """Push accumulated cost/usage metrics to the operator bar."""
-        await self.emit({
-            "type": "cost_update",
-            "data": {
-                "total_cost_usd": total_cost_usd,
-                "total_tokens": total_tokens,
-                "turns": turns,
-                "model": model,
-            },
-        })
+        await self.emit(
+            {
+                "type": "cost_update",
+                "data": {
+                    "total_cost_usd": total_cost_usd,
+                    "total_tokens": total_tokens,
+                    "turns": turns,
+                    "model": model,
+                },
+            }
+        )
 
     async def read_user_input(self, timeout: float | None = None) -> str | None:
         """
@@ -349,9 +370,7 @@ class KinthicInkBridge:
         try:
             coro = self._user_input_queue.get()
             result = (
-                await asyncio.wait_for(coro, timeout=timeout)
-                if timeout else
-                await coro
+                await asyncio.wait_for(coro, timeout=timeout) if timeout else await coro
             )
             return result  # None signals bridge shutdown
         except asyncio.TimeoutError:
@@ -380,7 +399,9 @@ class KinthicInkBridge:
         if not self._enabled:
             return None
         try:
-            return await asyncio.wait_for(self._approval_response_queue.get(), timeout=timeout)
+            return await asyncio.wait_for(
+                self._approval_response_queue.get(), timeout=timeout
+            )
         except asyncio.TimeoutError:
             log.warning("kinthic-ink-ui: approval_response timeout after %ss", timeout)
             return None
@@ -398,6 +419,7 @@ class KinthicInkBridge:
     async def _send_header(self) -> None:
         try:
             from silex import __version__
+
             version = __version__
         except Exception:
             version = "1.0.0"
@@ -405,6 +427,7 @@ class KinthicInkBridge:
         skill_count = 0
         try:
             from silex.utils.config import KINTHIC_HOME
+
             d = KINTHIC_HOME / "skills"
             if d.is_dir():
                 skill_count = len(list(d.glob("*.md")))
@@ -412,31 +435,32 @@ class KinthicInkBridge:
             pass
 
         import os as _os
+
         try:
             cwd = _os.getcwd()
         except Exception:
             cwd = "~"
 
-        await self.emit({
-            "type": "header",
-            "data": {
-                "platform":    self._metadata.get("platform",    "OpenYF (λ) Enterprise"),
-                "core":        self._metadata.get("core",        "SILEX Reasoning Engine"),
-                "version":     self._metadata.get("version",     version),
-                "skillCount":  skill_count,
-                "storageMode": self._metadata.get("storageMode", "SQLite + ChromaDB"),
-                "cwd":         self._metadata.get("cwd",         cwd),
-            },
-        })
+        await self.emit(
+            {
+                "type": "header",
+                "data": {
+                    "platform": self._metadata.get("platform", "OpenYF (λ) Enterprise"),
+                    "core": self._metadata.get("core", "SILEX Reasoning Engine"),
+                    "version": self._metadata.get("version", version),
+                    "skillCount": skill_count,
+                    "storageMode": self._metadata.get(
+                        "storageMode", "SQLite + ChromaDB"
+                    ),
+                    "cwd": self._metadata.get("cwd", cwd),
+                },
+            }
+        )
 
     async def _send_commands(self) -> None:
         from silex.ui.commands import SLASH_COMMANDS
-        await self.emit({
-            "type": "init_commands",
-            "data": {
-                "commands": SLASH_COMMANDS
-            }
-        })
+
+        await self.emit({"type": "init_commands", "data": {"commands": SLASH_COMMANDS}})
 
     async def _stderr_reader(self) -> None:
         """

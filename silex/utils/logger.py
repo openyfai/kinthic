@@ -12,6 +12,7 @@ Behaviour
 
 Security: show_locals disabled to prevent API key leakage in tracebacks.
 """
+
 from __future__ import annotations
 
 import logging
@@ -21,7 +22,7 @@ from pathlib import Path
 
 
 # ── Log file path ─────────────────────────────────────────────────────────────
-_LOG_DIR  = Path.home() / ".kinthic"
+_LOG_DIR = Path.home() / ".kinthic"
 _LOG_FILE = _LOG_DIR / "kinthic.log"
 
 _FILE_FORMATTER = logging.Formatter(
@@ -71,6 +72,7 @@ def setup_logger(name: str = "aria", level: str = "INFO") -> logging.Logger:
         else:
             # ── Normal mode: Rich stderr handler ──────────────────────────
             from rich.logging import RichHandler
+
             handler = RichHandler(
                 rich_tracebacks=True,
                 show_time=True,
@@ -97,7 +99,8 @@ def redirect_root_logger_to_file() -> None:
 
     # Remove every handler that writes to a stream (stdout/stderr/console)
     to_remove = [
-        h for h in root.handlers
+        h
+        for h in root.handlers
         if isinstance(h, (logging.StreamHandler,))
         and not isinstance(h, logging.FileHandler)
     ]
@@ -105,4 +108,4 @@ def redirect_root_logger_to_file() -> None:
         root.removeHandler(h)
 
     _ensure_file_handler(root)
-    root.setLevel(logging.DEBUG)   # file captures everything; terminal sees nothing
+    root.setLevel(logging.DEBUG)  # file captures everything; terminal sees nothing

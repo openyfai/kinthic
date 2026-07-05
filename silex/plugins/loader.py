@@ -33,6 +33,7 @@ Example tool.py:
       async def execute(self, query: str, **kwargs) -> str:
           return f"Processed: {query}"
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -87,10 +88,13 @@ def load_tool_plugins(plugins_dir: Path) -> list["BaseTool"]:
             # Read manifest for logging/diagnostics
             try:
                 import yaml
+
                 with open(manifest_path, encoding="utf-8") as f:
                     manifest = yaml.safe_load(f) or {}
             except Exception as exc:
-                log.warning("Plugin %s: could not parse plugin.yaml: %s", plugin_dir.name, exc)
+                log.warning(
+                    "Plugin %s: could not parse plugin.yaml: %s", plugin_dir.name, exc
+                )
                 manifest = {}
 
             plugin_label = manifest.get("name", plugin_dir.name)
@@ -135,7 +139,9 @@ def load_tool_plugins(plugins_dir: Path) -> list["BaseTool"]:
 
             log.info(
                 "Loaded plugin tool: %s v%s → tool '%s'",
-                plugin_label, plugin_version, tool_instance.name,
+                plugin_label,
+                plugin_version,
+                tool_instance.name,
             )
 
         except Exception as exc:
@@ -151,12 +157,14 @@ def list_loaded_plugins() -> list[dict]:
     """
     result = []
     for dir_name, tool in _loaded_plugins.items():
-        result.append({
-            "dir_name": dir_name,
-            "tool_name": tool.name,
-            "description": tool.description,
-            "risk_level": getattr(tool, "risk_level", "unknown"),
-        })
+        result.append(
+            {
+                "dir_name": dir_name,
+                "tool_name": tool.name,
+                "description": tool.description,
+                "risk_level": getattr(tool, "risk_level", "unknown"),
+            }
+        )
     return result
 
 
@@ -170,6 +178,7 @@ def read_manifest(plugin_dir: "Path") -> dict:
         return {}
     try:
         import yaml
+
         with open(manifest_path, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except Exception as exc:

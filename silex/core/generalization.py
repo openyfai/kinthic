@@ -80,8 +80,7 @@ class GeneralizationEngine:
 
             # Check for duplicates
             existing = await self.db.fetch_all(
-                "SELECT name FROM principles WHERE name = ?",
-                (extraction.name,)
+                "SELECT name FROM principles WHERE name = ?", (extraction.name,)
             )
             if existing:
                 log.debug(f"Principle '{extraction.name}' already exists. Skipping.")

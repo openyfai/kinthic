@@ -16,7 +16,7 @@ async def test_orchestrator_initialization(tmp_path):
     orchestrator = WorkerOrchestrator(
         max_workers=2,
         workspace_root=tmp_path / "workspace",
-        project_root=tmp_path / "project"
+        project_root=tmp_path / "project",
     )
     assert WorkerOrchestrator.instance() == orchestrator
     assert orchestrator.max_workers == 2
@@ -29,13 +29,16 @@ async def test_orchestrator_concurrency_throttling(tmp_path):
     orchestrator = WorkerOrchestrator(
         max_workers=2,
         workspace_root=tmp_path / "workspace",
-        project_root=tmp_path / "project"
+        project_root=tmp_path / "project",
     )
 
-    lease = ActuationLease.issue("task_concurrency", "agent_concurrency", allowed_tools=["run_terminal_command"])
+    lease = ActuationLease.issue(
+        "task_concurrency", "agent_concurrency", allowed_tools=["run_terminal_command"]
+    )
 
     async def mock_provision(lease=None):
         import uuid
+
         wid = f"worker_{uuid.uuid4().hex[:8]}"
         wdir = tmp_path / "workspace" / wid
         wdir.mkdir(parents=True, exist_ok=True)
@@ -45,8 +48,10 @@ async def test_orchestrator_concurrency_throttling(tmp_path):
         sandbox.execute.return_value = "--- SANDBOX OUTPUT ---\nSuccess\nExit Code: 0"
         return sandbox
 
-    with patch("agent.compute.runtimes.warm_pool.DockerWarmPoolManager.provision_sandbox", side_effect=mock_provision):
-        
+    with patch(
+        "agent.compute.runtimes.warm_pool.DockerWarmPoolManager.provision_sandbox",
+        side_effect=mock_provision,
+    ):
         # Spawn three parallel workers (max_workers=2)
         h1 = await orchestrator.spawn_worker("echo 1", ["run_terminal_command"], lease)
         h2 = await orchestrator.spawn_worker("echo 2", ["run_terminal_command"], lease)
@@ -66,15 +71,18 @@ async def test_orchestrator_heartbeat_timeout(tmp_path):
     orchestrator = WorkerOrchestrator(
         max_workers=1,
         workspace_root=tmp_path / "workspace",
-        project_root=tmp_path / "project"
+        project_root=tmp_path / "project",
     )
 
-    lease = ActuationLease.issue("task_heartbeat", "agent_heartbeat", allowed_tools=["run_terminal_command"])
+    lease = ActuationLease.issue(
+        "task_heartbeat", "agent_heartbeat", allowed_tools=["run_terminal_command"]
+    )
 
     mock_kill = AsyncMock()
 
     async def mock_provision_heartbeat(lease=None):
         import uuid
+
         wid = f"worker_{uuid.uuid4().hex[:8]}"
         wdir = tmp_path / "workspace" / wid
         wdir.mkdir(parents=True, exist_ok=True)
@@ -82,15 +90,16 @@ async def test_orchestrator_heartbeat_timeout(tmp_path):
         sandbox.worker_id = wid
         sandbox.workspace_dir = wdir
         sandbox.kill = mock_kill
-        
+
         async def hang_execute(command, lease):
             heartbeat_file = wdir / "heartbeat.txt"
             heartbeat_file.write_text("1234567890", encoding="utf-8")
             import os
+
             os.utime(heartbeat_file, (time.time() - 60.0, time.time() - 60.0))
             await asyncio.sleep(0.5)
             return "Command completed"
-            
+
         sandbox.execute.side_effect = hang_execute
         return sandbox
 
@@ -103,11 +112,15 @@ async def test_orchestrator_heartbeat_timeout(tmp_path):
         else:
             await original_sleep(seconds)
 
-    with patch("agent.compute.runtimes.warm_pool.DockerWarmPoolManager.provision_sandbox", side_effect=mock_provision_heartbeat):
-
+    with patch(
+        "agent.compute.runtimes.warm_pool.DockerWarmPoolManager.provision_sandbox",
+        side_effect=mock_provision_heartbeat,
+    ):
         with patch("asyncio.sleep", custom_sleep):
             # Spawn a worker
-            handle = await orchestrator.spawn_worker("sleep 100", ["run_terminal_command"], lease)
+            handle = await orchestrator.spawn_worker(
+                "sleep 100", ["run_terminal_command"], lease
+            )
 
             # Await the result. Heartbeat monitor will detect stale mtime and call kill()
             await handle.result()
@@ -127,7 +140,7 @@ async def test_orchestrator_spawn_cognitive_worker(tmp_path):
     orchestrator = WorkerOrchestrator(
         max_workers=2,
         workspace_root=tmp_path / "workspace",
-        project_root=tmp_path / "project"
+        project_root=tmp_path / "project",
     )
 
     job = WorkerJob(
@@ -145,10 +158,12 @@ async def test_orchestrator_spawn_cognitive_worker(tmp_path):
         tokens_used=1200,
     )
 
-    with patch("agent.subagent.run_cognitive_subagent", return_value=mock_result) as mock_run:
+    with patch(
+        "agent.subagent.run_cognitive_subagent", return_value=mock_result
+    ) as mock_run:
         handle = await orchestrator.spawn_job(job, lease)
         assert handle.task_id == job.job_id
-        
+
         # Verify the handle registry works correctly now (no AttributeError)
         assert orchestrator._handles[job.job_id] == handle
 

@@ -31,17 +31,29 @@ SchemaT = TypeVar("SchemaT", bound=BaseModel)
 # Shared: Retry decorator for transient API errors
 # ---------------------------------------------------------------------------
 
-_TRANSIENT_ERROR_CODES = {"502", "503", "504", "429", "500", "UNAVAILABLE", "RESOURCE_EXHAUSTED", "timeout", "connection", "read"}
+_TRANSIENT_ERROR_CODES = {
+    "502",
+    "503",
+    "504",
+    "429",
+    "500",
+    "UNAVAILABLE",
+    "RESOURCE_EXHAUSTED",
+    "timeout",
+    "connection",
+    "read",
+}
 
 
 def _is_transient(error: Exception) -> bool:
     """Check if an exception is a transient API error worth retrying."""
     import json
+
     try:
         from pydantic import ValidationError
     except ImportError:
         ValidationError = type(None)
-        
+
     if isinstance(error, (json.JSONDecodeError, ValidationError)):
         return True
 
@@ -52,14 +64,18 @@ def _is_transient(error: Exception) -> bool:
 import time
 from enum import Enum
 
+
 class CircuitBreakerState(Enum):
     CLOSED = 1
     OPEN = 2
     HALF_OPEN = 3
 
+
 class CircuitBreakerTripped(Exception):
     """Raised when the LLM circuit breaker is OPEN due to repeated transient failures."""
+
     pass
+
 
 class CircuitBreaker:
     def __init__(self, max_failures: int = 5, cooldown_seconds: float = 60.0):
@@ -72,9 +88,14 @@ class CircuitBreaker:
     def record_failure(self):
         self.failure_count += 1
         self.last_failure_time = time.time()
-        if self.state == CircuitBreakerState.HALF_OPEN or self.failure_count >= self.max_failures:
+        if (
+            self.state == CircuitBreakerState.HALF_OPEN
+            or self.failure_count >= self.max_failures
+        ):
             self.state = CircuitBreakerState.OPEN
-            log.critical(f"LLM Circuit Breaker TRIPPED. State: OPEN. Network suspended for {self.cooldown_seconds}s.")
+            log.critical(
+                f"LLM Circuit Breaker TRIPPED. State: OPEN. Network suspended for {self.cooldown_seconds}s."
+            )
 
     def record_success(self):
         if self.state != CircuitBreakerState.CLOSED:
@@ -86,29 +107,37 @@ class CircuitBreaker:
         if self.state == CircuitBreakerState.OPEN:
             if time.time() - self.last_failure_time > self.cooldown_seconds:
                 self.state = CircuitBreakerState.HALF_OPEN
-                log.warning("LLM Circuit Breaker cooling down. State: HALF_OPEN. Permitting 1 probe request.")
+                log.warning(
+                    "LLM Circuit Breaker cooling down. State: HALF_OPEN. Permitting 1 probe request."
+                )
             else:
-                raise CircuitBreakerTripped("LLM Circuit Breaker is OPEN. Network requests fast-failed to prevent starvation.")
+                raise CircuitBreakerTripped(
+                    "LLM Circuit Breaker is OPEN. Network requests fast-failed to prevent starvation."
+                )
+
 
 _CIRCUIT_BREAKERS: dict[str, CircuitBreaker] = {}
+
 
 def get_circuit_breaker(provider_name: str) -> CircuitBreaker:
     if provider_name not in _CIRCUIT_BREAKERS:
         _CIRCUIT_BREAKERS[provider_name] = CircuitBreaker()
     return _CIRCUIT_BREAKERS[provider_name]
 
+
 def retry_on_transient(max_retries: int = 3, base_delay: float = 1.0):
     """
     Decorator that retries async functions on transient API errors, protected by a stateful Circuit Breaker.
     Uses exponential backoff with jitter.
     """
+
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             provider_name = "unknown"
             if args and hasattr(args[0], "provider_name"):
                 provider_name = getattr(args[0], "provider_name", "unknown")
-            
+
             cb = get_circuit_breaker(provider_name)
             cb.check()  # Will instantly raise CircuitBreakerTripped if OPEN
 
@@ -123,10 +152,12 @@ def retry_on_transient(max_retries: int = 3, base_delay: float = 1.0):
                     if _is_transient(e):
                         cb.record_failure()
                         if cb.state == CircuitBreakerState.OPEN:
-                            raise CircuitBreakerTripped(f"Circuit Breaker TRIPPED during retries on {provider_name}.") from e
-                        
+                            raise CircuitBreakerTripped(
+                                f"Circuit Breaker TRIPPED during retries on {provider_name}."
+                            ) from e
+
                         if attempt < max_retries - 1:
-                            delay = base_delay * (2 ** attempt)
+                            delay = base_delay * (2**attempt)
                             log.warning(
                                 f"Transient API error on {provider_name} (attempt {attempt + 1}/{max_retries}), "
                                 f"retrying in {delay:.1f}s: {e}"
@@ -135,7 +166,9 @@ def retry_on_transient(max_retries: int = 3, base_delay: float = 1.0):
                             continue
                     raise
             raise last_error  # Should never reach here, but safety net
+
         return wrapper
+
     return decorator
 
 
@@ -161,17 +194,17 @@ def repair_json(raw: str) -> str:
 
     # 2. If the string starts with prose before the JSON object/array,
     #    find the first { or [ and take everything from there.
-    if text and text[0] not in ('{', '['):
+    if text and text[0] not in ("{", "["):
         for i, ch in enumerate(text):
-            if ch in ('{', '['):
+            if ch in ("{", "["):
                 text = text[i:]
                 break
 
     # 3. If the string ends with prose after the JSON, find the last } or ]
-    if text and text[-1] not in ('}', ']'):
+    if text and text[-1] not in ("}", "]"):
         for i in range(len(text) - 1, -1, -1):
-            if text[i] in ('}', ']'):
-                text = text[:i + 1]
+            if text[i] in ("}", "]"):
+                text = text[: i + 1]
                 break
 
     return text
@@ -181,12 +214,12 @@ def repair_json(raw: str) -> str:
 # Provider base class
 # ---------------------------------------------------------------------------
 
+
 class SupportsLLM(Protocol):
     provider_name: str
     default_model: str
 
-    def connect(self) -> None:
-        ...
+    def connect(self) -> None: ...
 
     async def complete_json(
         self,
@@ -198,8 +231,7 @@ class SupportsLLM(Protocol):
         model_override: str | None = None,
         temperature: float = 0.7,
         request_kind: str = "chat",
-    ) -> SchemaT:
-        ...
+    ) -> SchemaT: ...
 
     async def think(
         self,
@@ -207,8 +239,7 @@ class SupportsLLM(Protocol):
         user_input: str,
         images: list[dict] | None = None,
         model_override: str | None = None,
-    ) -> CognitiveResponse:
-        ...
+    ) -> CognitiveResponse: ...
 
 
 class BaseLLMProvider(ABC):
@@ -217,32 +248,39 @@ class BaseLLMProvider(ABC):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         import inspect
-        if cls.__name__ not in ("BaseLLMProvider",) and "mock" not in cls.__name__.lower() and "test" not in cls.__name__.lower():
+
+        if (
+            cls.__name__ not in ("BaseLLMProvider",)
+            and "mock" not in cls.__name__.lower()
+            and "test" not in cls.__name__.lower()
+        ):
             if "__init__" in cls.__dict__:
                 sig = inspect.signature(cls.__init__)
-                non_self_params = [p for p in sig.parameters.values() if p.name != "self"]
-                
+                non_self_params = [
+                    p for p in sig.parameters.values() if p.name != "self"
+                ]
+
                 if len(non_self_params) < 3:
                     raise TypeError(
                         f"Subclass '{cls.__name__}' must conform to standardized constructor signature: "
                         f"__init__(self, provider_profile, settings_store=None, usage_tracker=None). "
                         f"Found too few parameters: {list(sig.parameters.keys())}"
                     )
-                
+
                 p0, p1, p2 = non_self_params[:3]
                 is_valid = (
-                    ("profile" in p0.name.lower()) and
-                    ("settings" in p1.name.lower() or "store" in p1.name.lower()) and
-                    ("usage" in p2.name.lower() or "tracker" in p2.name.lower())
+                    ("profile" in p0.name.lower())
+                    and ("settings" in p1.name.lower() or "store" in p1.name.lower())
+                    and ("usage" in p2.name.lower() or "tracker" in p2.name.lower())
                 )
-                
+
                 if not is_valid:
                     raise TypeError(
                         f"Subclass '{cls.__name__}' must conform to standardized constructor signature: "
                         f"__init__(self, provider_profile, settings_store=None, usage_tracker=None). "
                         f"Found signature: {sig}"
                     )
-                    
+
                 for param in non_self_params[3:]:
                     if param.default == inspect.Parameter.empty:
                         raise TypeError(
@@ -252,10 +290,10 @@ class BaseLLMProvider(ABC):
 
     def __init__(self, default_model: str):
         self.default_model = default_model
-        
+
         # Dynamically wrap complete_json with caching
         original_complete_json = self.complete_json
-        
+
         async def wrapped_complete_json(
             *,
             schema: type[SchemaT],
@@ -276,7 +314,7 @@ class BaseLLMProvider(ABC):
                 temperature=temperature,
                 request_kind=request_kind,
             )
-        
+
         self.complete_json = wrapped_complete_json
 
     async def _cached_complete_json(
@@ -295,7 +333,7 @@ class BaseLLMProvider(ABC):
         db = None
         if hasattr(self, "_usage_tracker") and self._usage_tracker:
             db = self._usage_tracker.db
-            
+
         if not db:
             return await original_complete_json(
                 schema=schema,
@@ -318,16 +356,16 @@ class BaseLLMProvider(ABC):
         try:
             cached_row = await db.fetch_one(
                 "SELECT response, created_at FROM response_cache WHERE query_hash = ?",
-                (query_hash,)
+                (query_hash,),
             )
             if cached_row:
                 cached_response = cached_row["response"]
                 created_at_str = cached_row["created_at"]
-                
+
                 created_at = datetime.fromisoformat(created_at_str)
                 now = datetime.now(timezone.utc)
                 age = (now - created_at).total_seconds()
-                
+
                 if age <= 900:
                     log.info("Semantic Response Cache HIT! (Age: %.1fs)", age)
                     return self.parse_model_json(schema, cached_response)
@@ -356,7 +394,7 @@ class BaseLLMProvider(ABC):
             now_str = datetime.now(timezone.utc).isoformat()
             await db.execute(
                 "INSERT OR REPLACE INTO response_cache (query_hash, response, created_at) VALUES (?, ?, ?)",
-                (query_hash, json_str, now_str)
+                (query_hash, json_str, now_str),
             )
             log.debug("Stored response in Semantic Response Cache.")
         except Exception as e:
@@ -427,7 +465,9 @@ class BaseLLMProvider(ABC):
         )
 
     @staticmethod
-    def parse_model_json(schema: type[SchemaT], payload: str | dict[str, Any]) -> SchemaT:
+    def parse_model_json(
+        schema: type[SchemaT], payload: str | dict[str, Any]
+    ) -> SchemaT:
         if isinstance(payload, str):
             try:
                 return schema.model_validate_json(payload)
@@ -449,7 +489,9 @@ class ProviderProfile:
     display_name: str
     env_vars: tuple[str, ...]
     base_url: str = ""
-    api_mode: str = "chat_completions"  # "chat_completions", "gemini_native", "anthropic_native"
+    api_mode: str = (
+        "chat_completions"  # "chat_completions", "gemini_native", "anthropic_native"
+    )
     aliases: tuple[str, ...] = ()
 
     # Metadata
@@ -473,6 +515,7 @@ class ProviderProfile:
         """Return the provider's base hostname for URL-based detection."""
         if self.base_url:
             from urllib.parse import urlparse
+
             return urlparse(self.base_url).hostname or ""
         return ""
 
@@ -484,7 +527,9 @@ class ProviderProfile:
         """Provider-specific extra_body fields hook."""
         return {}
 
-    def build_api_kwargs_extras(self, **context: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    def build_api_kwargs_extras(
+        self, **context: Any
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Provider-specific split between extra_body and top-level api_kwargs.
         Returns (extra_body_additions, top_level_kwargs).
         """

@@ -30,8 +30,16 @@ log = setup_logger("silex.tools.registry")
 
 class ToolRegistry:
     """Holds available tools and executes them based on ToolCalls."""
-    
-    def __init__(self, vector_store=None, db=None, session_manager=None, memory_store=None, llm=None, file_indexer=None):
+
+    def __init__(
+        self,
+        vector_store=None,
+        db=None,
+        session_manager=None,
+        memory_store=None,
+        llm=None,
+        file_indexer=None,
+    ):
         self.tools: dict[str, BaseTool] = {}
         self.vector_store = vector_store
         self.db = db
@@ -46,15 +54,16 @@ class ToolRegistry:
         """Register the default tools."""
         self.register(WebSearchTool())
         self.register(FileReaderTool())
-        self.register(PhantomTool())         # Phantom Simulator — dry-run before apply
+        self.register(PhantomTool())  # Phantom Simulator — dry-run before apply
         self.register(CodeEditorTool())
         self.register(ApplyEditTool())
         self.register(ListDirectoryTool())
         self.register(RunTerminalCommandTool())
         self.register(BrowserTool())
         from silex.tools.worker import SpawnWorkerTool
+
         self.register(SpawnWorkerTool())
-        
+
         if self.vector_store and getattr(self.vector_store, "is_active", False):
             self.register(SemanticSearchTool(self.vector_store))
 
@@ -64,28 +73,40 @@ class ToolRegistry:
 
         if getattr(self, "llm", None):
             from silex.tools.directives import UpdateDirectivesTool
+
             self.register(UpdateDirectivesTool(self.llm))
             from silex.tools.web_extract import WebExtractTool
+
             self.register(WebExtractTool(self.llm))
 
         if getattr(self, "file_indexer", None):
             from silex.tools.rag_query import RAGQueryTool
+
             self.register(RAGQueryTool(self.file_indexer))
 
         # Phase D — Load user tool plugins from ~/.kinthic/plugins/tools/
         try:
             from silex.utils.config import KINTHIC_PLUGINS_TOOLS
             from silex.plugins.loader import load_tool_plugins
+
             user_tools = load_tool_plugins(KINTHIC_PLUGINS_TOOLS)
             for tool in user_tools:
                 self.register(tool)
         except Exception as exc:
             log.warning("Plugin loader error: %s", exc)
 
-    def register_default_tools(self, mcp_manager: MCPManager = None, skill_loader=None) -> None:
+    def register_default_tools(
+        self, mcp_manager: MCPManager = None, skill_loader=None
+    ) -> None:
         from silex.tools.web import WebSearchTool, WebExtractTool
         from silex.tools.system import (
-            TimeTool, WaitTool, WriteFileTool, ReadFileTool, RunCommandTool, SetGoalTool, ReplaceFileTool
+            TimeTool,
+            WaitTool,
+            WriteFileTool,
+            ReadFileTool,
+            RunCommandTool,
+            SetGoalTool,
+            ReplaceFileTool,
         )
         from silex.tools.memory import SearchMemoryTool
         from silex.tools.skills import SkillsListTool, SkillViewTool, SkillManageTool
@@ -100,7 +121,7 @@ class ToolRegistry:
         self.register(RunCommandTool())
         self.register(SetGoalTool())
         self.register(SearchMemoryTool(self.memory_store))
-        
+
         self.register(SkillsListTool(skill_loader))
         self.register(SkillViewTool(skill_loader))
         self.register(SkillManageTool(skill_loader))
@@ -108,6 +129,7 @@ class ToolRegistry:
     def register_skill_tools(self, skill_loader) -> None:
         """Register progressive disclosure skill tools."""
         from silex.tools.skills import SkillsListTool, SkillViewTool, SkillManageTool
+
         self.register(SkillsListTool(skill_loader))
         self.register(SkillViewTool(skill_loader))
         self.register(SkillManageTool(skill_loader))
@@ -119,6 +141,7 @@ class ToolRegistry:
                 del self.tools[name]
         try:
             from silex.mcp.manager import get_mcp_manager
+
             mgr = get_mcp_manager()
             adapted = mgr.discover_tools_sync()
             for tool in adapted:
@@ -137,14 +160,16 @@ class ToolRegistry:
         """Returns the formatted documentation of all tools for the LLM prompt."""
         if not self.tools:
             return "No tools available."
-            
+
         docs = "AVAILABLE TOOLS:\n"
         for tool in self.tools.values():
             docs += tool.get_prompt_description() + "\n"
-            
+
         return docs
 
-    async def execute(self, call: ToolCall, execution_mode: str = "interactive") -> ToolResult:
+    async def execute(
+        self, call: ToolCall, execution_mode: str = "interactive"
+    ) -> ToolResult:
         """Execute a ToolCall and return a ToolResult."""
         tool = self.tools.get(call.tool_name)
         if not tool:
@@ -153,7 +178,7 @@ class ToolRegistry:
                 tool_name=call.tool_name,
                 actual_outcome="Error: Tool not found in registry.",
                 success=False,
-                error="Tool not found"
+                error="Tool not found",
             )
 
         # ── Parse arguments ──────────────────────────────────────
@@ -166,7 +191,7 @@ class ToolRegistry:
                     tool_name=call.tool_name,
                     actual_outcome="Error: Failed to parse arguments as JSON.",
                     success=False,
-                    error="JSON parse error"
+                    error="JSON parse error",
                 )
         elif isinstance(call.arguments, dict):
             args_dict = call.arguments
@@ -223,7 +248,9 @@ class ToolRegistry:
             )
 
         if self._approval_required(tool):
-            approval_id = await self._queue_approval(tool, args_dict, call.expected_outcome)
+            approval_id = await self._queue_approval(
+                tool, args_dict, call.expected_outcome
+            )
             return ToolResult(
                 tool_name=call.tool_name,
                 actual_outcome=(
@@ -237,16 +264,15 @@ class ToolRegistry:
 
         try:
             timeout_seconds = getattr(tool, "timeout_seconds", 180.0)
-            
+
             # Wrap execution in a hard timeout to prevent deadlocks
             outcome = await asyncio.wait_for(
-                tool.execute(**args_dict), 
-                timeout=timeout_seconds
+                tool.execute(**args_dict), timeout=timeout_seconds
             )
-            
+
             # Tools return human-readable strings, so normalize the common error prefixes.
             success = not outcome.lower().startswith("error:")
-            
+
             return ToolResult(
                 tool_name=call.tool_name,
                 actual_outcome=outcome,
@@ -255,7 +281,9 @@ class ToolRegistry:
                 ethical_decision=ethical_decision,
             )
         except asyncio.TimeoutError:
-            log.error(f"Tool {call.tool_name} timed out after {timeout_seconds}s. Execution severed.")
+            log.error(
+                f"Tool {call.tool_name} timed out after {timeout_seconds}s. Execution severed."
+            )
             return ToolResult(
                 tool_name=call.tool_name,
                 actual_outcome=f"Error: Tool execution timed out after {timeout_seconds} seconds. The process was forcibly terminated to prevent engine deadlock.",
@@ -264,15 +292,19 @@ class ToolRegistry:
                 ethical_decision=ethical_decision,
             )
         except asyncio.CancelledError:
-            log.warning(f"Tool {call.tool_name} execution was cancelled by the DAG Orchestrator.")
+            log.warning(
+                f"Tool {call.tool_name} execution was cancelled by the DAG Orchestrator."
+            )
             raise  # Crucial: Must propagate up so the TaskGroup DAG handles the rollback properly
         except BaseException as e:
             # Catching BaseException ensures we don't miss SystemExit or KeyboardInterrupt
             if isinstance(e, Exception):
                 log.error(f"Tool {call.tool_name} crashed: {e}")
             else:
-                log.critical(f"Tool {call.tool_name} encountered critical system exception: {e}")
-            
+                log.critical(
+                    f"Tool {call.tool_name} encountered critical system exception: {e}"
+                )
+
             return ToolResult(
                 tool_name=call.tool_name,
                 actual_outcome=f"Error executing tool: internal error occurred ({type(e).__name__}).",
@@ -296,7 +328,9 @@ class ToolRegistry:
     # When set to 0 (or not in interactive mode), the old dead-end behaviour applies.
     APPROVAL_TIMEOUT_SECONDS: float = 120.0
 
-    async def _queue_approval(self, tool: BaseTool, args_dict: dict, reason: str) -> str:
+    async def _queue_approval(
+        self, tool: BaseTool, args_dict: dict, reason: str
+    ) -> str:
         approval_id = str(uuid.uuid4())
         if self.db:
             await self.db.execute(
@@ -308,7 +342,9 @@ class ToolRegistry:
                 """,
                 (
                     approval_id,
-                    self.session_manager.current.id if self.session_manager and self.session_manager.current else None,
+                    self.session_manager.current.id
+                    if self.session_manager and self.session_manager.current
+                    else None,
                     tool.name,
                     tool.risk_level,
                     json.dumps(args_dict),
@@ -371,7 +407,11 @@ class ToolRegistry:
         On approval, executes the tool and returns a real ToolResult.
         On rejection or timeout, returns a refused ToolResult.
         """
-        timeout = approval_timeout if approval_timeout is not None else self.APPROVAL_TIMEOUT_SECONDS
+        timeout = (
+            approval_timeout
+            if approval_timeout is not None
+            else self.APPROVAL_TIMEOUT_SECONDS
+        )
 
         result = await self.execute(call, execution_mode=execution_mode)
 
@@ -401,21 +441,26 @@ class ToolRegistry:
                     msg,
                 )
             elif event_emitter is not None:
-                await event_emitter({
-                    "type": "approval_requested",
-                    "data": {
-                        "approval_id": approval_id,
-                        "tool_name": call.tool_name,
-                        "risk_level": risk,
-                        "reason": msg,
-                    },
-                })
+                await event_emitter(
+                    {
+                        "type": "approval_requested",
+                        "data": {
+                            "approval_id": approval_id,
+                            "tool_name": call.tool_name,
+                            "risk_level": risk,
+                            "reason": msg,
+                        },
+                    }
+                )
         except Exception:
             pass
-            
+
         try:
             from silex.adapters.approval_notifier import notify_approval_required
-            await notify_approval_required(self.db, approval_id, call.tool_name, risk, msg)
+
+            await notify_approval_required(
+                self.db, approval_id, call.tool_name, risk, msg
+            )
         except Exception as e:
             log.warning(f"Failed to queue telegram approval notification: {e}")
 
@@ -446,7 +491,9 @@ class ToolRegistry:
                         exec_result = json.loads(row["execution_result_json"])
                         return ToolResult(
                             tool_name=call.tool_name,
-                            actual_outcome=exec_result.get("actual_outcome", "Approved and executed."),
+                            actual_outcome=exec_result.get(
+                                "actual_outcome", "Approved and executed."
+                            ),
                             success=exec_result.get("success", True),
                             ethical_decision=result.ethical_decision,
                         )
@@ -459,7 +506,11 @@ class ToolRegistry:
                 ethical_decision=result.ethical_decision,
             )
 
-        reason_msg = "rejected by operator" if resolved_status == "rejected" else "approval timed out"
+        reason_msg = (
+            "rejected by operator"
+            if resolved_status == "rejected"
+            else "approval timed out"
+        )
         try:
             if turn_emitter is not None:
                 await turn_emitter.error(f"Tool {call.tool_name} was {reason_msg}.")
@@ -486,8 +537,12 @@ class ToolRegistry:
             """,
             (
                 str(uuid.uuid4()),
-                self.session_manager.current.id if self.session_manager and self.session_manager.current else None,
-                (self.session_manager.current.turn_count + 1) if self.session_manager and self.session_manager.current else 0,
+                self.session_manager.current.id
+                if self.session_manager and self.session_manager.current
+                else None,
+                (self.session_manager.current.turn_count + 1)
+                if self.session_manager and self.session_manager.current
+                else 0,
                 call.tool_name,
                 decision.principle,
                 decision.action.value,

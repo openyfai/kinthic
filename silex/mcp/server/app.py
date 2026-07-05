@@ -63,7 +63,12 @@ def register_tools(mcp: "FastMCP", ctx: McpServerContext) -> None:
         """Store memory through full A-MAC admission pipeline; returns admission metadata."""
         return await svc.remember(
             ctx,
-            RememberRequest(content=content, memory_type=memory_type, importance=importance, tags=tags or []),
+            RememberRequest(
+                content=content,
+                memory_type=memory_type,
+                importance=importance,
+                tags=tags or [],
+            ),
         )
 
     @mcp.tool()
@@ -75,13 +80,17 @@ def register_tools(mcp: "FastMCP", ctx: McpServerContext) -> None:
         """Store a user/agent fact directly (bypasses A-MAC; injection guard still applies)."""
         return await svc.remember_explicit(
             ctx,
-            RememberExplicitRequest(content=content, importance=importance, tags=tags or []),
+            RememberExplicitRequest(
+                content=content, importance=importance, tags=tags or []
+            ),
         )
 
     @mcp.tool()
     async def silex_forget(memory_id: str, confirm: bool = False) -> str:
         """Delete a memory by ID. Requires confirm=true."""
-        return await svc.forget(ctx, ForgetRequest(memory_id=memory_id, confirm=confirm))
+        return await svc.forget(
+            ctx, ForgetRequest(memory_id=memory_id, confirm=confirm)
+        )
 
     @mcp.tool()
     async def silex_get_memory(memory_id: str) -> str:
@@ -102,7 +111,9 @@ def register_tools(mcp: "FastMCP", ctx: McpServerContext) -> None:
     @mcp.tool()
     async def silex_graph_recall(query: str, max_nodes: int = 15) -> str:
         """Graph-aware causal context retrieval from the knowledge graph."""
-        return await svc.graph_recall(ctx, GraphRecallRequest(query=query, max_nodes=max_nodes))
+        return await svc.graph_recall(
+            ctx, GraphRecallRequest(query=query, max_nodes=max_nodes)
+        )
 
     @mcp.tool()
     async def silex_memory_health() -> str:
@@ -115,6 +126,7 @@ def register_tools(mcp: "FastMCP", ctx: McpServerContext) -> None:
         loader = ctx.skill_loader
         if loader is None:
             from silex.core.skills import SkillLoader
+
             loader = SkillLoader()
             loader.load_all()
         return loader.format_index_text()
@@ -125,6 +137,7 @@ def register_tools(mcp: "FastMCP", ctx: McpServerContext) -> None:
         loader = ctx.skill_loader
         if loader is None:
             from silex.core.skills import SkillLoader
+
             loader = SkillLoader()
             loader.load_all()
         body = loader.get_skill_body(name.strip())

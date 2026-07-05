@@ -1,7 +1,7 @@
 """
 Context Pruner — ARIA's "Metabolic Optimizer."
 
-Summarizes old conversation history into Knowledge Graph nodes 
+Summarizes old conversation history into Knowledge Graph nodes
 to keep the active context window lean, fast, and cost-effective.
 """
 
@@ -14,6 +14,7 @@ from silex.utils.logger import setup_logger
 
 log = setup_logger("silex.memory.pruner")
 
+
 class ContextPruner:
     """
     Analyzes turn history and compresses old context into high-density summaries.
@@ -22,7 +23,13 @@ class ContextPruner:
     def __init__(self, llm: SupportsLLM):
         self.llm = llm
 
-    async def prune(self, turns: List[Turn], session_manager=None, memory_store=None, threshold: int = 10) -> List[Turn]:
+    async def prune(
+        self,
+        turns: List[Turn],
+        session_manager=None,
+        memory_store=None,
+        threshold: int = 10,
+    ) -> List[Turn]:
         """
         If the number of turns exceeds the threshold, compresses the oldest 20%.
         Returns a pruned/summarized list of turns.
@@ -44,25 +51,26 @@ class ContextPruner:
         if memory_store:
             try:
                 from silex.models.schemas import ExtractedFacts
+
                 extraction_prompt = (
                     "You are ARIA's Memory Extractor. Below is a list of conversation turns that are about to be pruned. "
                     "Review these conversation turns. Extract any permanent facts, user preferences, or causal observations (A causes B) "
                     "that should be saved permanently.\n"
                     "Return a JSON list of strings. Do not include markdown tags. Output ONLY a valid JSON list conforming to the schema."
                 )
-                
+
                 result = await self.llm.complete_json(
                     schema=ExtractedFacts,
                     system_prompt=extraction_prompt,
                     user_input=f"Extract facts from these turns:\n\n{turns_text}",
-                    model_override=get_provider_settings()["fast_model"]
+                    model_override=get_provider_settings()["fast_model"],
                 )
-                
+
                 if result and result.facts:
                     from silex.models.schemas import Memory, MemorySource, MemoryType
                     import uuid
                     from datetime import datetime, timezone
-                    
+
                     for fact in result.facts:
                         m = Memory(
                             id=str(uuid.uuid4()),
@@ -76,10 +84,12 @@ class ContextPruner:
                             access_count=0,
                             tags=["pruner_extracted"],
                             level=1,
-                            provenance={"context": "Pre-compaction LLM extraction"}
+                            provenance={"context": "Pre-compaction LLM extraction"},
                         )
                         await memory_store.add(m)
-                    log.info(f"💾 Pre-Compaction Flush: Evaluated {len(result.facts)} facts for permanent storage.")
+                    log.info(
+                        f"💾 Pre-Compaction Flush: Evaluated {len(result.facts)} facts for permanent storage."
+                    )
             except Exception as e:
                 log.error(f"Pre-compaction flush failed: {e}")
 
@@ -97,7 +107,7 @@ class ContextPruner:
                 user_input=f"Compress these turns:\n\n{turns_text}",
                 model_override=get_provider_settings()["fast_model"],
             )
-            
+
             summary_text = summary_response.response
 
             # Create a new "Virtual Turn" that holds the summary
@@ -108,18 +118,20 @@ class ContextPruner:
                 reasoning="Pruned context",
                 response=f"Summary of previous {num_to_prune} turns: {summary_text}",
                 self_reflection="",
-                confidence=1.0
+                confidence=1.0,
             )
 
             if session_manager:
                 old_ids = [t.id for t in to_prune]
-                await session_manager.compress_turns(virtual_turn.session_id, old_ids, virtual_turn)
+                await session_manager.compress_turns(
+                    virtual_turn.session_id, old_ids, virtual_turn
+                )
 
             return [virtual_turn] + remaining
 
         except Exception as e:
             log.error(f"Context pruning failed: {e}")
-            return turns # Return original if compression fails
+            return turns  # Return original if compression fails
 
     async def consolidate_memories(self, memory_store):
         """Weekly background task to cluster and consolidate redundant memories."""
@@ -128,7 +140,7 @@ class ContextPruner:
         )
         if len(memories) < 20:
             return
-            
+
         mem_objs = [memory_store._row_to_memory(dict(r)) for r in memories]
         prompt = (
             "You are ARIA's Memory Consolidator. "
@@ -139,17 +151,17 @@ class ContextPruner:
             "Only cluster things that mean the same thing or are granular details of the same pattern. "
             "Leave distinct, unconnected facts alone."
         )
-        
+
         mem_text = "\n".join([f"[{m.id}] {m.content}" for m in mem_objs])
-        
+
         try:
             result = await self.llm.complete_json(
                 schema=ConsolidationResult,
                 system_prompt=prompt,
                 user_input=f"Memories to cluster:\n\n{mem_text}",
-                model_override=get_provider_settings()["reasoning_model"]
+                model_override=get_provider_settings()["reasoning_model"],
             )
-            
+
             count = 0
             for cluster in result.clusters:
                 if len(cluster.original_ids) > 1:
@@ -157,14 +169,16 @@ class ContextPruner:
                         content=cluster.synthesis,
                         importance=0.9,
                         level=2,
-                        child_memory_ids=cluster.original_ids
+                        child_memory_ids=cluster.original_ids,
                     )
                     if new_mem is not None:
                         count += 1
                         for old_id in cluster.original_ids:
                             if old_id != new_mem.id:
                                 await memory_store.archive(old_id)
-                            
-            log.info(f"Consolidated {sum(len(c.original_ids) for c in result.clusters if len(c.original_ids) > 1)} memories into {count} abstractions.")
+
+            log.info(
+                f"Consolidated {sum(len(c.original_ids) for c in result.clusters if len(c.original_ids) > 1)} memories into {count} abstractions."
+            )
         except Exception as e:
             log.error(f"Memory consolidation failed: {e}")

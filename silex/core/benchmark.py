@@ -104,7 +104,7 @@ class BenchmarkRunner:
         for i, q in enumerate(BENCHMARK_SUITE):
             if status_callback:
                 status_callback(
-                    f"[bright_magenta]  Benchmark [{i+1}/{len(BENCHMARK_SUITE)}]: "
+                    f"[bright_magenta]  Benchmark [{i + 1}/{len(BENCHMARK_SUITE)}]: "
                     f"{q.domain} ({q.difficulty})...[/]"
                 )
 

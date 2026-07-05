@@ -5,6 +5,7 @@ Filesystem Path Guardian for preventing path traversal and unsafe write operatio
 from pathlib import Path
 from typing import Union
 
+
 class FilesystemPathGuardian:
     """
     Enforces strict path checks on worker filesystem access to prevent
@@ -26,8 +27,10 @@ class FilesystemPathGuardian:
         PermissionError if the target lies outside the sandbox root.
         """
         # Defense against null-byte injections
-        if '\x00' in str(unvalidated_path):
-            raise PermissionError("Security Violation: Null-byte injection detected in target path.")
+        if "\x00" in str(unvalidated_path):
+            raise PermissionError(
+                "Security Violation: Null-byte injection detected in target path."
+            )
 
         # Resolve symlinks and relative directories to determine the physical path
         try:

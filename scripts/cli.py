@@ -20,10 +20,12 @@ _root = logging.getLogger()
 _root.handlers.clear()
 _root.setLevel(logging.DEBUG)
 _fh = logging.FileHandler(str(_log_file), encoding="utf-8", mode="a")
-_fh.setFormatter(logging.Formatter(
-    "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-))
+_fh.setFormatter(
+    logging.Formatter(
+        "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+)
 _root.addHandler(_fh)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -40,14 +42,20 @@ from silex.utils.config import (
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="kinthic", description="Kinthic local operator CLI")
+    parser = argparse.ArgumentParser(
+        prog="kinthic", description="Kinthic local operator CLI"
+    )
     subparsers = parser.add_subparsers(dest="command")
 
-    subparsers.add_parser("init", help="First-run wizard: provider, skills, Telegram, MCP")
+    subparsers.add_parser(
+        "init", help="First-run wizard: provider, skills, Telegram, MCP"
+    )
     subparsers.add_parser("innit", help="Alias for init (common typo)")
     subparsers.add_parser("onboard", help="Alias for init (first-run wizard)")
     subparsers.add_parser("setup", help="Alias for init (first-run wizard)")
-    doctor_parser = subparsers.add_parser("doctor", help="Show local setup and security status")
+    doctor_parser = subparsers.add_parser(
+        "doctor", help="Show local setup and security status"
+    )
     doctor_parser.add_argument(
         "--ping",
         action="store_true",
@@ -57,46 +65,95 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("web", help="Launch the local Kinthic web dashboard")
     subparsers.add_parser("usage", help="View usage and token costs")
 
-    daemon_parser = subparsers.add_parser("daemon", help="Manage the background supervisor daemon")
+    daemon_parser = subparsers.add_parser(
+        "daemon", help="Manage the background supervisor daemon"
+    )
     daemon_sub = daemon_parser.add_subparsers(dest="daemon_command")
     daemon_sub.add_parser("start", help="Start the supervisor in the background")
     daemon_sub.add_parser("stop", help="Stop the background supervisor")
     daemon_sub.add_parser("status", help="Check if the daemon is running")
     daemon_sub.add_parser("logs", help="Tail the daemon logs")
     daemon_sub.add_parser("run", help="Run the supervisor in the foreground")
-    daemon_install = daemon_sub.add_parser("install", help="Install as a systemd/LaunchAgent service (survives reboot)")
-    daemon_install.add_argument("--force", action="store_true", help="Overwrite an existing service unit")
+    daemon_install = daemon_sub.add_parser(
+        "install", help="Install as a systemd/LaunchAgent service (survives reboot)"
+    )
+    daemon_install.add_argument(
+        "--force", action="store_true", help="Overwrite an existing service unit"
+    )
     daemon_sub.add_parser("uninstall", help="Remove the installed service unit")
 
-    data_parser = subparsers.add_parser("data", help="Manage memories, backups, and exports")
+    data_parser = subparsers.add_parser(
+        "data", help="Manage memories, backups, and exports"
+    )
     data_sub = data_parser.add_subparsers(dest="data_command")
     backup_p = data_sub.add_parser("backup", help="Export ~/.kinthic to a zip archive")
-    backup_p.add_argument("--output", default="kinthic-backup.zip", help="Output zip file")
-    restore_p = data_sub.add_parser("restore", help="Restore ~/.kinthic from a backup zip")
+    backup_p.add_argument(
+        "--output", default="kinthic-backup.zip", help="Output zip file"
+    )
+    restore_p = data_sub.add_parser(
+        "restore", help="Restore ~/.kinthic from a backup zip"
+    )
     restore_p.add_argument("archive", help="Path to kinthic-backup.zip")
-    restore_p.add_argument("--dry-run", action="store_true", help="Preview restore plan (default)")
+    restore_p.add_argument(
+        "--dry-run", action="store_true", help="Preview restore plan (default)"
+    )
     restore_p.add_argument("--apply", action="store_true", help="Execute restore")
     restore_p.add_argument(
         "--no-pre-backup",
         action="store_true",
         help="Skip automatic pre-restore safety backup",
     )
-    export_p = data_sub.add_parser("export", help="Export training trajectories (SFT / GRPO / CSV)")
-    export_p.add_argument("--format", choices=["sft", "grpo", "csv"], default="grpo", help="Output format (default: grpo)")
+    export_p = data_sub.add_parser(
+        "export", help="Export training trajectories (SFT / GRPO / CSV)"
+    )
+    export_p.add_argument(
+        "--format",
+        choices=["sft", "grpo", "csv"],
+        default="grpo",
+        help="Output format (default: grpo)",
+    )
     export_p.add_argument("--output", default=None, help="Output file path")
-    export_p.add_argument("--success-only", action="store_true", help="Only include successful trajectories")
-    export_p.add_argument("--since", default=None, metavar="YYYY-MM-DD", help="Lower date bound (UTC)")
-    export_p.add_argument("--until", default=None, metavar="YYYY-MM-DD", help="Upper date bound (UTC)")
-    export_p.add_argument("--max", type=int, default=10_000, dest="max_traj", help="Maximum number of trajectories to export")
-    migrate_scan = data_sub.add_parser("migrate", help="Scan and import migratable data from legacy agents")
-    migrate_scan.add_argument("--from", dest="source", choices=["hermes", "openclaw"], required=True)
+    export_p.add_argument(
+        "--success-only",
+        action="store_true",
+        help="Only include successful trajectories",
+    )
+    export_p.add_argument(
+        "--since", default=None, metavar="YYYY-MM-DD", help="Lower date bound (UTC)"
+    )
+    export_p.add_argument(
+        "--until", default=None, metavar="YYYY-MM-DD", help="Upper date bound (UTC)"
+    )
+    export_p.add_argument(
+        "--max",
+        type=int,
+        default=10_000,
+        dest="max_traj",
+        help="Maximum number of trajectories to export",
+    )
+    migrate_scan = data_sub.add_parser(
+        "migrate", help="Scan and import migratable data from legacy agents"
+    )
+    migrate_scan.add_argument(
+        "--from", dest="source", choices=["hermes", "openclaw"], required=True
+    )
     migrate_scan.add_argument("--path", default=None, help="Custom path to target")
     migrate_group = migrate_scan.add_mutually_exclusive_group()
-    migrate_group.add_argument("--scan-only", action="store_true", help="Only scan without importing")
-    migrate_group.add_argument("--dry-run", action="store_true", help="Report what would be migrated without copying")
-    migrate_group.add_argument("--apply", action="store_true", help="Execute the migration")
+    migrate_group.add_argument(
+        "--scan-only", action="store_true", help="Only scan without importing"
+    )
+    migrate_group.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report what would be migrated without copying",
+    )
+    migrate_group.add_argument(
+        "--apply", action="store_true", help="Execute the migration"
+    )
 
-    channels_parser = subparsers.add_parser("channels", help="Manage connected messaging channels")
+    channels_parser = subparsers.add_parser(
+        "channels", help="Manage connected messaging channels"
+    )
     channels_sub = channels_parser.add_subparsers(dest="channel_app")
     telegram_parser = channels_sub.add_parser("telegram", help="Telegram integration")
     telegram_sub = telegram_parser.add_subparsers(dest="channel_cmd")
@@ -106,10 +163,14 @@ def build_parser() -> argparse.ArgumentParser:
     discord_sub = discord_parser.add_subparsers(dest="channel_cmd")
     discord_sub.add_parser("run", help="Run the Discord bot")
 
-    proposals_parser = subparsers.add_parser("proposals", help="Manage self-improvement proposals")
+    proposals_parser = subparsers.add_parser(
+        "proposals", help="Manage self-improvement proposals"
+    )
     proposals_sub = proposals_parser.add_subparsers(dest="proposals_command")
     proposals_sub.add_parser("list", help="List all pending proposals")
-    approve_p = proposals_sub.add_parser("approve", help="Approve a proposal by ID prefix")
+    approve_p = proposals_sub.add_parser(
+        "approve", help="Approve a proposal by ID prefix"
+    )
     approve_p.add_argument("proposal_id", help="Proposal ID or prefix")
     reject_p = proposals_sub.add_parser("reject", help="Reject a proposal by ID prefix")
     reject_p.add_argument("proposal_id", help="Proposal ID or prefix")
@@ -119,10 +180,14 @@ def build_parser() -> argparse.ArgumentParser:
     skills_sub.add_parser("list", help="List installed and catalog skills")
     skills_search = skills_sub.add_parser("search", help="Search the skill catalog")
     skills_search.add_argument("query", help="Search query")
-    skills_install = skills_sub.add_parser("install", help="Install a skill by name or URL")
+    skills_install = skills_sub.add_parser(
+        "install", help="Install a skill by name or URL"
+    )
     skills_install.add_argument("name", help="Skill name or https:// URL")
     skills_sub.add_parser("reload", help="Reload skills from disk")
-    skills_uninstall = skills_sub.add_parser("uninstall", help="Remove an installed skill")
+    skills_uninstall = skills_sub.add_parser(
+        "uninstall", help="Remove an installed skill"
+    )
     skills_uninstall.add_argument("name", help="Skill name")
     skills_show = skills_sub.add_parser("show", help="Show full skill markdown")
     skills_show.add_argument("name", help="Skill name")
@@ -133,9 +198,17 @@ def build_parser() -> argparse.ArgumentParser:
     mcp_sub.add_parser("list", help="List configured MCP servers")
     mcp_add = mcp_sub.add_parser("add", help="Add an MCP server")
     mcp_add.add_argument("name", help="Server name")
-    mcp_add.add_argument("--preset", choices=["filesystem", "fetch", "github"], help="Use a bundled preset")
-    mcp_add.add_argument("--exec", dest="mcp_exec", help="Executable command (with --args)")
-    mcp_add.add_argument("--args", nargs="*", default=[], dest="mcp_args", help="Command arguments")
+    mcp_add.add_argument(
+        "--preset",
+        choices=["filesystem", "fetch", "github"],
+        help="Use a bundled preset",
+    )
+    mcp_add.add_argument(
+        "--exec", dest="mcp_exec", help="Executable command (with --args)"
+    )
+    mcp_add.add_argument(
+        "--args", nargs="*", default=[], dest="mcp_args", help="Command arguments"
+    )
     mcp_enable = mcp_sub.add_parser("enable", help="Enable an MCP server")
     mcp_enable.add_argument("name", help="Server name")
     mcp_disable = mcp_sub.add_parser("disable", help="Disable an MCP server")
@@ -145,15 +218,23 @@ def build_parser() -> argparse.ArgumentParser:
     mcp_tools = mcp_sub.add_parser("tools", help="List tools exposed by MCP servers")
     mcp_tools.add_argument("--server", default=None, help="Filter by server name")
     mcp_serve = mcp_sub.add_parser("serve", help="Run the Silex memory MCP server")
-    mcp_serve.add_argument("--stdio", action="store_true", help="stdio transport (Claude Desktop / Cursor)")
+    mcp_serve.add_argument(
+        "--stdio", action="store_true", help="stdio transport (Claude Desktop / Cursor)"
+    )
     mcp_print = mcp_sub.add_parser("print-config", help="Print MCP client config JSON")
     mcp_print.add_argument("--client", choices=["claude", "cursor"], default="claude")
 
-    benchmark_parser = subparsers.add_parser("benchmark", help="Run evaluation benchmarks")
+    benchmark_parser = subparsers.add_parser(
+        "benchmark", help="Run evaluation benchmarks"
+    )
     benchmark_sub = benchmark_parser.add_subparsers(dest="benchmark_command")
-    recall_p = benchmark_sub.add_parser("recall", help="Memory recall needle-in-haystack benchmark")
+    recall_p = benchmark_sub.add_parser(
+        "recall", help="Memory recall needle-in-haystack benchmark"
+    )
     recall_p.add_argument("--seed", type=int, default=42, help="RNG seed (default: 42)")
-    recall_p.add_argument("--noise", type=int, default=None, help="Override distractor memory count")
+    recall_p.add_argument(
+        "--noise", type=int, default=None, help="Override distractor memory count"
+    )
     recall_p.add_argument(
         "--conditions",
         nargs="*",
@@ -175,6 +256,7 @@ def build_parser() -> argparse.ArgumentParser:
 def detect_local_ollama_models(base_url: str) -> list[str]:
     """Auto-detect installed models from local Ollama tags API."""
     import httpx
+
     try:
         url = base_url.rstrip("/").replace("/v1", "") + "/api/tags"
         resp = httpx.get(url, timeout=1.5)
@@ -189,6 +271,7 @@ def detect_local_ollama_models(base_url: str) -> list[str]:
 def detect_local_lmstudio_models(base_url: str) -> list[str]:
     """Auto-detect loaded models from local LM Studio models API."""
     import httpx
+
     try:
         url = base_url.rstrip("/") + "/models"
         resp = httpx.get(url, timeout=1.5)
@@ -216,6 +299,7 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
 
     if onboard:
         from silex.utils.config import KINTHIC_HOME, KINTHIC_SKILLS, WORKSPACE_DIR
+
         ui.render_step(
             "Welcome to Kinthic",
             f"Home: {KINTHIC_HOME}\nSkills: {KINTHIC_SKILLS}\nWorkspace: {WORKSPACE_DIR}",
@@ -223,7 +307,9 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
         )
         ui.prompt("Press Enter to continue")
 
-    providers = list_providers()  # Returns list of dicts: {id, label, env_key, base_url, models}
+    providers = (
+        list_providers()
+    )  # Returns list of dicts: {id, label, env_key, base_url, models}
     if not providers:
         ui.render_step(
             "Setup Error",
@@ -238,13 +324,20 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
     # Sort: gemini first, anthropic second, then cloud, then local, custom last
     def provider_sort_key(p):
         p_id = p["id"]
-        if p_id == "gemini":    return 0
-        if p_id == "anthropic": return 1
-        if p_id == "openai":    return 2
-        if p_id == "azure":     return 3
-        if p_id == "deepseek":  return 4
-        if p_id == "custom":    return 99
+        if p_id == "gemini":
+            return 0
+        if p_id == "anthropic":
+            return 1
+        if p_id == "openai":
+            return 2
+        if p_id == "azure":
+            return 3
+        if p_id == "deepseek":
+            return 4
+        if p_id == "custom":
+            return 99
         return 10
+
     providers = sorted(providers, key=provider_sort_key)
 
     # 1. Provider Selection — build labels with descriptions
@@ -279,12 +372,18 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
         detected_models = detect_local_lmstudio_models(base_url)
 
     if provider["id"] == "custom":
-        ui.render_step("Universal Provider", "Configure your custom endpoint.",
-                       subtitle="Display Name (e.g. My Private Llama)")
+        ui.render_step(
+            "Universal Provider",
+            "Configure your custom endpoint.",
+            subtitle="Display Name (e.g. My Private Llama)",
+        )
         custom_label = ui.prompt("Display Name", default="Custom Model")
 
-        ui.render_step("Universal Provider", f"Configuring '{custom_label}'",
-                       subtitle="Base URL (e.g. https://api.proxy.com/v1)")
+        ui.render_step(
+            "Universal Provider",
+            f"Configuring '{custom_label}'",
+            subtitle="Base URL (e.g. https://api.proxy.com/v1)",
+        )
         custom_base_url = ""
         while not custom_base_url:
             custom_base_url = ui.prompt("Base URL").strip()
@@ -293,7 +392,9 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
         detected_models = detect_local_lmstudio_models(custom_base_url)
 
         if detected_models:
-            model_choices = [f"{m} (detected)" for m in detected_models] + ["Enter custom model ID manually..."]
+            model_choices = [f"{m} (detected)" for m in detected_models] + [
+                "Enter custom model ID manually..."
+            ]
             m_idx = ui.prompt_choice(
                 "model",
                 model_choices,
@@ -303,14 +404,20 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
             if m_idx < len(detected_models):
                 model_id = detected_models[m_idx]
             else:
-                ui.render_step("Universal Provider", f"Configuring '{custom_label}'",
-                               subtitle="Exact Model ID (e.g. mixtral-8x7b-instruct)")
+                ui.render_step(
+                    "Universal Provider",
+                    f"Configuring '{custom_label}'",
+                    subtitle="Exact Model ID (e.g. mixtral-8x7b-instruct)",
+                )
                 model_id = ""
                 while not model_id:
                     model_id = ui.prompt("Model ID").strip()
         else:
-            ui.render_step("Universal Provider", f"Configuring '{custom_label}'",
-                           subtitle="Exact Model ID (e.g. mixtral-8x7b-instruct)")
+            ui.render_step(
+                "Universal Provider",
+                f"Configuring '{custom_label}'",
+                subtitle="Exact Model ID (e.g. mixtral-8x7b-instruct)",
+            )
             model_id = ""
             while not model_id:
                 model_id = ui.prompt("Model ID").strip()
@@ -319,14 +426,20 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
         defaults = {"fast_model": model_id, "reasoning_model": model_id}
 
     elif provider["id"] == "azure":
-        ui.render_step("Azure OpenAI", "Configure your Azure OpenAI resource.",
-                       subtitle="Endpoint URL (e.g. https://my-resource.openai.azure.com)")
+        ui.render_step(
+            "Azure OpenAI",
+            "Configure your Azure OpenAI resource.",
+            subtitle="Endpoint URL (e.g. https://my-resource.openai.azure.com)",
+        )
         custom_base_url = ""
         while not custom_base_url:
             custom_base_url = ui.prompt("Endpoint URL").strip()
 
-        ui.render_step("Azure OpenAI", "Configure your Azure OpenAI deployment.",
-                       subtitle="Deployment Name / Model ID (e.g. gpt-4o)")
+        ui.render_step(
+            "Azure OpenAI",
+            "Configure your Azure OpenAI deployment.",
+            subtitle="Deployment Name / Model ID (e.g. gpt-4o)",
+        )
         model_id = ""
         while not model_id:
             model_id = ui.prompt("Deployment Name").strip()
@@ -335,7 +448,9 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
 
     elif provider["id"] in ("ollama", "lm_studio"):
         if detected_models:
-            model_choices = [f"{m} (installed)" for m in detected_models] + ["Enter custom model ID manually..."]
+            model_choices = [f"{m} (installed)" for m in detected_models] + [
+                "Enter custom model ID manually..."
+            ]
             m_idx = ui.prompt_choice(
                 "model",
                 model_choices,
@@ -346,8 +461,11 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
                 model_id = detected_models[m_idx]
                 model = {"id": model_id, "label": model_id}
             else:
-                ui.render_step(provider["label"], f"Configuring '{provider['label']}'",
-                               subtitle="Enter custom model ID manually (e.g. llama3:8b)")
+                ui.render_step(
+                    provider["label"],
+                    f"Configuring '{provider['label']}'",
+                    subtitle="Enter custom model ID manually (e.g. llama3:8b)",
+                )
                 model_id = ""
                 while not model_id:
                     model_id = ui.prompt("Model ID").strip()
@@ -368,8 +486,11 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
             if m_idx < len(models):
                 model = models[m_idx]
             else:
-                ui.render_step(provider["label"], f"Configuring '{provider['label']}'",
-                               subtitle="Enter model ID (e.g. llama3)")
+                ui.render_step(
+                    provider["label"],
+                    f"Configuring '{provider['label']}'",
+                    subtitle="Enter model ID (e.g. llama3)",
+                )
                 model_id = ""
                 while not model_id:
                     model_id = ui.prompt("Model ID").strip()
@@ -392,8 +513,11 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
         if m_idx < len(models):
             model = models[m_idx]
         else:
-            ui.render_step(provider["label"], f"Configuring '{provider['label']}'",
-                           subtitle="Enter custom model ID manually")
+            ui.render_step(
+                provider["label"],
+                f"Configuring '{provider['label']}'",
+                subtitle="Enter custom model ID manually",
+            )
             model_id = ""
             while not model_id:
                 model_id = ui.prompt("Model ID").strip()
@@ -415,11 +539,14 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
 
             ui.render_step("Authentication", "Verifying connectivity...")
             from silex.llm.provider_test import ping_provider
+
             result = await ping_provider(
                 provider["id"],
                 api_key,
                 model["id"],
-                base_url=custom_base_url if provider["id"] in ("custom", "azure") else None,
+                base_url=custom_base_url
+                if provider["id"] in ("custom", "azure")
+                else None,
             )
 
             if result.get("ok"):
@@ -436,12 +563,16 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
         # Ollama / LM Studio connectivity check
         ui.render_step("Local Core", "Verifying local core endpoint...")
         from silex.llm.provider_test import ping_provider
+
         result = await ping_provider(provider["id"], "", model["id"])
         if not result.get("ok"):
             ui.render_step(
                 "Local Core",
                 f"{provider['label']} unreachable.",
-                subtitle=result.get("hint", f"Ensure {provider['label']} is running and the model is loaded/pulled."),
+                subtitle=result.get(
+                    "hint",
+                    f"Ensure {provider['label']} is running and the model is loaded/pulled.",
+                ),
             )
             ui.prompt("Press Enter to continue anyway")
 
@@ -451,12 +582,16 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
         from silex.utils.config import get_provider_secret
 
         while True:
-            key = (get_provider_secret(provider["id"], settings_store=store) or "").strip()
+            key = (
+                get_provider_secret(provider["id"], settings_store=store) or ""
+            ).strip()
             result = await ping_provider(
                 provider["id"],
                 key,
                 model["id"],
-                base_url=custom_base_url if provider["id"] in ("custom", "azure") else None,
+                base_url=custom_base_url
+                if provider["id"] in ("custom", "azure")
+                else None,
             )
             if result.get("ok"):
                 ui.render_step("Live verify", "✓ Provider responded successfully.")
@@ -476,6 +611,7 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
 
         ui.render_step("Core skills", "Installing bundled workflow skills...")
         from silex.plugins.registry import get_registry
+
         reg = get_registry()
         try:
             ok, refresh_msg = reg.refresh_from_remote()
@@ -497,14 +633,18 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
         default_idx=1,
         subtitle="Would you like to link Kinthic to your Telegram account?",
     )
-    wants_telegram = (telegram_idx == 0)
+    wants_telegram = telegram_idx == 0
 
     if wants_telegram:
-        ui.render_step("Telegram Link", "Enter your Telegram Bot Token.",
-                       subtitle="Get this from @BotFather")
+        ui.render_step(
+            "Telegram Link",
+            "Enter your Telegram Bot Token.",
+            subtitle="Get this from @BotFather",
+        )
         bot_token = ui.prompt("Bot Token", password=True)
         if bot_token:
             from silex.utils.telegram_pairing import TelegramPairingSession
+
             session = TelegramPairingSession(bot_token)
             try:
                 await session.get_bot_info()
@@ -523,17 +663,25 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
 
                 # Write to .env to allow kinthic telegram run to work out of the box
                 from silex.utils.config import KINTHIC_HOME
+
                 env_path = KINTHIC_HOME / ".env"
                 env_lines = []
                 if env_path.exists():
                     env_lines = env_path.read_text(encoding="utf-8").splitlines()
-                
+
                 # Replace existing token or append
-                new_lines = [line for line in env_lines if not line.startswith("TELEGRAM_BOT_TOKEN=")]
+                new_lines = [
+                    line
+                    for line in env_lines
+                    if not line.startswith("TELEGRAM_BOT_TOKEN=")
+                ]
                 new_lines.append(f"TELEGRAM_BOT_TOKEN={bot_token}")
                 env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 
-                ui.render_step("Telegram Link", "✓ Identity Verified. Account Linked and .env updated.")
+                ui.render_step(
+                    "Telegram Link",
+                    "✓ Identity Verified. Account Linked and .env updated.",
+                )
                 await asyncio.sleep(1.5)
             except Exception as e:
                 ui.render_step("Telegram Link", f"Pairing failed: {e}")
@@ -542,29 +690,44 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
     # 4.2. Search Configuration
     search_idx = ui.prompt_choice(
         "Search Setup",
-        ["Keep using free DuckDuckGo (zero config)", "Configure paid Search APIs (Tavily, Brave)"],
+        [
+            "Keep using free DuckDuckGo (zero config)",
+            "Configure paid Search APIs (Tavily, Brave)",
+        ],
         default_idx=0,
         subtitle="Would you like to set up high-reliability Search APIs for internet searches?",
     )
-    
+
     if search_idx == 1:
         prov_idx = ui.prompt_choice(
             "Search API Provider",
-            ["Configure Tavily API (Agent-optimized search)", "Configure Brave Search API", "Configure Both (Tavily + Brave)"],
+            [
+                "Configure Tavily API (Agent-optimized search)",
+                "Configure Brave Search API",
+                "Configure Both (Tavily + Brave)",
+            ],
             default_idx=0,
             subtitle="Choose which Search API you want to configure:",
         )
-        
+
         if prov_idx in (0, 2):
-            ui.render_step("Search Setup", "Configure Tavily API.", subtitle="Enter your Tavily API Key (or press enter to skip)")
+            ui.render_step(
+                "Search Setup",
+                "Configure Tavily API.",
+                subtitle="Enter your Tavily API Key (or press enter to skip)",
+            )
             tavily_key = ui.prompt("Tavily API Key", password=True).strip()
             if tavily_key:
                 store.set_provider_secret("tavily", tavily_key)
                 ui.render_step("Search Setup", "✓ Tavily API Key saved.")
                 await asyncio.sleep(0.8)
-                
+
         if prov_idx in (1, 2):
-            ui.render_step("Search Setup", "Configure Brave Search API.", subtitle="Enter your Brave Search API Key (or press enter to skip)")
+            ui.render_step(
+                "Search Setup",
+                "Configure Brave Search API.",
+                subtitle="Enter your Brave Search API Key (or press enter to skip)",
+            )
             brave_key = ui.prompt("Brave Search API Key", password=True).strip()
             if brave_key:
                 store.set_provider_secret("brave", brave_key)
@@ -589,12 +752,16 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
             _onboard_enable_mcp_preset(ui, "fetch")
 
     # 4.5. Configure Agent Persona
-    ui.render_step("Configure Agent Persona", "Choose the identity and name of your local agent.")
-    agent_name_input = ui.prompt("Name your specific agent instance (Default: Kinthic)", default="Kinthic").strip()
-    
+    ui.render_step(
+        "Configure Agent Persona", "Choose the identity and name of your local agent."
+    )
+    agent_name_input = ui.prompt(
+        "Name your specific agent instance (Default: Kinthic)", default="Kinthic"
+    ).strip()
+
     from silex.utils.config import KINTHIC_PERSONA
     import yaml
-    
+
     persona_data = {
         "agent_name": "Kinthic",
         "engine_name": "SILEX",
@@ -602,11 +769,11 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
         "personality_archetype": "Sovereign CLI Development Engine",
         "tone_modifiers": [
             "Direct, sharp, and technically flawless.",
-            "Gives raw engineering facts, completely avoiding polite fluff."
+            "Gives raw engineering facts, completely avoiding polite fluff.",
         ],
-        "custom_greeting": "🧠 SILEX memory core active. Kinthic CLI operational. Systems are 100% green."
+        "custom_greeting": "🧠 SILEX memory core active. Kinthic CLI operational. Systems are 100% green.",
     }
-    
+
     if KINTHIC_PERSONA.exists():
         try:
             with open(KINTHIC_PERSONA, "r", encoding="utf-8") as f:
@@ -615,15 +782,17 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
                     persona_data.update(loaded)
         except Exception:
             pass
-            
+
     if agent_name_input:
         persona_data["agent_name"] = agent_name_input
-        
+
     try:
         with open(KINTHIC_PERSONA, "w", encoding="utf-8") as f:
             yaml.safe_dump(persona_data, f, sort_keys=False, allow_unicode=True)
     except Exception as e:
-        logging.getLogger("kinthic.cli").error("Failed to save persona name in setup: %s", e)
+        logging.getLogger("kinthic.cli").error(
+            "Failed to save persona name in setup: %s", e
+        )
 
     # 5. Finalize
     settings_payload = {
@@ -642,8 +811,11 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
     store.save_settings(settings_payload)
 
     if onboard:
-        ui.render_step("Semantic memory", "Prefetching embedding model (one-time download)...")
+        ui.render_step(
+            "Semantic memory", "Prefetching embedding model (one-time download)..."
+        )
         from silex.ops.prefetch import prefetch_embedding_model
+
         prefetch_msg = prefetch_embedding_model()
         if prefetch_msg:
             ui.render_step("Semantic memory", prefetch_msg)
@@ -663,7 +835,10 @@ async def run_interactive_setup(*, onboard: bool = False) -> None:
             subtitle="Run kinthic doctor --ping anytime to verify connectivity",
         )
     else:
-        greeting = persona_data.get("custom_greeting", "🧠 SILEX memory core active. Kinthic CLI operational. Systems are 100% green.")
+        greeting = persona_data.get(
+            "custom_greeting",
+            "🧠 SILEX memory core active. Kinthic CLI operational. Systems are 100% green.",
+        )
         ui.render_step(
             "Activation Complete",
             f"Kinthic cognitive core is now active.\n\n  {greeting}",
@@ -700,15 +875,13 @@ def run_setup() -> None:
     run_onboard()
 
 
-
-
 def run_doctor(*, ping: bool = False) -> None:
     store = RuntimeSettingsStore()
     settings = store.load_settings()
     status = store.setup_status()
-    
-    provider_label = status['provider']
-    if status['provider'] == 'custom':
+
+    provider_label = status["provider"]
+    if status["provider"] == "custom":
         provider_label = f"Custom ({settings.get('custom_label', 'Unknown')})"
 
     print("\nKinthic doctor\n")
@@ -721,15 +894,18 @@ def run_doctor(*, ping: bool = False) -> None:
     print(f"Model: {status['model']}")
     print(f"Provider key configured: {status['provider_configured']}")
     print(f"Web API key configured: {status['web_api_key_configured']}")
-    
+
     from silex.utils.config import get_search_secret
+
     has_tavily = bool(get_search_secret("tavily", settings_store=store))
     has_brave = bool(get_search_secret("brave", settings_store=store))
     print(f"Tavily Search API Key configured: {has_tavily}")
     print(f"Brave Search API Key configured: {has_brave}")
-    
+
     print(f"Paired Telegram users: {status['paired_telegram_users']}")
-    print(f"Approvals required: {settings.get('security', {}).get('require_tool_approvals', True)}")
+    print(
+        f"Approvals required: {settings.get('security', {}).get('require_tool_approvals', True)}"
+    )
     print(f"Browser actions enabled: {browser_actions_enabled()}")
     terminal_enabled = terminal_execution_enabled()
     code_enabled = code_apply_enabled()
@@ -737,15 +913,20 @@ def run_doctor(*, ping: bool = False) -> None:
     print(f"Direct code apply enabled: {code_enabled}")
 
     import os
+
     public_mode = os.environ.get("TELEGRAM_PUBLIC_MODE", "false").lower() == "true"
     print(f"Telegram Public Mode: {public_mode}")
-    
+
     warnings = []
     if public_mode and (terminal_enabled or code_enabled):
-        warnings.append("⚠️ RISKY CONFIG: Telegram Public Mode is ON while Terminal/Code Apply is enabled. Unpaired users could execute arbitrary code!")
-    if not settings.get('security', {}).get('require_tool_approvals', True):
-        warnings.append("⚠️ RISKY CONFIG: require_tool_approvals is FALSE. The agent can take irreversible actions without operator consent.")
-        
+        warnings.append(
+            "⚠️ RISKY CONFIG: Telegram Public Mode is ON while Terminal/Code Apply is enabled. Unpaired users could execute arbitrary code!"
+        )
+    if not settings.get("security", {}).get("require_tool_approvals", True):
+        warnings.append(
+            "⚠️ RISKY CONFIG: require_tool_approvals is FALSE. The agent can take irreversible actions without operator consent."
+        )
+
     if warnings:
         print("\n--- SECURITY WARNINGS ---")
         for w in warnings:
@@ -758,7 +939,9 @@ def run_doctor(*, ping: bool = False) -> None:
 
         mcp_cfg = load_mcp_config()
         enabled = [n for n, s in mcp_cfg.servers.items() if s.get("enabled", True)]
-        print(f"MCP servers configured: {len(mcp_cfg.servers)} ({len(enabled)} enabled)")
+        print(
+            f"MCP servers configured: {len(mcp_cfg.servers)} ({len(enabled)} enabled)"
+        )
         for line in get_mcp_manager().status_report():
             print(line)
     except Exception as exc:
@@ -770,8 +953,12 @@ def run_doctor(*, ping: bool = False) -> None:
         from silex.utils.config import gateway_host, gateway_port
 
         ctx = get_mcp_context()
-        print(f"Silex MCP server endpoint: http://{gateway_host()}:{gateway_port()}/mcp")
-        print(f"Silex MCP active in-process: {'yes' if ctx else 'no (start daemon/gateway)'}")
+        print(
+            f"Silex MCP server endpoint: http://{gateway_host()}:{gateway_port()}/mcp"
+        )
+        print(
+            f"Silex MCP active in-process: {'yes' if ctx else 'no (start daemon/gateway)'}"
+        )
         audit = get_audit_log()
         print(f"MCP audit log: {audit.path}")
         if audit.last_error:
@@ -780,13 +967,18 @@ def run_doctor(*, ping: bool = False) -> None:
         print(f"Silex MCP server status unavailable: {exc}")
 
     from silex.utils.config import KINTHIC_BACKUPS, KINTHIC_HOME
+
     print(f"Kinthic data home: {KINTHIC_HOME}")
-    print("Backup/restore: kinthic data backup | kinthic data restore <archive> [--apply]")
+    print(
+        "Backup/restore: kinthic data backup | kinthic data restore <archive> [--apply]"
+    )
     print(f"Pre-restore safety backups: {KINTHIC_BACKUPS}")
-    
+
     warnings = []
     if os.name == "nt":
-        warnings.append("Windows detected: ~/.kinthic/secrets.json has no OS-level file permission protection. (Prefer Env Vars)")
+        warnings.append(
+            "Windows detected: ~/.kinthic/secrets.json has no OS-level file permission protection. (Prefer Env Vars)"
+        )
 
     if warnings:
         print("\nWarnings:")
@@ -795,9 +987,12 @@ def run_doctor(*, ping: bool = False) -> None:
 
     try:
         import importlib.util
+
         if browser_actions_enabled() and importlib.util.find_spec("playwright") is None:
             print("\nWarnings:")
-            print("- Browser tools are enabled but playwright is not installed. Run: pip install 'kinthic[browser]'")
+            print(
+                "- Browser tools are enabled but playwright is not installed. Run: pip install 'kinthic[browser]'"
+            )
     except Exception:
         pass
 
@@ -806,7 +1001,9 @@ def run_doctor(*, ping: bool = False) -> None:
         from silex.llm.provider_test import ping_provider
         from silex.utils.config import get_provider_secret
 
-        provider = str(settings.get("provider", "") or status.get("provider") or "gemini").strip()
+        provider = str(
+            settings.get("provider", "") or status.get("provider") or "gemini"
+        ).strip()
         model = settings.get("model")
         key = (get_provider_secret(provider, settings_store=store) or "").strip()
         if provider != "ollama" and not key:
@@ -815,6 +1012,7 @@ def run_doctor(*, ping: bool = False) -> None:
             print("\nLive provider check...")
             result = asyncio.run(ping_provider(provider, key, model))
             print(f"  [{'ok' if result.get('ok') else 'fail'}] {result.get('message')}")
+
 
 def run_models() -> None:
     print("\nKinthic supported providers\n")
@@ -828,11 +1026,13 @@ def run_models() -> None:
 
 def run_telegram() -> None:
     from silex.adapters.telegram import TelegramAdapter
+
     TelegramAdapter().run()
 
 
 def run_discord() -> None:
     from silex.adapters.discord import DiscordAdapter
+
     DiscordAdapter().run()
 
 
@@ -844,12 +1044,12 @@ def _run_export_trajectories(args) -> None:
     from silex.utils.config import SILEX_DB
     from silex.autonomy.export import export_trajectories
 
-    fmt    = getattr(args, "format", "grpo")
-    out    = getattr(args, "output", None)
+    fmt = getattr(args, "format", "grpo")
+    out = getattr(args, "output", None)
     s_only = getattr(args, "success_only", False)
-    since  = getattr(args, "since", None)
-    until  = getattr(args, "until", None)
-    max_t  = getattr(args, "max_traj", 10_000)
+    since = getattr(args, "since", None)
+    until = getattr(args, "until", None)
+    max_t = getattr(args, "max_traj", 10_000)
 
     async def _run() -> None:
         db = Database(str(SILEX_DB))
@@ -865,7 +1065,9 @@ def _run_export_trajectories(args) -> None:
                 max_trajectories=max_t,
             )
             if path:
-                print(f"\n✅  Exported {len(records)} trajectories ({fmt.upper()}) → {path}")
+                print(
+                    f"\n✅  Exported {len(records)} trajectories ({fmt.upper()}) → {path}"
+                )
             else:
                 print("\n⚠️  No trajectories matched the filter criteria.")
         finally:
@@ -964,7 +1166,7 @@ def run_benchmark_recall(
             f"\naged_21d hybrid — Hit@5: {hybrid.get('hit_at_5', 0):.1%} | "
             f"Hit@12: {hybrid.get('hit_at_12', 0):.1%} | MRR: {hybrid.get('mrr', 0):.3f}"
         )
-    print(f"Full report: benchmarks/memory_recall/results/REPORT.md")
+    print("Full report: benchmarks/memory_recall/results/REPORT.md")
 
 
 def run_mcp(command: str, name: str | None = None, **kwargs) -> None:
@@ -997,7 +1199,9 @@ def run_mcp(command: str, name: str | None = None, **kwargs) -> None:
             write_server(name or preset, dict(preset_cfg))
             print(f"Added MCP server '{name or preset}' from preset '{preset}'")
         elif cmd:
-            write_server(name or "custom", {"command": cmd, "args": args, "enabled": False})
+            write_server(
+                name or "custom", {"command": cmd, "args": args, "enabled": False}
+            )
             print(f"Added MCP server '{name or 'custom'}'")
         else:
             print("Use --preset or --command")
@@ -1024,13 +1228,18 @@ def run_mcp(command: str, name: str | None = None, **kwargs) -> None:
     elif command == "serve":
         if kwargs.get("stdio"):
             from silex.mcp.server.stdio_bridge import run_stdio_bridge
+
             run_stdio_bridge()
         else:
-            print("Use --stdio for Claude Desktop / Cursor, or connect via HTTP when daemon is running:")
+            print(
+                "Use --stdio for Claude Desktop / Cursor, or connect via HTTP when daemon is running:"
+            )
             from silex.utils.config import gateway_host, gateway_port
+
             print(f"  http://{gateway_host()}:{gateway_port()}/mcp")
     elif command == "print-config":
         from silex.mcp.server.print_config import print_config
+
         print_config(kwargs.get("client", "claude"))
 
 
@@ -1038,23 +1247,23 @@ def run_usage() -> None:
     from silex.storage.database import Database
     from silex.runtime.usage import UsageTracker
     from silex.utils.config import SILEX_DB
-    
+
     async def _run():
         db = Database(str(SILEX_DB))
         await db.connect()
         try:
             tracker = UsageTracker(db)
             summary = await tracker.summary()
-            
+
             totals = summary.get("totals", {})
             models = summary.get("models", [])
-            
+
             print("\n📊 Usage & Cost Report\n")
             print(f"Total Requests: {totals.get('requests', 0)}")
             print(f"Total Tokens In: {totals.get('input_tokens', 0):,}")
             print(f"Total Tokens Out: {totals.get('output_tokens', 0):,}")
             print(f"Estimated Cost: ${totals.get('estimated_cost_usd', 0.0):.4f}\n")
-            
+
             if models:
                 print("Top Models:")
                 for m in models:
@@ -1062,12 +1271,14 @@ def run_usage() -> None:
             print()
         finally:
             await db.close()
-            
+
     asyncio.run(_run())
+
 
 def run_backup(command: str, output: str) -> None:
     if command == "export":
         from silex.ops.backup import export_backup
+
         export_backup(output)
     else:
         print("Usage: kinthic data backup [--output filename.zip]")
@@ -1081,29 +1292,35 @@ def run_restore(archive: str, *, apply: bool, pre_backup: bool) -> None:
     if summary.get("errors"):
         raise SystemExit(1)
 
+
 def run_migrate(command: str, source: str, path: str | None, dry_run: bool) -> None:
     if source == "hermes":
         from silex.migrate.hermes import scan_hermes, import_hermes
+
         if command == "scan":
             report = scan_hermes(path)
             print("Hermes Migration Scan Report:")
             import json
+
             print(json.dumps(report, indent=2))
         elif command == "import":
             logs = import_hermes(path, dry_run=dry_run)
             print("\n".join(logs))
     elif source == "openclaw":
         from silex.migrate.openclaw import scan_openclaw, import_openclaw
+
         if command == "scan":
             report = scan_openclaw(path)
             print("OpenClaw Migration Scan Report:")
             import json
+
             print(json.dumps(report, indent=2))
         elif command == "import":
             logs = import_openclaw(path, dry_run=dry_run)
             print("\n".join(logs))
     else:
         print("Unknown source for migration.")
+
 
 def run_start() -> None:
     import subprocess
@@ -1115,7 +1332,9 @@ def run_start() -> None:
 
     if KINTHIC_DAEMON_LOCK.exists():
         try:
-            lock_data = json.loads(KINTHIC_DAEMON_LOCK.read_text(encoding="utf-8").strip())
+            lock_data = json.loads(
+                KINTHIC_DAEMON_LOCK.read_text(encoding="utf-8").strip()
+            )
             pid = lock_data.get("pid")
             if pid:
                 os.kill(pid, 0)
@@ -1127,6 +1346,7 @@ def run_start() -> None:
     # Prefer systemd/LaunchAgent when the service unit is installed.
     try:
         from silex.ops.service import is_service_installed, start_service
+
         if is_service_installed():
             ok, msg = start_service()
             print(msg)
@@ -1153,7 +1373,9 @@ def run_start() -> None:
     for _ in range(30):
         if KINTHIC_DAEMON_LOCK.exists():
             try:
-                lock_data = json.loads(KINTHIC_DAEMON_LOCK.read_text(encoding="utf-8").strip())
+                lock_data = json.loads(
+                    KINTHIC_DAEMON_LOCK.read_text(encoding="utf-8").strip()
+                )
                 pid = lock_data.get("pid")
                 if pid:
                     os.kill(pid, 0)
@@ -1168,10 +1390,12 @@ def run_start() -> None:
         "Run 'kinthic daemon run' in the foreground to see the error."
     )
 
+
 def run_stop() -> None:
     import json
     import signal
     from silex.utils.config import KINTHIC_DAEMON_LOCK
+
     lock_path = KINTHIC_DAEMON_LOCK
     if not lock_path.exists():
         print("Kinthic is not running (no daemon.lock found).")
@@ -1186,6 +1410,7 @@ def run_stop() -> None:
 
     try:
         from silex.ops.service import is_service_installed, stop_service
+
         if is_service_installed():
             ok, msg = stop_service()
             if ok:
@@ -1219,7 +1444,7 @@ def run_proposals(command: str, proposal_id: str | None = None) -> None:
         db = Database(str(SILEX_DB))
         await db.connect()
         try:
-            engine = MetaReasoningEngine(None, db) # type: ignore
+            engine = MetaReasoningEngine(None, db)  # type: ignore
             if command == "list":
                 proposals = await engine.get_pending_proposals()
                 for p in proposals:
@@ -1232,6 +1457,7 @@ def run_proposals(command: str, proposal_id: str | None = None) -> None:
                 await engine.update_status(proposal_id, status)  # type: ignore
         finally:
             await db.close()
+
     asyncio.run(_run())
 
 
@@ -1263,28 +1489,35 @@ def run_web() -> None:
     api_proc = None
     ui_proc = None
     try:
-        api_proc = subprocess.Popen([sys.executable, str(PROJECT_ROOT / "scripts" / "dashboard_api.py")])
+        api_proc = subprocess.Popen(
+            [sys.executable, str(PROJECT_ROOT / "scripts" / "dashboard_api.py")]
+        )
         npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
         ui_env = {
             **os.environ,
             "NEXT_PUBLIC_KINTHIC_API_KEY": api_key,
             "NEXT_PUBLIC_KINTHIC_API_BASE": api_base,
         }
-        ui_proc = subprocess.Popen([npm_cmd, "run", "dev"], cwd=str(dashboard_path), env=ui_env)
+        ui_proc = subprocess.Popen(
+            [npm_cmd, "run", "dev"], cwd=str(dashboard_path), env=ui_env
+        )
 
         print(f"\n[+] Dashboard is running against {api_base} (Press Ctrl+C to stop).")
         ui_proc.wait()
     except KeyboardInterrupt:
         print("\nStopping dashboard...")
     finally:
-        if api_proc: api_proc.terminate()
-        if ui_proc: ui_proc.terminate()
+        if api_proc:
+            api_proc.terminate()
+        if ui_proc:
+            ui_proc.terminate()
 
 
 def run_daemon_status() -> None:
     import json
     import os
     from silex.utils.config import KINTHIC_DAEMON_LOCK
+
     lock_path = KINTHIC_DAEMON_LOCK
     if not lock_path.exists():
         print("Kinthic daemon is NOT running.")
@@ -1303,23 +1536,29 @@ def run_daemon_status() -> None:
     print("Kinthic daemon is NOT running (stale lockfile).")
     lock_path.unlink(missing_ok=True)
 
+
 def run_daemon_logs() -> None:
     from silex.utils.config import KINTHIC_DAEMON_LOG
     import subprocess
     import os
+
     if not KINTHIC_DAEMON_LOG.exists():
         print("No daemon logs found.")
         return
     print(f"Tailing {KINTHIC_DAEMON_LOG}...")
     if os.name == "nt":
-        subprocess.run(["powershell", "-c", f"Get-Content '{KINTHIC_DAEMON_LOG}' -Wait"])
+        subprocess.run(
+            ["powershell", "-c", f"Get-Content '{KINTHIC_DAEMON_LOG}' -Wait"]
+        )
     else:
         subprocess.run(["tail", "-f", str(KINTHIC_DAEMON_LOG)])
+
 
 def run_daemon_foreground() -> None:
     import json
     import os
     from silex.utils.config import KINTHIC_DAEMON_LOCK
+
     lock_path = KINTHIC_DAEMON_LOCK
     if lock_path.exists():
         try:
@@ -1333,17 +1572,21 @@ def run_daemon_foreground() -> None:
             lock_path.unlink(missing_ok=True)
         except Exception:
             lock_path.unlink(missing_ok=True)
-            
+
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.write_text(json.dumps({"pid": os.getpid()}), encoding="utf-8")
 
     def setup_daemon_logging():
         from silex.utils.config import KINTHIC_DAEMON_LOG
         import os
-        if KINTHIC_DAEMON_LOG.exists() and KINTHIC_DAEMON_LOG.stat().st_size > 10 * 1024 * 1024:
+
+        if (
+            KINTHIC_DAEMON_LOG.exists()
+            and KINTHIC_DAEMON_LOG.stat().st_size > 10 * 1024 * 1024
+        ):
             for i in range(2, 0, -1):
                 old = KINTHIC_DAEMON_LOG.with_name(f"daemon.log.{i}")
-                new = KINTHIC_DAEMON_LOG.with_name(f"daemon.log.{i+1}")
+                new = KINTHIC_DAEMON_LOG.with_name(f"daemon.log.{i + 1}")
                 if old.exists():
                     try:
                         old.replace(new)
@@ -1359,21 +1602,25 @@ def run_daemon_foreground() -> None:
             os.dup2(log_file.fileno(), 2)
         except Exception:
             pass
-    
+
     setup_daemon_logging()
     try:
         from scripts.daemon import main as daemon_main
+
         daemon_main()
     finally:
         lock_path.unlink(missing_ok=True)
 
+
 def main() -> None:
     import sys
+
     parser = build_parser()
     args = parser.parse_args()
 
     if args.command is None:
         from scripts.run import main as run_main
+
         run_main()
         return
 
@@ -1400,12 +1647,14 @@ def main() -> None:
             run_daemon_foreground()
         elif args.daemon_command == "install":
             from silex.ops.service import install_service
+
             ok, msg = install_service(force=getattr(args, "force", False))
             print(msg)
             if not ok:
                 sys.exit(1)
         elif args.daemon_command == "uninstall":
             from silex.ops.service import uninstall_service
+
             ok, msg = uninstall_service()
             print(msg)
             if not ok:
@@ -1434,7 +1683,8 @@ def main() -> None:
             source = getattr(args, "source", "")
             path = getattr(args, "path", None)
             if getattr(args, "scan_only", False) or (
-                not getattr(args, "dry_run", False) and not getattr(args, "apply", False)
+                not getattr(args, "dry_run", False)
+                and not getattr(args, "apply", False)
             ):
                 run_migrate("scan", source, path, True)
             elif getattr(args, "apply", False):
@@ -1452,7 +1702,10 @@ def main() -> None:
         elif args.channel_app == "discord":
             run_discord()
     elif args.command == "proposals":
-        run_proposals(getattr(args, "proposals_command", "list"), getattr(args, "proposal_id", None))
+        run_proposals(
+            getattr(args, "proposals_command", "list"),
+            getattr(args, "proposal_id", None),
+        )
     elif args.command == "skills":
         run_skills(
             getattr(args, "skills_command", "list") or "list",

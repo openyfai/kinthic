@@ -27,12 +27,12 @@ from typing import Any
 # ANSI helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-_AMBER  = "\033[1;33m"   # bold yellow/amber – header
-_DIM    = "\033[2m"      # dim   – legend / unselected text
-_GREEN  = "\033[32m"     # green – active row
-_RED    = "\033[1;31m"   # bold red – error messages
-_WHITE  = "\033[1;37m"   # bold white – prompts / info
-_RESET  = "\033[0m"
+_AMBER = "\033[1;33m"  # bold yellow/amber – header
+_DIM = "\033[2m"  # dim   – legend / unselected text
+_GREEN = "\033[32m"  # green – active row
+_RED = "\033[1;31m"  # bold red – error messages
+_WHITE = "\033[1;37m"  # bold white – prompts / info
+_RESET = "\033[0m"
 
 
 def _ansi_enable_win32() -> None:
@@ -41,6 +41,7 @@ def _ansi_enable_win32() -> None:
         return
     try:
         import ctypes
+
         kernel32 = ctypes.windll.kernel32
         hOut = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
         if hOut and hOut != -1:
@@ -68,23 +69,34 @@ def _clear_screen() -> None:
 # Cross-platform single-key reader
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _get_key() -> str:
     """Read one logical keypress and return a named string token."""
     if sys.platform == "win32":
         import msvcrt
+
         ch = msvcrt.getch()
-        if ch in (b"\x00", b"\xe0"):          # extended key prefix
+        if ch in (b"\x00", b"\xe0"):  # extended key prefix
             ch2 = msvcrt.getch()
-            if ch2 == b"H": return "up"
-            if ch2 == b"P": return "down"
-            if ch2 == b"K": return "left"
-            if ch2 == b"M": return "right"
+            if ch2 == b"H":
+                return "up"
+            if ch2 == b"P":
+                return "down"
+            if ch2 == b"K":
+                return "left"
+            if ch2 == b"M":
+                return "right"
             return ""
-        if ch in (b"\r", b"\n"): return "enter"
-        if ch == b" ":           return "space"
-        if ch == b"\x1b":        return "escape"
-        if ch == b"\x03":        raise KeyboardInterrupt
-        if ch == b"\x08":        return "backspace"
+        if ch in (b"\r", b"\n"):
+            return "enter"
+        if ch == b" ":
+            return "space"
+        if ch == b"\x1b":
+            return "escape"
+        if ch == b"\x03":
+            raise KeyboardInterrupt
+        if ch == b"\x08":
+            return "backspace"
         try:
             return ch.decode("utf-8").lower()
         except Exception:
@@ -93,6 +105,7 @@ def _get_key() -> str:
         import tty
         import termios
         import select
+
         fd = sys.stdin.fileno()
         old = termios.tcgetattr(fd)
         try:
@@ -104,15 +117,23 @@ def _get_key() -> str:
                     ch2 = sys.stdin.read(1)
                     if ch2 == "[":
                         ch3 = sys.stdin.read(1)
-                        if ch3 == "A": return "up"
-                        if ch3 == "B": return "down"
-                        if ch3 == "C": return "right"
-                        if ch3 == "D": return "left"
+                        if ch3 == "A":
+                            return "up"
+                        if ch3 == "B":
+                            return "down"
+                        if ch3 == "C":
+                            return "right"
+                        if ch3 == "D":
+                            return "left"
                 return "escape"
-            if ch in ("\r", "\n"): return "enter"
-            if ch == " ":          return "space"
-            if ch == "\x03":       raise KeyboardInterrupt
-            if ch in ("\x7f", "\x08"): return "backspace"
+            if ch in ("\r", "\n"):
+                return "enter"
+            if ch == " ":
+                return "space"
+            if ch == "\x03":
+                raise KeyboardInterrupt
+            if ch in ("\x7f", "\x08"):
+                return "backspace"
             return ch.lower()
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old)
@@ -121,6 +142,7 @@ def _get_key() -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # ProviderSelector — reactive Widget (pure-ANSI, zero-dep)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class ProviderSelector:
     """
@@ -155,7 +177,7 @@ class ProviderSelector:
         self.title = title
         self.choices = choices
         self.current_index = max(0, min(default_idx, len(choices) - 1))
-        self._lines_rendered = 0          # tracks how many lines last drawn
+        self._lines_rendered = 0  # tracks how many lines last drawn
 
     # ── render() — assembles full frame ───────────────────────────────────
 
@@ -170,7 +192,9 @@ class ProviderSelector:
         lines.append(f"{_AMBER}{self.title}{_RESET}")
 
         # Header line 2 — dim legend
-        lines.append(f"{_DIM}  \u2191\u2193 navigate   ENTER/SPACE select   ESC cancel{_RESET}")
+        lines.append(
+            f"{_DIM}  \u2191\u2193 navigate   ENTER/SPACE select   ESC cancel{_RESET}"
+        )
 
         # Empty spacer
         lines.append("")
@@ -196,7 +220,7 @@ class ProviderSelector:
         if self._lines_rendered > 0:
             # Move cursor up to top of frame, then erase to end of screen
             _write(f"\033[{self._lines_rendered}A\033[J")
-        
+
         _write(frame + "\n")
         self._lines_rendered = new_lines
 
@@ -233,10 +257,10 @@ class ProviderSelector:
             return self._fallback_numbered()
 
         _ansi_enable_win32()
-        _write("\033[?25l")   # hide cursor
+        _write("\033[?25l")  # hide cursor
 
         try:
-            self._draw()           # initial render
+            self._draw()  # initial render
 
             while True:
                 try:
@@ -255,7 +279,7 @@ class ProviderSelector:
                     # Reactive re-render (state changed → repaint)
                     self._draw()
         finally:
-            _write("\033[?25h")   # restore cursor
+            _write("\033[?25h")  # restore cursor
 
     # ── Fallback: non-TTY numbered prompt ─────────────────────────────────
 
@@ -265,7 +289,9 @@ class ProviderSelector:
         for i, choice in enumerate(self.choices, 1):
             prefix = "→" if i - 1 == self.current_index else " "
             print(f"  {prefix} {i}. {choice}")
-        raw = input(f"\nSelect [1-{len(self.choices)}] (default {self.current_index + 1}): ").strip()
+        raw = input(
+            f"\nSelect [1-{len(self.choices)}] (default {self.current_index + 1}): "
+        ).strip()
         try:
             idx = int(raw) - 1
             return max(0, min(len(self.choices) - 1, idx))
@@ -276,6 +302,7 @@ class ProviderSelector:
 # ─────────────────────────────────────────────────────────────────────────────
 # OnboardingUI — session coordinator
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class OnboardingUI:
     """
@@ -321,6 +348,7 @@ class OnboardingUI:
         content_str = str(content) if not isinstance(content, str) else content
         # Strip Rich markup tags for plain display
         import re
+
         content_str = re.sub(r"\[/?[^\]]+\]", "", content_str)
         lines.append(f"  {content_str}")
 
@@ -384,6 +412,7 @@ class OnboardingUI:
 
         if not sys.stdin.isatty():
             import getpass
+
             try:
                 return getpass.getpass("").strip()
             except Exception:
@@ -394,22 +423,23 @@ class OnboardingUI:
         try:
             if sys.platform == "win32":
                 import msvcrt
+
                 while True:
                     ch = msvcrt.getch()
-                    if ch in (b"\x00", b"\xe0"):   # skip arrow key sequences
+                    if ch in (b"\x00", b"\xe0"):  # skip arrow key sequences
                         msvcrt.getch()
                         continue
                     if ch in (b"\r", b"\n"):
                         _write("\n")
                         break
-                    elif ch == b"\x08":            # backspace
+                    elif ch == b"\x08":  # backspace
                         if buf:
                             buf.pop()
                             _write("\b \b")
                     elif ch == b"\x03":
                         raise KeyboardInterrupt
                     elif ch == b"\x1b":
-                        pass                       # ignore ESC
+                        pass  # ignore ESC
                     else:
                         try:
                             c = ch.decode("utf-8")
@@ -421,6 +451,7 @@ class OnboardingUI:
             else:
                 import tty
                 import termios
+
                 fd = sys.stdin.fileno()
                 old = termios.tcgetattr(fd)
                 try:
@@ -430,7 +461,7 @@ class OnboardingUI:
                         if ch in ("\r", "\n"):
                             _write("\r\n")
                             break
-                        elif ch in ("\x7f", "\x08"):    # backspace
+                        elif ch in ("\x7f", "\x08"):  # backspace
                             if buf:
                                 buf.pop()
                                 _write("\b \b")

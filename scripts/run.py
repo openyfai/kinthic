@@ -25,11 +25,15 @@ _root_log = _logging.getLogger()
 if not any(isinstance(h, _logging.FileHandler) for h in _root_log.handlers):
     _root_log.handlers.clear()
     _root_log.setLevel(_logging.DEBUG)
-    _fh = _logging.FileHandler(str(_log_dir / "kinthic.log"), encoding="utf-8", mode="a")
-    _fh.setFormatter(_logging.Formatter(
-        "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    ))
+    _fh = _logging.FileHandler(
+        str(_log_dir / "kinthic.log"), encoding="utf-8", mode="a"
+    )
+    _fh.setFormatter(
+        _logging.Formatter(
+            "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
     _root_log.addHandler(_fh)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -77,7 +81,7 @@ from silex.ui.terminal import (
 # ─────────────────────────────────────────────────────────────────────────────
 
 _HISTORY_FILE = _Path.home() / ".kinthic" / "history"
-_MAX_HISTORY  = 500
+_MAX_HISTORY = 500
 
 
 def _load_history() -> list[str]:
@@ -100,6 +104,7 @@ def _append_history(entry: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Plain-text formatters — used when Ink bridge is active
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _fmt_help() -> str:
     lines = [
@@ -191,7 +196,9 @@ def _fmt_goals(goals: list) -> str:
         p_val = g.priority.value if hasattr(g.priority, "value") else str(g.priority)
         s_val = g.status.value if hasattr(g.status, "value") else str(g.status)
         notes = f"  [{g.completion_notes[:30]}]" if g.completion_notes else ""
-        lines.append(f"  {i:2}. [{p_val.upper():8}] [{s_val:10}] {g.description[:55]}{notes}")
+        lines.append(
+            f"  {i:2}. [{p_val.upper():8}] [{s_val:10}] {g.description[:55]}{notes}"
+        )
     return "\n".join(lines)
 
 
@@ -290,7 +297,11 @@ def _fmt_contradictions(items: list) -> str:
         if isinstance(c, dict):
             lines.append(
                 f"  • {c.get('claim_a', '?')[:50]}  ⟺  {c.get('claim_b', '?')[:50]}"
-                + (f"\n    [{c.get('status', 'open')}] {c.get('resolution', '')[:60]}" if c.get("resolution") else "")
+                + (
+                    f"\n    [{c.get('status', 'open')}] {c.get('resolution', '')[:60]}"
+                    if c.get("resolution")
+                    else ""
+                )
             )
         else:
             lines.append(f"  • {str(c)[:100]}")
@@ -392,7 +403,11 @@ def _fmt_proposals(items: list) -> str:
             lines.append(
                 f"  [{prop.get('status', '?'):10}] {prop.get('title', '?')[:60]}"
                 + f"\n    id: {str(prop.get('id', '?'))[:36]}"
-                + (f"\n    {prop.get('summary', '')[:80]}" if prop.get("summary") else "")
+                + (
+                    f"\n    {prop.get('summary', '')[:80]}"
+                    if prop.get("summary")
+                    else ""
+                )
             )
         else:
             lines.append(f"  • {str(prop)[:100]}")
@@ -447,6 +462,7 @@ def _fmt_meta_proposal(prop) -> str:
 # Main async run loop
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 async def _ink_approval_listener(
     bridge: KinthicInkBridge,
     tool_registry,
@@ -454,6 +470,7 @@ async def _ink_approval_listener(
 ) -> None:
     """Forward Ink approval_response packets to the tool approval gate."""
     import logging
+
     log = logging.getLogger("kinthic.approval")
 
     while bridge.is_active:
@@ -486,7 +503,10 @@ async def _ink_approval_listener(
         turn_emitter = turn_emitter_holder[0] if turn_emitter_holder else None
         if turn_emitter is not None:
             await turn_emitter.approval_result(
-                approval_id, tool_name, risk_level, approved,
+                approval_id,
+                tool_name,
+                risk_level,
+                approved,
             )
             if approved:
                 await turn_emitter.tool_progress(tool_name, "Running approved tool...")
@@ -518,11 +538,18 @@ async def run() -> None:
         if not bridge.is_active:
             os.environ.pop("KINTHIC_INK_ACTIVE", None)
             import logging as _lg
+
             _root = _lg.getLogger()
             if not any(not isinstance(h, _lg.FileHandler) for h in _root.handlers):
                 from rich.logging import RichHandler as _RH
-                _rh = _RH(rich_tracebacks=True, show_time=True, show_path=False,
-                          markup=True, tracebacks_show_locals=False)
+
+                _rh = _RH(
+                    rich_tracebacks=True,
+                    show_time=True,
+                    show_path=False,
+                    markup=True,
+                    tracebacks_show_locals=False,
+                )
                 _rh.setFormatter(_lg.Formatter("%(message)s"))
                 _root.addHandler(_rh)
             show_banner()
@@ -536,16 +563,20 @@ async def run() -> None:
 
         if bridge.is_active:
             approval_task = asyncio.create_task(
-                _ink_approval_listener(bridge, loop.tool_registry, _turn_emitter_holder),
+                _ink_approval_listener(
+                    bridge, loop.tool_registry, _turn_emitter_holder
+                ),
                 name="kinthic-ink-approval",
             )
 
         # Emit history to Ink for up/down arrow navigation
         if bridge.is_active and session_history:
-            await bridge.emit({
-                "type": "history_update",
-                "data": {"history": session_history[-200:]},
-            })
+            await bridge.emit(
+                {
+                    "type": "history_update",
+                    "data": {"history": session_history[-200:]},
+                }
+            )
 
         # WSL2 cross-OS mount performance boundary warning
         cwd_str = str(Path.cwd())
@@ -581,11 +612,15 @@ async def run() -> None:
         while True:
             if _voice_session and _voice_session._active:
                 if bridge.is_active:
-                    await bridge.emit({"type": "thinking", "data": {"status": "🎤 Listening..."}})
+                    await bridge.emit(
+                        {"type": "thinking", "data": {"status": "🎤 Listening..."}}
+                    )
                 else:
                     console.print("\n  [bold bright_cyan]🎤 Listening...[/]")
                 try:
-                    user_input = await asyncio.to_thread(_voice_session._listener.listen)
+                    user_input = await asyncio.to_thread(
+                        _voice_session._listener.listen
+                    )
                 except Exception as exc:
                     msg = f"Voice listening failed: {exc}"
                     if bridge.is_active:
@@ -600,12 +635,23 @@ async def run() -> None:
                     continue
 
                 if bridge.is_active:
-                    await bridge.emit({"type": "response", "data": {"text": f"🎤 Heard: \"{user_input}\""}})
+                    await bridge.emit(
+                        {
+                            "type": "response",
+                            "data": {"text": f'🎤 Heard: "{user_input}"'},
+                        }
+                    )
                 else:
                     console.print(f"  [bold bright_white]Heard ›[/] {user_input}")
 
                 lower_input = user_input.lower().strip().rstrip(".")
-                if lower_input in ("voice off", "turn off voice", "disable voice", "stop voice", "/voice off"):
+                if lower_input in (
+                    "voice off",
+                    "turn off voice",
+                    "disable voice",
+                    "stop voice",
+                    "/voice off",
+                ):
                     user_input = "/voice off"
                 elif lower_input.startswith("slash "):
                     user_input = "/" + user_input[6:]
@@ -651,7 +697,9 @@ async def run() -> None:
                 # ── Help ─────────────────────────────────────────────────────
                 elif cmd in (":help", ":h"):
                     if bridge.is_active:
-                        await bridge.emit({"type": "response", "data": {"text": _fmt_help()}})
+                        await bridge.emit(
+                            {"type": "response", "data": {"text": _fmt_help()}}
+                        )
                     else:
                         show_help()
                     continue
@@ -660,7 +708,12 @@ async def run() -> None:
                 elif cmd in (":memories", ":mem"):
                     memories = await loop.get_all_memories()
                     if bridge.is_active:
-                        await bridge.emit({"type": "response", "data": {"text": _fmt_memories(memories)}})
+                        await bridge.emit(
+                            {
+                                "type": "response",
+                                "data": {"text": _fmt_memories(memories)},
+                            }
+                        )
                     else:
                         show_memories(memories)
                     continue
@@ -669,7 +722,9 @@ async def run() -> None:
                 elif cmd in (":goals", ":g"):
                     goals = await loop.get_all_goals()
                     if bridge.is_active:
-                        await bridge.emit({"type": "response", "data": {"text": _fmt_goals(goals)}})
+                        await bridge.emit(
+                            {"type": "response", "data": {"text": _fmt_goals(goals)}}
+                        )
                     else:
                         show_goals(goals)
                     continue
@@ -683,17 +738,23 @@ async def run() -> None:
                     try:
                         new_goal = await loop.create_goal(cmd_arg)
                         goal_id = getattr(new_goal, "id", "?")
-                        msg = f"Goal created: \"{cmd_arg[:60]}\" (id: {str(goal_id)[:8]})"
+                        msg = f'Goal created: "{cmd_arg[:60]}" (id: {str(goal_id)[:8]})'
                     except Exception as exc:
                         msg = f"Failed to create goal: {exc}"
-                    await _emit_or(msg, show_success if "created" in msg.lower() else show_error, msg)
+                    await _emit_or(
+                        msg,
+                        show_success if "created" in msg.lower() else show_error,
+                        msg,
+                    )
                     continue
 
                 # ── Stats ────────────────────────────────────────────────────
                 elif cmd in (":stats", ":s"):
                     stats = await loop.get_session_info()
                     if bridge.is_active:
-                        await bridge.emit({"type": "response", "data": {"text": _fmt_stats(stats)}})
+                        await bridge.emit(
+                            {"type": "response", "data": {"text": _fmt_stats(stats)}}
+                        )
                     else:
                         show_stats(stats)
                     continue
@@ -702,7 +763,12 @@ async def run() -> None:
                 elif cmd in (":sessions", ":sess"):
                     sessions = await loop.get_all_sessions()
                     if bridge.is_active:
-                        await bridge.emit({"type": "response", "data": {"text": _fmt_sessions(sessions)}})
+                        await bridge.emit(
+                            {
+                                "type": "response",
+                                "data": {"text": _fmt_sessions(sessions)},
+                            }
+                        )
                     else:
                         show_sessions(sessions)
                     continue
@@ -715,7 +781,12 @@ async def run() -> None:
                         continue
                     results = await loop.search_memories(cmd_arg)
                     if bridge.is_active:
-                        await bridge.emit({"type": "response", "data": {"text": _fmt_search(results, cmd_arg)}})
+                        await bridge.emit(
+                            {
+                                "type": "response",
+                                "data": {"text": _fmt_search(results, cmd_arg)},
+                            }
+                        )
                     else:
                         show_search_results(results, cmd_arg)
                     continue
@@ -731,7 +802,7 @@ async def run() -> None:
                         msg = "Blocked: this content was rejected by the memory integrity guard."
                         await _emit_or(msg, show_warning, msg)
                         continue
-                    msg = f"Stored: \"{memory.content[:50]}\""
+                    msg = f'Stored: "{memory.content[:50]}"'
                     await _emit_or(msg, show_success, msg)
                     continue
 
@@ -761,7 +832,12 @@ async def run() -> None:
                         data = await loop.get_graph_neighborhood(cmd_arg)
                         if data:
                             if bridge.is_active:
-                                await bridge.emit({"type": "response", "data": {"text": _fmt_graph_neighborhood(data)}})
+                                await bridge.emit(
+                                    {
+                                        "type": "response",
+                                        "data": {"text": _fmt_graph_neighborhood(data)},
+                                    }
+                                )
                             else:
                                 show_graph_neighborhood(data)
                         else:
@@ -770,7 +846,12 @@ async def run() -> None:
                     else:
                         stats = await loop.get_graph_stats()
                         if bridge.is_active:
-                            await bridge.emit({"type": "response", "data": {"text": _fmt_graph_stats(stats)}})
+                            await bridge.emit(
+                                {
+                                    "type": "response",
+                                    "data": {"text": _fmt_graph_stats(stats)},
+                                }
+                            )
                         else:
                             show_graph_stats(stats)
                     continue
@@ -786,7 +867,14 @@ async def run() -> None:
                     to_c = parts[1].strip()
                     chain = await loop.get_causal_chain(from_c, to_c)
                     if bridge.is_active:
-                        await bridge.emit({"type": "response", "data": {"text": _fmt_causal_chain(chain or [], from_c, to_c)}})
+                        await bridge.emit(
+                            {
+                                "type": "response",
+                                "data": {
+                                    "text": _fmt_causal_chain(chain or [], from_c, to_c)
+                                },
+                            }
+                        )
                     else:
                         show_causal_chain(chain or [], from_c, to_c)
                     continue
@@ -795,7 +883,12 @@ async def run() -> None:
                 elif cmd in (":contradictions", ":contra"):
                     contras = await loop.get_contradictions()
                     if bridge.is_active:
-                        await bridge.emit({"type": "response", "data": {"text": _fmt_contradictions(contras)}})
+                        await bridge.emit(
+                            {
+                                "type": "response",
+                                "data": {"text": _fmt_contradictions(contras)},
+                            }
+                        )
                     else:
                         show_contradictions(contras)
                     continue
@@ -804,7 +897,12 @@ async def run() -> None:
                 elif cmd in (":hypotheses", ":hypo"):
                     hypos = await loop.get_hypotheses()
                     if bridge.is_active:
-                        await bridge.emit({"type": "response", "data": {"text": _fmt_hypotheses(hypos)}})
+                        await bridge.emit(
+                            {
+                                "type": "response",
+                                "data": {"text": _fmt_hypotheses(hypos)},
+                            }
+                        )
                     else:
                         show_hypotheses(hypos)
                     continue
@@ -852,7 +950,12 @@ async def run() -> None:
                 elif cmd in (":improvements", ":imp"):
                     improvements = await loop.get_recent_improvements()
                     if bridge.is_active:
-                        await bridge.emit({"type": "response", "data": {"text": _fmt_improvements(improvements)}})
+                        await bridge.emit(
+                            {
+                                "type": "response",
+                                "data": {"text": _fmt_improvements(improvements)},
+                            }
+                        )
                     else:
                         show_improvements(improvements)
                     continue
@@ -865,12 +968,29 @@ async def run() -> None:
                         continue
                     try:
                         if bridge.is_active:
-                            await bridge.emit({"type": "thinking", "data": {"status": f"Debating: {cmd_arg[:50]}..."}})
+                            await bridge.emit(
+                                {
+                                    "type": "thinking",
+                                    "data": {"status": f"Debating: {cmd_arg[:50]}..."},
+                                }
+                            )
                             resolution = await loop.run_debate(cmd_arg)
-                            await bridge.emit({"type": "response", "data": {"text": _fmt_debate_resolution(resolution)}})
+                            await bridge.emit(
+                                {
+                                    "type": "response",
+                                    "data": {
+                                        "text": _fmt_debate_resolution(resolution)
+                                    },
+                                }
+                            )
                         else:
-                            with console.status("[bright_cyan]  Initializing debate...[/]", spinner="dots") as status:
-                                resolution = await loop.run_debate(cmd_arg, status_callback=status.update)
+                            with console.status(
+                                "[bright_cyan]  Initializing debate...[/]",
+                                spinner="dots",
+                            ) as status:
+                                resolution = await loop.run_debate(
+                                    cmd_arg, status_callback=status.update
+                                )
                             show_debate_resolution(resolution)
                     except Exception as exc:
                         await _emit_or(str(exc), show_error, str(exc))
@@ -882,7 +1002,12 @@ async def run() -> None:
                 elif cmd in (":uncertainties", ":unc"):
                     uncertainties = await loop.get_uncertainties()
                     if bridge.is_active:
-                        await bridge.emit({"type": "response", "data": {"text": _fmt_uncertainties(uncertainties)}})
+                        await bridge.emit(
+                            {
+                                "type": "response",
+                                "data": {"text": _fmt_uncertainties(uncertainties)},
+                            }
+                        )
                     else:
                         show_uncertainties(uncertainties)
                     continue
@@ -890,7 +1015,12 @@ async def run() -> None:
                 # ── Tools ─────────────────────────────────────────────────────
                 elif cmd in (":tools",):
                     if bridge.is_active:
-                        await bridge.emit({"type": "response", "data": {"text": _fmt_tools(loop.tool_registry)}})
+                        await bridge.emit(
+                            {
+                                "type": "response",
+                                "data": {"text": _fmt_tools(loop.tool_registry)},
+                            }
+                        )
                     else:
                         show_tools(loop.tool_registry)
                     continue
@@ -899,7 +1029,12 @@ async def run() -> None:
                 elif cmd in (":principles", ":prin"):
                     principles = await loop.get_principles()
                     if bridge.is_active:
-                        await bridge.emit({"type": "response", "data": {"text": _fmt_principles(principles)}})
+                        await bridge.emit(
+                            {
+                                "type": "response",
+                                "data": {"text": _fmt_principles(principles)},
+                            }
+                        )
                     else:
                         show_principles(principles)
                     continue
@@ -908,7 +1043,12 @@ async def run() -> None:
                 elif cmd in (":proposals", ":prop"):
                     proposals = await loop.get_proposals()
                     if bridge.is_active:
-                        await bridge.emit({"type": "response", "data": {"text": _fmt_proposals(proposals)}})
+                        await bridge.emit(
+                            {
+                                "type": "response",
+                                "data": {"text": _fmt_proposals(proposals)},
+                            }
+                        )
                     else:
                         show_proposals(proposals)
                     continue
@@ -918,7 +1058,9 @@ async def run() -> None:
                         msg = "Usage: /prop-approve <proposal-uuid>"
                         await _emit_or(msg, show_warning, msg)
                         continue
-                    ok = await loop.resolve_improvement_proposal(cmd_arg.strip(), "approved")
+                    ok = await loop.resolve_improvement_proposal(
+                        cmd_arg.strip(), "approved"
+                    )
                     if ok:
                         msg = "Proposal marked approved."
                         await _emit_or(msg, show_success, msg)
@@ -932,7 +1074,9 @@ async def run() -> None:
                         msg = "Usage: /prop-reject <proposal-uuid>"
                         await _emit_or(msg, show_warning, msg)
                         continue
-                    ok = await loop.resolve_improvement_proposal(cmd_arg.strip(), "rejected")
+                    ok = await loop.resolve_improvement_proposal(
+                        cmd_arg.strip(), "rejected"
+                    )
                     if ok:
                         msg = "Proposal marked rejected."
                         await _emit_or(msg, show_success, msg)
@@ -945,13 +1089,29 @@ async def run() -> None:
                 elif cmd in (":benchmark", ":bench"):
                     try:
                         if bridge.is_active:
-                            await bridge.emit({"type": "thinking", "data": {"status": "Running benchmark suite..."}})
+                            await bridge.emit(
+                                {
+                                    "type": "thinking",
+                                    "data": {"status": "Running benchmark suite..."},
+                                }
+                            )
                             result = await loop.run_benchmark()
-                            await bridge.emit({"type": "response", "data": {"text": _fmt_benchmark(result)}})
+                            await bridge.emit(
+                                {
+                                    "type": "response",
+                                    "data": {"text": _fmt_benchmark(result)},
+                                }
+                            )
                         else:
-                            console.print("\n  [bright_magenta]Running benchmark suite (this will take a while)...[/]\n")
-                            with console.status("[bright_magenta]  Benchmarking...", spinner="dots") as status:
-                                result = await loop.run_benchmark(status_callback=status.update)
+                            console.print(
+                                "\n  [bright_magenta]Running benchmark suite (this will take a while)...[/]\n"
+                            )
+                            with console.status(
+                                "[bright_magenta]  Benchmarking...", spinner="dots"
+                            ) as status:
+                                result = await loop.run_benchmark(
+                                    status_callback=status.update
+                                )
                             show_benchmark_result(result)
                     except Exception as exc:
                         await _emit_or(str(exc), show_error, str(exc))
@@ -961,13 +1121,31 @@ async def run() -> None:
                 elif cmd in (":meta",):
                     try:
                         if bridge.is_active:
-                            await bridge.emit({"type": "thinking", "data": {"status": "Running meta-reasoning analysis..."}})
+                            await bridge.emit(
+                                {
+                                    "type": "thinking",
+                                    "data": {
+                                        "status": "Running meta-reasoning analysis..."
+                                    },
+                                }
+                            )
                             proposal = await loop.run_meta_analysis()
-                            await bridge.emit({"type": "response", "data": {"text": _fmt_meta_proposal(proposal)}})
+                            await bridge.emit(
+                                {
+                                    "type": "response",
+                                    "data": {"text": _fmt_meta_proposal(proposal)},
+                                }
+                            )
                         else:
-                            console.print("\n  [bright_magenta]Running meta-reasoning analysis...[/]\n")
-                            with console.status("[bright_magenta]  Analyzing...", spinner="dots") as status:
-                                proposal = await loop.run_meta_analysis(status_callback=status.update)
+                            console.print(
+                                "\n  [bright_magenta]Running meta-reasoning analysis...[/]\n"
+                            )
+                            with console.status(
+                                "[bright_magenta]  Analyzing...", spinner="dots"
+                            ) as status:
+                                proposal = await loop.run_meta_analysis(
+                                    status_callback=status.update
+                                )
                             show_meta_proposal(proposal)
                     except Exception as exc:
                         await _emit_or(str(exc), show_error, str(exc))
@@ -979,16 +1157,28 @@ async def run() -> None:
                         available = loop.smart_router.list_available()
                         lines = ["Active providers:\n"]
                         for p in available:
-                            status_str = "✓ active" if p["active"] else ("✓ ready" if p["available"] else "✗ no key")
+                            status_str = (
+                                "✓ active"
+                                if p["active"]
+                                else ("✓ ready" if p["available"] else "✗ no key")
+                            )
                             lines.append(f"  [{status_str}] {p['label']} ({p['name']})")
-                            lines.append(f"         fast: {p['fast_model']} | reasoning: {p['reasoning_model']}")
+                            lines.append(
+                                f"         fast: {p['fast_model']} | reasoning: {p['reasoning_model']}"
+                            )
                         await _emit_or("\n".join(lines))
                     else:
                         ok = loop.smart_router.set_provider(cmd_arg.strip())
                         loop.llm = loop.smart_router.get_proxy()
-                        msg = f"Switched to provider: {cmd_arg}" if ok else f"Provider '{cmd_arg}' unavailable — check API key."
+                        msg = (
+                            f"Switched to provider: {cmd_arg}"
+                            if ok
+                            else f"Provider '{cmd_arg}' unavailable — check API key."
+                        )
                         if bridge.is_active:
-                            await bridge.emit({"type": "response", "data": {"text": msg}})
+                            await bridge.emit(
+                                {"type": "response", "data": {"text": msg}}
+                            )
                         else:
                             (show_success if ok else show_error)(msg)
                     continue
@@ -1011,29 +1201,46 @@ async def run() -> None:
                     available = loop.smart_router.list_available()
                     lines = ["Available LLM providers:\n"]
                     for p in available:
-                        status_str = "● ACTIVE" if p["active"] else ("○ ready" if p["available"] else "✗ no key")
-                        lines.append(f"  {status_str}  {p['label']} — use: /model {p['name']}")
+                        status_str = (
+                            "● ACTIVE"
+                            if p["active"]
+                            else ("○ ready" if p["available"] else "✗ no key")
+                        )
+                        lines.append(
+                            f"  {status_str}  {p['label']} — use: /model {p['name']}"
+                        )
                     await _emit_or("\n".join(lines))
                     continue
 
                 # ── Index ─────────────────────────────────────────────────────
                 elif cmd in (":index",):
                     from silex.utils.config import WORKSPACE_DIR
+
                     folder = cmd_arg.strip() or str(WORKSPACE_DIR)
                     if folder == "--clear":
                         loop.file_indexer.clear()
                         msg = "File index cleared."
                     else:
                         from pathlib import Path as _P
+
                         target = _P(folder).resolve()
                         if not target.is_dir():
                             msg = f"Not a directory: {folder}"
                         else:
                             if bridge.is_active:
-                                await bridge.emit({"type": "thinking", "data": {"status": f"Indexing {folder}..."}})
+                                await bridge.emit(
+                                    {
+                                        "type": "thinking",
+                                        "data": {"status": f"Indexing {folder}..."},
+                                    }
+                                )
                             else:
-                                console.print(f"  [bright_magenta]Indexing {folder}...[/]")
-                            stats = await asyncio.to_thread(loop.file_indexer.index_folder, target)
+                                console.print(
+                                    f"  [bright_magenta]Indexing {folder}...[/]"
+                                )
+                            stats = await asyncio.to_thread(
+                                loop.file_indexer.index_folder, target
+                            )
                             msg = f"Indexed {stats['indexed']} files ({stats['skipped']} unchanged, {stats['errors']} errors)"
                     await _emit_or(msg, show_success, msg)
                     continue
@@ -1059,6 +1266,7 @@ async def run() -> None:
                 # ── Plugins ───────────────────────────────────────────────────
                 elif cmd in (":plugins",):
                     from silex.plugins.loader import list_loaded_plugins
+
                     plugin_tool_names = {p["tool_name"] for p in list_loaded_plugins()}
                     lines = ["Registered tools:\n"]
                     for name, tool in loop.tool_registry.tools.items():
@@ -1086,6 +1294,7 @@ async def run() -> None:
                             skill_count = 0
                         mcp_count = loop.tool_registry.reload_mcp_tools()
                         from silex.plugins.loader import list_loaded_plugins
+
                         user_plugins = list_loaded_plugins()
                         msg = (
                             f"Reloaded: {len(user_plugins)} tool plugin(s), "
@@ -1097,32 +1306,44 @@ async def run() -> None:
                     continue
 
                 elif cmd in (":plugin",) and cmd_arg.strip().startswith("search"):
-                    query = cmd_arg.strip()[len("search"):].strip()
+                    query = cmd_arg.strip()[len("search") :].strip()
                     try:
                         from silex.plugins.registry import get_registry
+
                         reg = get_registry()
                         results = reg.search(query) if query else reg.get_all()
                         if not results:
                             msg = f"No plugins found matching '{query}'."
                         else:
-                            msg = f"KinthicHub — {len(results)} result(s):\n\n" + reg.format_list(results)
+                            msg = (
+                                f"KinthicHub — {len(results)} result(s):\n\n"
+                                + reg.format_list(results)
+                            )
                     except Exception as exc:
                         msg = f"Registry search error: {exc}"
                     await _emit_or(msg)
                     continue
 
                 elif cmd in (":plugin",) and cmd_arg.strip().startswith("install"):
-                    target = cmd_arg.strip()[len("install"):].strip()
+                    target = cmd_arg.strip()[len("install") :].strip()
                     if not target:
                         msg = "Usage: /plugin install <name-or-url>"
                     else:
                         try:
                             from silex.plugins.registry import get_registry
+
                             reg = get_registry()
                             if bridge.is_active:
-                                await bridge.emit({"type": "thinking", "data": {"status": f"Installing {target}..."}})
+                                await bridge.emit(
+                                    {
+                                        "type": "thinking",
+                                        "data": {"status": f"Installing {target}..."},
+                                    }
+                                )
                             else:
-                                console.print(f"  [bright_magenta]Installing {target}...[/]")
+                                console.print(
+                                    f"  [bright_magenta]Installing {target}...[/]"
+                                )
                             ok, msg = reg.install(target)
                             if ok:
                                 # Auto-reload so the new plugin/skill is immediately active
@@ -1135,12 +1356,13 @@ async def run() -> None:
                     continue
 
                 elif cmd in (":plugin",) and cmd_arg.strip().startswith("uninstall"):
-                    target = cmd_arg.strip()[len("uninstall"):].strip()
+                    target = cmd_arg.strip()[len("uninstall") :].strip()
                     if not target:
                         msg = "Usage: /plugin uninstall <name>"
                     else:
                         try:
                             from silex.plugins.registry import get_registry
+
                             reg = get_registry()
                             ok, msg = reg.uninstall(target)
                             if ok:
@@ -1184,7 +1406,9 @@ async def run() -> None:
                 # ── MCP ─────────────────────────────────────────────────────
                 elif cmd in (":mcp",):
                     mcp_sub = cmd_arg.strip().split(None, 1)
-                    mcp_action = mcp_sub[0].lower() if mcp_sub and mcp_sub[0] else "list"
+                    mcp_action = (
+                        mcp_sub[0].lower() if mcp_sub and mcp_sub[0] else "list"
+                    )
                     mcp_rest = mcp_sub[1].strip() if len(mcp_sub) > 1 else ""
                     try:
                         from silex.mcp.config import load_mcp_config, set_server_enabled
@@ -1195,7 +1419,11 @@ async def run() -> None:
                             cfg = load_mcp_config()
                             lines = ["MCP servers:\n"]
                             for srv_name, srv in cfg.servers.items():
-                                state = "enabled" if srv.get("enabled", True) else "disabled"
+                                state = (
+                                    "enabled"
+                                    if srv.get("enabled", True)
+                                    else "disabled"
+                                )
                                 lines.append(f"  {srv_name}: {state}")
                             lines.extend(mgr.status_report())
                             msg = "\n".join(lines)
@@ -1205,11 +1433,19 @@ async def run() -> None:
                         elif mcp_action == "enable" and mcp_rest:
                             ok = set_server_enabled(mcp_rest, True)
                             loop.tool_registry.reload_mcp_tools()
-                            msg = f"Enabled '{mcp_rest}'." if ok else f"Server '{mcp_rest}' not found."
+                            msg = (
+                                f"Enabled '{mcp_rest}'."
+                                if ok
+                                else f"Server '{mcp_rest}' not found."
+                            )
                         elif mcp_action == "disable" and mcp_rest:
                             ok = set_server_enabled(mcp_rest, False)
                             loop.tool_registry.reload_mcp_tools()
-                            msg = f"Disabled '{mcp_rest}'." if ok else f"Server '{mcp_rest}' not found."
+                            msg = (
+                                f"Disabled '{mcp_rest}'."
+                                if ok
+                                else f"Server '{mcp_rest}' not found."
+                            )
                         elif mcp_action == "test" and mcp_rest:
                             ok, detail = await mgr.test_server(mcp_rest)
                             msg = f"[{'ok' if ok else 'fail'}] {detail}"
@@ -1224,6 +1460,7 @@ async def run() -> None:
                 elif cmd in (":export-traj",):
                     # Parse mini flags: --format grpo|sft|csv  --success-only  --since YYYY-MM-DD
                     import shlex as _shlex
+
                     _args = _shlex.split(cmd_arg.strip()) if cmd_arg.strip() else []
                     _fmt = "grpo"
                     _success_only = False
@@ -1249,11 +1486,18 @@ async def run() -> None:
 
                     try:
                         from silex.autonomy.export import export_trajectories
+
                         if bridge.is_active:
-                            await bridge.emit({"type": "thinking",
-                                               "data": {"status": "Exporting trajectories..."}})
+                            await bridge.emit(
+                                {
+                                    "type": "thinking",
+                                    "data": {"status": "Exporting trajectories..."},
+                                }
+                            )
                         else:
-                            console.print("  [bright_magenta]Exporting trajectories...[/]")
+                            console.print(
+                                "  [bright_magenta]Exporting trajectories...[/]"
+                            )
 
                         records, path = await export_trajectories(
                             loop.db,
@@ -1277,6 +1521,7 @@ async def run() -> None:
                 elif cmd in (":voice",):
                     try:
                         from silex.voice.session import VoiceSession
+
                         mode = cmd_arg.strip().lower()
                         if mode == "off" and _voice_session:
                             _voice_session.stop()
@@ -1297,10 +1542,14 @@ async def run() -> None:
                 # ── Clear ─────────────────────────────────────────────────────
                 elif cmd in (":clear", ":cls"):
                     if bridge.is_active:
-                        await bridge.emit({
-                            "type": "response",
-                            "data": {"text": "(Clear is unavailable in Ink mode — conversation history is preserved.)"},
-                        })
+                        await bridge.emit(
+                            {
+                                "type": "response",
+                                "data": {
+                                    "text": "(Clear is unavailable in Ink mode — conversation history is preserved.)"
+                                },
+                            }
+                        )
                     else:
                         console.clear()
                         show_banner()
@@ -1318,14 +1567,17 @@ async def run() -> None:
             session_history.append(user_input)
             if bridge.is_active and len(session_history) % 10 == 0:
                 # Periodically sync history to Ink (for new entries)
-                await bridge.emit({
-                    "type": "history_update",
-                    "data": {"history": session_history[-200:]},
-                })
+                await bridge.emit(
+                    {
+                        "type": "history_update",
+                        "data": {"history": session_history[-200:]},
+                    }
+                )
 
             try:
                 t_start = time.monotonic()
                 from datetime import datetime as _datetime, timezone as _timezone
+
                 t_start_utc = _datetime.now(_timezone.utc).isoformat()
 
                 from silex.ui.turn_emitter import TurnEmitter, worker_aware_emit
@@ -1411,23 +1663,34 @@ async def run() -> None:
                             if edit.get("status") != "pending":
                                 continue
 
-                            target_lines = (edit.get("target_content") or "").splitlines()
-                            replacement_lines = (edit.get("replacement_content") or "").splitlines()
-                            diff_lines = (
-                                [{"type": "remove", "content": l} for l in target_lines[:8]]
-                                + [{"type": "add",    "content": l} for l in replacement_lines[:8]]
-                            )
+                            target_lines = (
+                                edit.get("target_content") or ""
+                            ).splitlines()
+                            replacement_lines = (
+                                edit.get("replacement_content") or ""
+                            ).splitlines()
+                            diff_lines = [
+                                {"type": "remove", "content": l}
+                                for l in target_lines[:8]
+                            ] + [
+                                {"type": "add", "content": l}
+                                for l in replacement_lines[:8]
+                            ]
 
-                            await bridge.emit({
-                                "type": "tool_auth",
-                                "data": {
-                                    "toolName":      "propose_code_edit",
-                                    "targetPath":    Path(edit.get("file_path", "")).name,
-                                    "operationType": "1 local file alteration",
-                                    "txId":          edit.get("id", ""),
-                                    "diffLines":     diff_lines,
-                                },
-                            })
+                            await bridge.emit(
+                                {
+                                    "type": "tool_auth",
+                                    "data": {
+                                        "toolName": "propose_code_edit",
+                                        "targetPath": Path(
+                                            edit.get("file_path", "")
+                                        ).name,
+                                        "operationType": "1 local file alteration",
+                                        "txId": edit.get("id", ""),
+                                        "diffLines": diff_lines,
+                                    },
+                                }
+                            )
 
                             auth = await bridge.read_auth_response(timeout=120.0)
 
@@ -1449,14 +1712,14 @@ async def run() -> None:
                 if session:
                     tokens_row = await loop.db.fetch_one(
                         "SELECT SUM(input_tokens + output_tokens) AS total_tokens FROM llm_usage WHERE session_id = ? AND created_at >= ?",
-                        (session.id, t_start_utc)
+                        (session.id, t_start_utc),
                     )
                     if tokens_row and tokens_row["total_tokens"] is not None:
                         tokens_used = tokens_row["total_tokens"]
 
                     tools_row = await loop.db.fetch_one(
                         "SELECT COUNT(*) AS count FROM action_logs WHERE session_id = ? AND turn_number = ?",
-                        (session.id, session.turn_count)
+                        (session.id, session.turn_count),
                     )
                     if tools_row:
                         tools_executed = tools_row["count"]
@@ -1478,22 +1741,28 @@ async def run() -> None:
                     )
                     _turn_emitter_holder[0] = None
                 elif bridge.is_active:
-                    await bridge.emit({
-                        "type": "telemetry",
-                        "data": {
-                            "latencyMs":       latency_ms,
-                            "tokens":          tokens_used,
-                            "memoriesWritten": len(response.new_memories),
-                            "toolsExecuted":   tools_executed,
-                        },
-                    })
-                    await bridge.emit({
-                        "type": "memory_write",
-                        "data": {
-                            "count": len(response.new_memories),
-                            "items": [str(m)[:160] for m in response.new_memories[:5]],
-                        },
-                    })
+                    await bridge.emit(
+                        {
+                            "type": "telemetry",
+                            "data": {
+                                "latencyMs": latency_ms,
+                                "tokens": tokens_used,
+                                "memoriesWritten": len(response.new_memories),
+                                "toolsExecuted": tools_executed,
+                            },
+                        }
+                    )
+                    await bridge.emit(
+                        {
+                            "type": "memory_write",
+                            "data": {
+                                "count": len(response.new_memories),
+                                "items": [
+                                    str(m)[:160] for m in response.new_memories[:5]
+                                ],
+                            },
+                        }
+                    )
                     text = response.response or ""
                     await bridge.emit({"type": "stream", "data": {"text": text}})
                 else:
@@ -1531,11 +1800,14 @@ async def run() -> None:
 def main() -> None:
     """Synchronous wrapper for the async entry point."""
     import os
+
     if os.environ.get("KINTHIC_SKIP_SETUP") != "1":
         from silex.runtime.settings import RuntimeSettingsStore
+
         if not RuntimeSettingsStore().setup_status()["setup_completed"]:
             print("First run: starting setup wizard...")
             from scripts.cli import run_onboard
+
             run_onboard()
             return
     asyncio.run(run())

@@ -52,7 +52,9 @@ class StuckLoopDetector:
                 payload = json.loads(row["payload_json"] or "{}")
             except Exception:
                 payload = {}
-            combined = f'{row["kind"]}:{json.dumps(payload, sort_keys=True, default=str)}'
+            combined = (
+                f"{row['kind']}:{json.dumps(payload, sort_keys=True, default=str)}"
+            )
             return hashlib.sha256(combined.encode()).hexdigest()[:12]
 
         hashes = [_hash_row(dict(r)) for r in rows]

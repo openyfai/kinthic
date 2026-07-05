@@ -21,8 +21,18 @@ class Planner:
     """SQLite-backed plan and step tracker."""
 
     COMPLEX_TRIGGERS = {
-        "build", "implement", "fix", "refactor", "audit", "review",
-        "research", "deploy", "debug", "improve", "create", "add",
+        "build",
+        "implement",
+        "fix",
+        "refactor",
+        "audit",
+        "review",
+        "research",
+        "deploy",
+        "debug",
+        "improve",
+        "create",
+        "add",
     }
 
     def __init__(self, db: Database):
@@ -32,26 +42,29 @@ class Planner:
         """Query for an active plan and its associated steps."""
         plan_row = await self.db.fetch_one(
             "SELECT * FROM plans WHERE session_id = ? AND status = 'active' LIMIT 1",
-            (session_id,)
+            (session_id,),
         )
         if not plan_row:
             return None
-        
+
         step_rows = await self.db.fetch_all(
             "SELECT * FROM plan_steps WHERE plan_id = ? ORDER BY step_number ASC",
-            (plan_row["id"],)
+            (plan_row["id"],),
         )
-        
-        return {
-            "plan": dict(plan_row),
-            "steps": [dict(r) for r in step_rows]
-        }
+
+        return {"plan": dict(plan_row), "steps": [dict(r) for r in step_rows]}
 
     def should_plan(self, user_input: str, tool_count: int = 0) -> bool:
         words = {w.strip(".,!?;:").lower() for w in user_input.split()}
-        return tool_count > 0 or len(user_input) > 220 or bool(words & self.COMPLEX_TRIGGERS)
+        return (
+            tool_count > 0
+            or len(user_input) > 220
+            or bool(words & self.COMPLEX_TRIGGERS)
+        )
 
-    async def create_plan(self, user_input: str, session_id: str | None, tool_names: list[str]) -> Plan:
+    async def create_plan(
+        self, user_input: str, session_id: str | None, tool_names: list[str]
+    ) -> Plan:
         title = self._make_title(user_input)
         plan = Plan(
             session_id=session_id,
@@ -67,9 +80,15 @@ class Planner:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                plan.id, plan.session_id, plan.title, plan.user_input,
-                plan.status.value, plan.success_criteria, plan.tool_budget,
-                plan.created_at, plan.updated_at,
+                plan.id,
+                plan.session_id,
+                plan.title,
+                plan.user_input,
+                plan.status.value,
+                plan.success_criteria,
+                plan.tool_budget,
+                plan.created_at,
+                plan.updated_at,
             ),
         )
 
@@ -77,15 +96,25 @@ class Planner:
         if tool_names:
             step_descriptions.append(f"Execute tools safely: {', '.join(tool_names)}.")
             step_descriptions.append("Integrate tool results and update state.")
-        step_descriptions.append("Return a concise final answer with uncertainty called out.")
+        step_descriptions.append(
+            "Return a concise final answer with uncertainty called out."
+        )
 
         for idx, description in enumerate(step_descriptions, 1):
-            await self.add_step(plan.id, idx, description, tool_names if idx == 2 else [])
+            await self.add_step(
+                plan.id, idx, description, tool_names if idx == 2 else []
+            )
 
         log.debug(f"Created plan {plan.id[:8]} for: {plan.title}")
         return plan
 
-    async def add_step(self, plan_id: str, step_number: int, description: str, required_tools: list[str]) -> PlanStep:
+    async def add_step(
+        self,
+        plan_id: str,
+        step_number: int,
+        description: str,
+        required_tools: list[str],
+    ) -> PlanStep:
         step = PlanStep(
             plan_id=plan_id,
             step_number=step_number,
@@ -99,14 +128,22 @@ class Planner:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                step.id, step.plan_id, step.step_number, step.description,
-                step.status.value, json.dumps(step.required_tools),
-                step.result, step.created_at, step.updated_at,
+                step.id,
+                step.plan_id,
+                step.step_number,
+                step.description,
+                step.status.value,
+                json.dumps(step.required_tools),
+                step.result,
+                step.created_at,
+                step.updated_at,
             ),
         )
         return step
 
-    async def reconcile_tools(self, plan_id: str | None, results: list[ToolResult]) -> None:
+    async def reconcile_tools(
+        self, plan_id: str | None, results: list[ToolResult]
+    ) -> None:
         if not plan_id:
             return
         now = datetime.now(timezone.utc).isoformat()
@@ -114,7 +151,8 @@ class Planner:
         status = PlanStatus.BLOCKED if failures else PlanStatus.COMPLETED
         summary = (
             f"{len(results)} tool calls executed; {len(failures)} failed."
-            if results else "No tools executed."
+            if results
+            else "No tools executed."
         )
         await self.db.execute(
             """

@@ -9,11 +9,13 @@ def test_runtime_settings_store_persists_setup_and_pairing(tmp_path: Path):
         secrets_path=tmp_path / "secrets.json",
     )
 
-    store.save_settings({
-        "setup_completed": True,
-        "provider": "openai",
-        "model": "gpt-4.1-mini",
-    })
+    store.save_settings(
+        {
+            "setup_completed": True,
+            "provider": "openai",
+            "model": "gpt-4.1-mini",
+        }
+    )
     store.set_provider_secret("openai", "test-key")
     code = store.create_pair_code(ttl_minutes=5)
 

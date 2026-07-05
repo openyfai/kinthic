@@ -29,8 +29,9 @@ async def test_semantic_skill_retrieval(tmp_path):
 
     vector_path = tmp_path / "vector_db"
 
-    with patch("silex.core.skills.KINTHIC_SKILLS", skills_dir), patch(
-        "silex.utils.config.SILEX_VECTOR_DB", vector_path
+    with (
+        patch("silex.core.skills.KINTHIC_SKILLS", skills_dir),
+        patch("silex.utils.config.SILEX_VECTOR_DB", vector_path),
     ):
         vs = VectorStore(collection_name="test_skills_collection")
         loader = SkillLoader(vector_store=vs)
@@ -39,15 +40,21 @@ async def test_semantic_skill_retrieval(tmp_path):
         assert count == 3
         assert len(loader.skills) == 3
 
-        relevant_docker = loader.get_relevant_skills("how do I prune docker containers?", limit=1)
+        relevant_docker = loader.get_relevant_skills(
+            "how do I prune docker containers?", limit=1
+        )
         assert len(relevant_docker) == 1
         assert "docker_guide" in relevant_docker
 
-        relevant_k8s = loader.get_relevant_skills("kubernetes ingress configuration", limit=1)
+        relevant_k8s = loader.get_relevant_skills(
+            "kubernetes ingress configuration", limit=1
+        )
         assert len(relevant_k8s) == 1
         assert "kubernetes_tips" in relevant_k8s
 
-        relevant_python = loader.get_relevant_skills("writing clean pytest code in python", limit=1)
+        relevant_python = loader.get_relevant_skills(
+            "writing clean pytest code in python", limit=1
+        )
         assert len(relevant_python) == 1
         assert "python_clean_code" in relevant_python
 
@@ -55,7 +62,9 @@ async def test_semantic_skill_retrieval(tmp_path):
 def test_format_index_for_prompt(tmp_path):
     skills_dir = tmp_path / "skills"
     skills_dir.mkdir()
-    (skills_dir / "tell_joke.md").write_text("# Tell Joke\nDo the thing.", encoding="utf-8")
+    (skills_dir / "tell_joke.md").write_text(
+        "# Tell Joke\nDo the thing.", encoding="utf-8"
+    )
     (skills_dir / "tell_joke.yaml").write_text(
         "name: tell_joke\ndescription: Jokes\ntrigger: joke humor\n", encoding="utf-8"
     )
@@ -73,7 +82,9 @@ def test_format_index_for_prompt(tmp_path):
 def test_flat_skill_defaults_to_community_trust(tmp_path):
     skills_dir = tmp_path / "skills"
     skills_dir.mkdir()
-    (skills_dir / "unknown_skill.md").write_text("# Unknown\nUser dropped this file.", encoding="utf-8")
+    (skills_dir / "unknown_skill.md").write_text(
+        "# Unknown\nUser dropped this file.", encoding="utf-8"
+    )
 
     with patch("silex.core.skills.KINTHIC_SKILLS", skills_dir):
         loader = SkillLoader()
@@ -94,7 +105,7 @@ def test_inline_skill_in_prompt(tmp_path):
         loader = SkillLoader()
         loader.load_all()
         prompt = loader.format_for_prompt("onboard repo")
-        assert "<skill name=\"repo_onboard\">" in prompt
+        assert '<skill name="repo_onboard">' in prompt
         assert "Steps here" in prompt
 
 
@@ -156,9 +167,11 @@ async def test_skill_manage_reload_roundtrip(tmp_path):
     skills_dir.mkdir()
     kinthic_home = tmp_path / "home"
 
-    with patch("silex.core.skills.KINTHIC_SKILLS", skills_dir), patch(
-        "silex.utils.config.KINTHIC_HOME", kinthic_home
-    ), patch("silex.utils.config.KINTHIC_SKILLS", skills_dir):
+    with (
+        patch("silex.core.skills.KINTHIC_SKILLS", skills_dir),
+        patch("silex.utils.config.KINTHIC_HOME", kinthic_home),
+        patch("silex.utils.config.KINTHIC_SKILLS", skills_dir),
+    ):
         loader = SkillLoader()
         loader.load_all()
         tool = SkillManageTool(loader)
@@ -204,7 +217,10 @@ async def test_skill_manage_blocked_without_approval():
             ToolCall(
                 tool_name="skill_manage",
                 arguments=json.dumps(
-                    {"name": "test_skill", "content": "---\nname: test_skill\n---\n# Test\nBody."}
+                    {
+                        "name": "test_skill",
+                        "content": "---\nname: test_skill\n---\n# Test\nBody.",
+                    }
                 ),
                 expected_outcome="Persist a new skill document",
                 rationale="Autonomous skill growth",
@@ -265,7 +281,7 @@ async def test_genesis_synthesizer_uses_amac_admission(tmp_path: Path, monkeypat
                 INSERT INTO trajectory_steps (trajectory_id, step_order, action_name, tool_input, execution_output, epistemic_category, latency_ms, token_usage)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (f"traj_genesis_1", order, action, "input", "ok", "fact", 50.0, 10),
+                ("traj_genesis_1", order, action, "input", "ok", "fact", 50.0, 10),
             )
 
         synthesizer = GenesisSynthesizer(db, MockGenesisLLM(), kg=None)
@@ -278,7 +294,9 @@ async def test_genesis_synthesizer_uses_amac_admission(tmp_path: Path, monkeypat
         assert "source: genesis" in content
         assert "Deploy Helper" in content
         assert (skills_dir / "deploy_helper" / "deploy_helper.py").exists()
-        assert (skills_dir / "deploy_helper" / "requirements.txt").read_text() == "requests"
+        assert (
+            skills_dir / "deploy_helper" / "requirements.txt"
+        ).read_text() == "requests"
     finally:
         await db.close()
 

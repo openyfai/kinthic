@@ -26,6 +26,7 @@ class DockerRuntime(BaseRuntime):
         self.client = None
         # Application-level path validation guard
         from agent.security.path_guardian import FilesystemPathGuardian
+
         self._guardian = FilesystemPathGuardian(workspace_dir)
         self._project_guardian = FilesystemPathGuardian(project_root)
         if docker:
@@ -70,7 +71,10 @@ class DockerRuntime(BaseRuntime):
                 image="alpine:latest",
                 command=["sh", "-c", command],
                 volumes={
-                    str(self.workspace_dir.resolve()): {"bind": "/workspace", "mode": "rw"},
+                    str(self.workspace_dir.resolve()): {
+                        "bind": "/workspace",
+                        "mode": "rw",
+                    },
                 },
                 environment={
                     "GIT_DIR": "/workspace/.git",
@@ -100,7 +104,9 @@ class DockerRuntime(BaseRuntime):
                 await self.kill()
                 return "Error: Sandboxed command timed out after 60 seconds."
 
-            logs = (await asyncio.to_thread(container.logs)).decode("utf-8", errors="replace")
+            logs = (await asyncio.to_thread(container.logs)).decode(
+                "utf-8", errors="replace"
+            )
             exit_code = result.get("StatusCode", 0)
 
             return f"--- SANDBOX OUTPUT (Alpine Linux) ---\n{logs}\n--- END OUTPUT ---\nExit Code: {exit_code}"
@@ -138,8 +144,18 @@ class DockerRuntime(BaseRuntime):
         if lease is None or not lease.validate("run_terminal_command"):
             return "Security Violation: Invalid or expired actuation lease"
 
-        allow = os.environ.get("KINTHIC_ALLOW_LOCAL_FALLBACK", "").lower() in ("1", "true", "yes", "on")
-        allow = allow or os.environ.get("KINTHIC_DEV_MODE", "").lower() in ("1", "true", "yes", "on")
+        allow = os.environ.get("KINTHIC_ALLOW_LOCAL_FALLBACK", "").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        allow = allow or os.environ.get("KINTHIC_DEV_MODE", "").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
         if not allow:
             return (
                 "Security Violation: Docker unavailable and local fallback is disabled. "

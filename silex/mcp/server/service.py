@@ -19,7 +19,6 @@ from silex.mcp.server.schemas import (
     ListMemoriesRequest,
     ListMemoriesResponse,
     MemoryHealthResponse,
-    MemoryRecord,
     McpErrorCode,
     RecallRequest,
     RecallResponse,
@@ -97,7 +96,9 @@ async def recall(ctx: McpServerContext, req: RecallRequest) -> str:
     async def _run():
         memories = await ctx.memory.retrieve_context(req.query)
         records = [memory_to_record(m) for m in memories[: req.limit]]
-        return RecallResponse(query=req.query, count=len(records), memories=records).model_dump_json()
+        return RecallResponse(
+            query=req.query, count=len(records), memories=records
+        ).model_dump_json()
 
     return await _guarded(ctx, "silex_recall", req.model_dump(), _run)
 
@@ -106,7 +107,9 @@ async def search(ctx: McpServerContext, req: SearchRequest) -> str:
     async def _run():
         memories = await ctx.memory.search(req.query)
         records = [memory_to_record(m) for m in memories[: req.limit]]
-        return RecallResponse(query=req.query, count=len(records), memories=records).model_dump_json()
+        return RecallResponse(
+            query=req.query, count=len(records), memories=records
+        ).model_dump_json()
 
     return await _guarded(ctx, "silex_search", req.model_dump(), _run)
 
@@ -150,7 +153,9 @@ async def remember_explicit(ctx: McpServerContext, req: RememberExplicitRequest)
             tags=apply_client_tags(req.tags, ctx.client_id),
         )
         if stored is None:
-            admission = AdmissionInfo(accepted=False, reason="guard_blocked", amac_score=None)
+            admission = AdmissionInfo(
+                accepted=False, reason="guard_blocked", amac_score=None
+            )
             return RememberResponse(admission=admission, memory=None).model_dump_json()
         admission = AdmissionInfo(accepted=True, reason="explicit", amac_score=None)
         return RememberResponse(
@@ -171,7 +176,9 @@ async def forget(ctx: McpServerContext, req: ForgetRequest) -> str:
         deleted = await ctx.memory.delete(req.memory_id)
         msg = "deleted" if deleted else "not found"
         log.warning("MCP forget %s: %s (client=%s)", req.memory_id, msg, ctx.client_id)
-        return ForgetResponse(deleted=deleted, memory_id=req.memory_id, message=msg).model_dump_json()
+        return ForgetResponse(
+            deleted=deleted, memory_id=req.memory_id, message=msg
+        ).model_dump_json()
 
     return await _guarded(ctx, "silex_forget", req.model_dump(), _run)
 
@@ -210,7 +217,9 @@ async def graph_summary(ctx: McpServerContext) -> str:
 
 async def graph_recall(ctx: McpServerContext, req: GraphRecallRequest) -> str:
     async def _run():
-        nodes = await ctx.kg.retrieve_relevant_context(req.query, max_nodes=req.max_nodes)
+        nodes = await ctx.kg.retrieve_relevant_context(
+            req.query, max_nodes=req.max_nodes
+        )
         return GraphRecallResponse(query=req.query, nodes=nodes).model_dump_json()
 
     return await _guarded(ctx, "silex_graph_recall", req.model_dump(), _run)

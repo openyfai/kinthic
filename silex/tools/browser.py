@@ -74,10 +74,12 @@ def _resolve_screenshot_path(filepath: str) -> Path:
         raise ValueError("Screenshot path must stay inside workspace/browser.")
     return resolved
 
+
 class BrowserTool(BaseTool):
     """
     A tool that allows ARIA to interact with the web.
     """
+
     name = "browser"
     risk_level = "network"
     description = "Browse the web, scrape content as markdown, and take screenshots."
@@ -86,7 +88,7 @@ class BrowserTool(BaseTool):
         "url": "str, optional: for navigate",
         "selector": "str, optional: for click/type",
         "text": "str, optional: for type",
-        "filepath": "str, optional: for screenshot (default: aria_vision_capture.png)"
+        "filepath": "str, optional: for screenshot (default: aria_vision_capture.png)",
     }
 
     def __init__(self):
@@ -100,17 +102,19 @@ class BrowserTool(BaseTool):
         """Lazy initialization of the browser with optional IP pinning."""
         if self.page is not None:
             if ip is not None and self.pinned_ip != ip:
-                log.info(f"IP mismatch (current: {self.pinned_ip}, new: {ip}). Relaunching browser...")
+                log.info(
+                    f"IP mismatch (current: {self.pinned_ip}, new: {ip}). Relaunching browser..."
+                )
                 await self.close()
             else:
                 return
 
         log.info(f"Starting headless Chromium instance with pinned IP: {ip}...")
         self.playwright = await async_playwright().start()
-        
+
         args = []
         if ip:
-            args.append(f'--host-resolver-rules=MAP * {ip}')
+            args.append(f"--host-resolver-rules=MAP * {ip}")
             self.pinned_ip = ip
         else:
             self.pinned_ip = None
@@ -118,10 +122,10 @@ class BrowserTool(BaseTool):
         self.browser = await self.playwright.chromium.launch(headless=True, args=args)
         self.context = await self.browser.new_context(
             viewport={"width": 1920, "height": 1080},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
         )
         self.page = await self.context.new_page()
-        
+
         if stealth_async:
             await stealth_async(self.page)
 
@@ -130,7 +134,9 @@ class BrowserTool(BaseTool):
         Execute a browser action.
         """
         if not browser_actions_enabled():
-            return "Error: Browser automation is disabled by ARIA_ENABLE_BROWSER_ACTIONS."
+            return (
+                "Error: Browser automation is disabled by ARIA_ENABLE_BROWSER_ACTIONS."
+            )
 
         action = kwargs.get("action")
 
@@ -142,7 +148,9 @@ class BrowserTool(BaseTool):
                 resolved_ip = _validate_public_url(url)
                 await self._ensure_started(ip=resolved_ip)
                 await self.page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                return await self._observation("navigate", f"Successfully navigated to {url}")
+                return await self._observation(
+                    "navigate", f"Successfully navigated to {url}"
+                )
 
             else:
                 await self._ensure_started()
@@ -155,14 +163,22 @@ class BrowserTool(BaseTool):
                 h.body_width = 0
                 markdown = h.handle(html_content)
                 # Strip known prompt injection keywords
-                markdown = re.sub(r'(?i)(system instruction|critical instruction|ignore previous|you are now|system override|forget all)', '[REDACTED]', markdown)
+                markdown = re.sub(
+                    r"(?i)(system instruction|critical instruction|ignore previous|you are now|system override|forget all)",
+                    "[REDACTED]",
+                    markdown,
+                )
                 return await self._observation("scrape", markdown[:8000])
 
             elif action == "screenshot":
                 filepath = kwargs.get("filepath", "aria_vision_capture.png")
                 safe_path = _resolve_screenshot_path(filepath)
                 await self.page.screenshot(path=str(safe_path), full_page=False)
-                return await self._observation("screenshot", f"Screenshot saved to {safe_path}", screenshot_path=str(safe_path))
+                return await self._observation(
+                    "screenshot",
+                    f"Screenshot saved to {safe_path}",
+                    screenshot_path=str(safe_path),
+                )
 
             elif action == "click":
                 selector = kwargs.get("selector")

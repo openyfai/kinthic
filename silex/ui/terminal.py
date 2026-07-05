@@ -28,24 +28,26 @@ from silex.models.schemas import CognitiveResponse, Goal, Memory, Session
 # Theme
 # ---------------------------------------------------------------------------
 
-ARIA_THEME = Theme({
-    "aria.title": "bold bright_cyan",
-    "aria.reasoning": "dim italic",
-    "aria.response": "white",
-    "aria.reflection": "dim magenta",
-    "aria.confidence.high": "bold green",
-    "aria.confidence.mid": "bold yellow",
-    "aria.confidence.low": "bold red",
-    "silex.memory": "cyan",
-    "aria.goal": "yellow",
-    "aria.stat": "bright_blue",
-    "aria.command": "bold bright_green",
-    "aria.error": "bold red",
-    "aria.warning": "bold yellow",
-    "aria.success": "bold green",
-    "aria.dim": "dim white",
-    "aria.accent": "bright_magenta",
-})
+ARIA_THEME = Theme(
+    {
+        "aria.title": "bold bright_cyan",
+        "aria.reasoning": "dim italic",
+        "aria.response": "white",
+        "aria.reflection": "dim magenta",
+        "aria.confidence.high": "bold green",
+        "aria.confidence.mid": "bold yellow",
+        "aria.confidence.low": "bold red",
+        "silex.memory": "cyan",
+        "aria.goal": "yellow",
+        "aria.stat": "bright_blue",
+        "aria.command": "bold bright_green",
+        "aria.error": "bold red",
+        "aria.warning": "bold yellow",
+        "aria.success": "bold green",
+        "aria.dim": "dim white",
+        "aria.accent": "bright_magenta",
+    }
+)
 
 console = Console(theme=ARIA_THEME)
 
@@ -54,19 +56,47 @@ console = Console(theme=ARIA_THEME)
 # Display Functions
 # ---------------------------------------------------------------------------
 
+
 def show_banner() -> None:
     """Display the ARIA startup banner."""
     _border_inner = 54  # characters between "    ║     " and closing "║"
     banner = Text()
-    banner.append("    ╔═══════════════════════════════════════════════════════════╗\n", style="bright_cyan")
-    banner.append("    ║                                                           ║\n", style="bright_cyan")
-    banner.append("    ║      █████╗ ██████╗ ██╗ █████╗                            ║\n", style="bright_cyan")
-    banner.append("    ║     ██╔══██╗██╔══██╗██║██╔══██╗                           ║\n", style="bright_cyan")
-    banner.append("    ║     ███████║██████╔╝██║███████║                            ║\n", style="bright_cyan")
-    banner.append("    ║     ██╔══██║██╔══██╗██║██╔══██║                            ║\n", style="bright_cyan")
-    banner.append("    ║     ██║  ██║██║  ██║██║██║  ██║                            ║\n", style="bright_cyan")
-    banner.append("    ║     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝                            ║\n", style="bright_cyan")
-    banner.append("    ║                                                           ║\n", style="bright_cyan")
+    banner.append(
+        "    ╔═══════════════════════════════════════════════════════════╗\n",
+        style="bright_cyan",
+    )
+    banner.append(
+        "    ║                                                           ║\n",
+        style="bright_cyan",
+    )
+    banner.append(
+        "    ║      █████╗ ██████╗ ██╗ █████╗                            ║\n",
+        style="bright_cyan",
+    )
+    banner.append(
+        "    ║     ██╔══██╗██╔══██╗██║██╔══██╗                           ║\n",
+        style="bright_cyan",
+    )
+    banner.append(
+        "    ║     ███████║██████╔╝██║███████║                            ║\n",
+        style="bright_cyan",
+    )
+    banner.append(
+        "    ║     ██╔══██║██╔══██╗██║██╔══██║                            ║\n",
+        style="bright_cyan",
+    )
+    banner.append(
+        "    ║     ██║  ██║██║  ██║██║██║  ██║                            ║\n",
+        style="bright_cyan",
+    )
+    banner.append(
+        "    ║     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝                            ║\n",
+        style="bright_cyan",
+    )
+    banner.append(
+        "    ║                                                           ║\n",
+        style="bright_cyan",
+    )
     banner.append(
         "    ║     "
         + "Local-first agent · memory · graph · governed tools".ljust(_border_inner)
@@ -80,19 +110,26 @@ def show_banner() -> None:
         style="dim bright_cyan",
     )
     from silex import __version__
+
     banner.append(
-        "    ║     "
-        + f"v{__version__}".ljust(_border_inner)
-        + "║\n",
+        "    ║     " + f"v{__version__}".ljust(_border_inner) + "║\n",
         style="dim bright_cyan",
     )
-    banner.append("    ║                                                           ║\n", style="bright_cyan")
-    banner.append("    ╚═══════════════════════════════════════════════════════════╝\n", style="bright_cyan")
+    banner.append(
+        "    ║                                                           ║\n",
+        style="bright_cyan",
+    )
+    banner.append(
+        "    ╚═══════════════════════════════════════════════════════════╝\n",
+        style="bright_cyan",
+    )
     console.print()
     console.print(banner)
 
 
-def show_startup_summary(memory_count: int, goal_count: int, session_count: int, total_turns: int) -> None:
+def show_startup_summary(
+    memory_count: int, goal_count: int, session_count: int, total_turns: int
+) -> None:
     """Display a context-aware startup summary."""
     if memory_count == 0 and session_count <= 1:
         # First time
@@ -122,7 +159,7 @@ def show_response(cognitive: CognitiveResponse) -> None:
 
     # Combine Reasoning and Reflection into the Monologue Panel
     monologue = Text(cognitive.reasoning, style="aria.reasoning")
-    
+
     reflection = cognitive.self_reflection.strip() if cognitive.self_reflection else ""
     if reflection and len(reflection) > 10:
         monologue.append("\n\n[🪞 Reflection]\n", style="bold magenta")
@@ -149,7 +186,7 @@ def show_response(cognitive: CognitiveResponse) -> None:
     grid = Table.grid(expand=True)
     grid.add_column("chat", ratio=3)
     grid.add_column("monologue", ratio=2)
-    
+
     # Add some spacing between the columns
     grid.add_row(chat_panel, reasoning_panel)
 
@@ -169,8 +206,14 @@ def show_response(cognitive: CognitiveResponse) -> None:
         conf_icon = "○"
 
     # Phase 2 counts
-    causal_count = len(cognitive.causal_observations) if cognitive.causal_observations else 0
-    contra_count = len(cognitive.contradictions_detected) if cognitive.contradictions_detected else 0
+    causal_count = (
+        len(cognitive.causal_observations) if cognitive.causal_observations else 0
+    )
+    contra_count = (
+        len(cognitive.contradictions_detected)
+        if cognitive.contradictions_detected
+        else 0
+    )
     hypo_count = len(cognitive.hypotheses) if cognitive.hypotheses else 0
 
     status_parts = [
@@ -218,7 +261,7 @@ def show_memories(memories: list[Memory]) -> None:
         imp_bar = "█" * int(mem.importance * 5)
         imp_bar = imp_bar.ljust(5, "░")
         tags = ", ".join(mem.tags[:3]) if mem.tags else "—"
-        source = mem.source.value if hasattr(mem.source, 'value') else str(mem.source)
+        source = mem.source.value if hasattr(mem.source, "value") else str(mem.source)
         table.add_row(
             str(i),
             mem.content[:55],
@@ -230,7 +273,9 @@ def show_memories(memories: list[Memory]) -> None:
 
     console.print()
     console.print(table)
-    console.print("  [aria.dim]Use[/] [aria.command]:forget <#>[/] [aria.dim]to remove a memory.[/]")
+    console.print(
+        "  [aria.dim]Use[/] [aria.command]:forget <#>[/] [aria.dim]to remove a memory.[/]"
+    )
     console.print()
 
 
@@ -255,7 +300,7 @@ def show_search_results(memories: list[Memory], query: str) -> None:
     for i, mem in enumerate(memories, 1):
         imp_bar = "█" * int(mem.importance * 5)
         imp_bar = imp_bar.ljust(5, "░")
-        source = mem.source.value if hasattr(mem.source, 'value') else str(mem.source)
+        source = mem.source.value if hasattr(mem.source, "value") else str(mem.source)
         table.add_row(str(i), mem.content[:60], imp_bar, source)
 
     console.print()
@@ -296,8 +341,12 @@ def show_goals(goals: list[Goal]) -> None:
     }
 
     for i, goal in enumerate(goals, 1):
-        p_val = goal.priority.value if hasattr(goal.priority, 'value') else str(goal.priority)
-        s_val = goal.status.value if hasattr(goal.status, 'value') else str(goal.status)
+        p_val = (
+            goal.priority.value
+            if hasattr(goal.priority, "value")
+            else str(goal.priority)
+        )
+        s_val = goal.status.value if hasattr(goal.status, "value") else str(goal.status)
         table.add_row(
             str(i),
             goal.description,
@@ -481,6 +530,7 @@ def show_info(message: str) -> None:
 # Phase 2 Display Functions
 # ---------------------------------------------------------------------------
 
+
 def show_graph_stats(stats: dict) -> None:
     """Display knowledge graph statistics."""
     table = Table(
@@ -567,9 +617,7 @@ def show_causal_chain(chain: list[dict], from_concept: str, to_concept: str) -> 
         strength_bar = strength_bar.ljust(5, "░")
         if i == 0:
             console.print(f"  [bright_white]{step['from']}[/]")
-        console.print(
-            f"    │ [dim]{step['relationship']}[/] [dim]{strength_bar}[/]"
-        )
+        console.print(f"    │ [dim]{step['relationship']}[/] [dim]{strength_bar}[/]")
         console.print("    ▼")
         console.print(f"  [bright_white]{step['to']}[/]")
 
@@ -660,12 +708,16 @@ def show_improvements(improvements) -> None:
     table.add_column("Improved Response", style="bright_cyan", max_width=50)
 
     for imp in improvements:
-        scores = f"{imp.accuracy_score:.1f}/{imp.depth_score:.1f}/{imp.honesty_score:.1f}"
+        scores = (
+            f"{imp.accuracy_score:.1f}/{imp.depth_score:.1f}/{imp.honesty_score:.1f}"
+        )
         table.add_row(
             str(imp.turn_number),
             scores,
             imp.feedback[:100] + "..." if len(imp.feedback) > 100 else imp.feedback,
-            imp.improved_response[:100] + "..." if len(imp.improved_response) > 100 else imp.improved_response,
+            imp.improved_response[:100] + "..."
+            if len(imp.improved_response) > 100
+            else imp.improved_response,
         )
 
     console.print()
@@ -676,16 +728,19 @@ def show_improvements(improvements) -> None:
 def show_debate_resolution(resolution) -> None:
     """Display the Judge's synthesis of a debate."""
     console.print()
-    console.print(Panel(
-        f"[bold bright_white]The Judge's Synthesis[/]\n\n"
-        f"[dim]Summary:[/] {resolution.summary}\n\n"
-        f"[bold bright_cyan]Final Truth:[/] {resolution.synthesis}",
-        title="[bold green]⚖️ Debate Concluded[/]",
-        border_style="green",
-        box=box.ROUNDED,
-        padding=(1, 2)
-    ))
+    console.print(
+        Panel(
+            f"[bold bright_white]The Judge's Synthesis[/]\n\n"
+            f"[dim]Summary:[/] {resolution.summary}\n\n"
+            f"[bold bright_cyan]Final Truth:[/] {resolution.synthesis}",
+            title="[bold green]⚖️ Debate Concluded[/]",
+            border_style="green",
+            box=box.ROUNDED,
+            padding=(1, 2),
+        )
+    )
     console.print()
+
 
 def show_uncertainties(uncertainties) -> None:
     """Display tracked uncertainties."""
@@ -706,12 +761,15 @@ def show_uncertainties(uncertainties) -> None:
     for u in uncertainties:
         table.add_row(
             u.topic[:50],
-            u.why_uncertain[:80] + "..." if len(u.why_uncertain) > 80 else u.why_uncertain,
+            u.why_uncertain[:80] + "..."
+            if len(u.why_uncertain) > 80
+            else u.why_uncertain,
         )
 
     console.print()
     console.print(table)
     console.print()
+
 
 def show_tools(registry) -> None:
     """Display available tools in the registry."""
@@ -731,20 +789,19 @@ def show_tools(registry) -> None:
     table.add_column("Arguments Schema", style="magenta", max_width=30)
 
     for name, tool in registry.tools.items():
-        table.add_row(
-            name,
-            tool.description,
-            str(tool.schema)
-        )
+        table.add_row(name, tool.description, str(tool.schema))
 
     console.print()
     console.print(table)
     console.print()
 
+
 def show_principles(principles) -> None:
     """Display discovered universal principles."""
     if not principles:
-        console.print("\n  [aria.dim]No universal principles discovered yet. Keep chatting![/]\n")
+        console.print(
+            "\n  [aria.dim]No universal principles discovered yet. Keep chatting![/]\n"
+        )
         return
 
     table = Table(
@@ -834,7 +891,9 @@ def show_benchmark_result(result) -> None:
 def show_meta_proposal(proposal) -> None:
     """Display a meta-analysis proposal with alarm styling."""
     if not proposal:
-        console.print("\n  [aria.dim]Meta-analysis found no actionable improvements.[/]\n")
+        console.print(
+            "\n  [aria.dim]Meta-analysis found no actionable improvements.[/]\n"
+        )
         return
 
     panel = Panel(

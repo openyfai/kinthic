@@ -15,13 +15,16 @@ import httpx
 import json
 from silex.utils.config import get_search_secret, browser_actions_enabled
 
+
 class WebSearchTool(BaseTool):
     name = "web_search"
     risk_level = "network"
-    description = "Searches the live internet for current facts, news, or general knowledge."
+    description = (
+        "Searches the live internet for current facts, news, or general knowledge."
+    )
     schema = {
         "query": "string (the exact search query to execute)",
-        "max_results": "integer (optional, default 3, max 5)"
+        "max_results": "integer (optional, default 3, max 5)",
     }
 
     async def execute(self, **kwargs) -> str:
@@ -44,19 +47,23 @@ class WebSearchTool(BaseTool):
                         json={
                             "api_key": tavily_key,
                             "query": query,
-                            "max_results": max_results
+                            "max_results": max_results,
                         },
-                        timeout=10.0
+                        timeout=10.0,
                     )
                     if resp.status_code == 200:
                         data = resp.json()
                         results = data.get("results", [])
                         if results:
-                            formatted = f"Search Results for '{query}' (via Tavily):\n\n"
+                            formatted = (
+                                f"Search Results for '{query}' (via Tavily):\n\n"
+                            )
                             for i, r in enumerate(results[:max_results], 1):
                                 formatted += f"[{i}] {r.get('title', 'No Title')}\n"
                                 formatted += f"URL: {r.get('url', 'No URL')}\n"
-                                formatted += f"Snippet: {r.get('content', 'No Snippet')}\n\n"
+                                formatted += (
+                                    f"Snippet: {r.get('content', 'No Snippet')}\n\n"
+                                )
                             return formatted.strip()
             except Exception as e:
                 log.warning(f"Tavily API search failed: {e}. Falling back...")
@@ -72,9 +79,9 @@ class WebSearchTool(BaseTool):
                         params={"q": query, "count": max_results},
                         headers={
                             "Accept": "application/json",
-                            "X-Subscription-Token": brave_key
+                            "X-Subscription-Token": brave_key,
                         },
-                        timeout=10.0
+                        timeout=10.0,
                     )
                     if resp.status_code == 200:
                         data = resp.json()
@@ -84,7 +91,9 @@ class WebSearchTool(BaseTool):
                             for i, r in enumerate(results[:max_results], 1):
                                 formatted += f"[{i}] {r.get('title', 'No Title')}\n"
                                 formatted += f"URL: {r.get('url', 'No URL')}\n"
-                                formatted += f"Snippet: {r.get('description', 'No Snippet')}\n\n"
+                                formatted += (
+                                    f"Snippet: {r.get('description', 'No Snippet')}\n\n"
+                                )
                             return formatted.strip()
             except Exception as e:
                 log.warning(f"Brave Search API failed: {e}. Falling back...")
@@ -95,7 +104,7 @@ class WebSearchTool(BaseTool):
         try:
             with DDGS() as ddgs:
                 results = list(ddgs.text(query, max_results=max_results))
-                
+
             if results:
                 formatted = f"Search Results for '{query}' (via DuckDuckGo):\n\n"
                 for i, r in enumerate(results, 1):
@@ -115,6 +124,7 @@ class WebSearchTool(BaseTool):
             log.info(f"Executing web_search via Browser Scraper for: '{query}'")
             try:
                 from silex.tools.browser import BrowserTool
+
                 browser = BrowserTool()
                 try:
                     # Utilize HTML search endpoint of DuckDuckGo
@@ -123,10 +133,15 @@ class WebSearchTool(BaseTool):
                     if "Error" not in nav_res:
                         scrape_res = await browser.execute(action="scrape")
                         if "BROWSER_OBSERVATION:" in scrape_res:
-                            obs_data = json.loads(scrape_res.replace("BROWSER_OBSERVATION:\n", ""))
+                            obs_data = json.loads(
+                                scrape_res.replace("BROWSER_OBSERVATION:\n", "")
+                            )
                             markdown = obs_data.get("result", "")
                             if len(markdown.strip()) > 200:
-                                return f"Search Results for '{query}' (via Browser Scraper):\n\n" + markdown[:3000].strip()
+                                return (
+                                    f"Search Results for '{query}' (via Browser Scraper):\n\n"
+                                    + markdown[:3000].strip()
+                                )
                 finally:
                     await browser.close()
             except Exception as e:
@@ -135,13 +150,14 @@ class WebSearchTool(BaseTool):
 
         return f"Error executing search: DuckDuckGo failed ({ddg_error}) and Browser automation is disabled/failed."
 
+
 class SemanticSearchTool(BaseTool):
     name = "semantic_search"
     risk_level = "read_only"
     description = "Search your local workspace using natural language. Useful for finding code patterns, related files, or old memories."
     schema = {
         "query": "string (the semantic query)",
-        "n_results": "integer (optional, default 5, max 10)"
+        "n_results": "integer (optional, default 5, max 10)",
     }
 
     def __init__(self, vector_store: VectorStore):
@@ -163,17 +179,17 @@ class SemanticSearchTool(BaseTool):
 
         try:
             results = self.vs.search(query, n_results=n_results)
-            
+
             if not results:
                 return "No semantic matches found in the local workspace."
 
             formatted = f"Semantic Matches for '{query}':\n\n"
             for r in results:
-                path = r['metadata'].get('path', 'Unknown')
+                path = r["metadata"].get("path", "Unknown")
                 formatted += f"FILE: {path}\n"
                 formatted += f"CONTENT: {r['content'][:300]}...\n"
                 formatted += "---"
-                
+
             return formatted.strip()
 
         except Exception as e:

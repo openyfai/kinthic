@@ -54,7 +54,9 @@ class LocalLLMClient:
             "response_format": {"type": "json_object"},
         }
         async with httpx.AsyncClient(timeout=120) as client:
-            response = await client.post(f"{self.base_url.rstrip('/')}/chat/completions", json=payload)
+            response = await client.post(
+                f"{self.base_url.rstrip('/')}/chat/completions", json=payload
+            )
             response.raise_for_status()
             content = response.json()["choices"][0]["message"]["content"]
         try:

@@ -38,7 +38,9 @@ class ContradictionDetector:
         self.db = db
         self.graph = graph
 
-    async def process_contradiction(self, contradiction: Contradiction) -> StoredContradiction | None:
+    async def process_contradiction(
+        self, contradiction: Contradiction
+    ) -> StoredContradiction | None:
         """
         Process a contradiction detected by Gemini.
 
@@ -52,25 +54,29 @@ class ContradictionDetector:
         node_b_id = self.graph.find_node_by_content(contradiction.new_claim)
 
         if not node_a_id:
-            node_a = await self.graph.add_node(KnowledgeNode(
-                content=contradiction.existing_claim,
-                node_type=NodeType.HYPOTHESIS,
-                confidence=0.4,
-                source="contradiction",
-                verification_status=VerificationStatus.CONTRADICTED,
-                metadata={"provenance": "contradiction_detector"},
-            ))
+            node_a = await self.graph.add_node(
+                KnowledgeNode(
+                    content=contradiction.existing_claim,
+                    node_type=NodeType.HYPOTHESIS,
+                    confidence=0.4,
+                    source="contradiction",
+                    verification_status=VerificationStatus.CONTRADICTED,
+                    metadata={"provenance": "contradiction_detector"},
+                )
+            )
             node_a_id = node_a.id
 
         if not node_b_id:
-            node_b = await self.graph.add_node(KnowledgeNode(
-                content=contradiction.new_claim,
-                node_type=NodeType.HYPOTHESIS,
-                confidence=0.4,
-                source="contradiction",
-                verification_status=VerificationStatus.CONTRADICTED,
-                metadata={"provenance": "contradiction_detector"},
-            ))
+            node_b = await self.graph.add_node(
+                KnowledgeNode(
+                    content=contradiction.new_claim,
+                    node_type=NodeType.HYPOTHESIS,
+                    confidence=0.4,
+                    source="contradiction",
+                    verification_status=VerificationStatus.CONTRADICTED,
+                    metadata={"provenance": "contradiction_detector"},
+                )
+            )
             node_b_id = node_b.id
 
         # Create the contradiction record
@@ -88,9 +94,14 @@ class ContradictionDetector:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                stored.id, stored.node_a, stored.node_b,
-                stored.analysis, stored.status, stored.resolution,
-                stored.created_at, stored.resolved_at,
+                stored.id,
+                stored.node_a,
+                stored.node_b,
+                stored.analysis,
+                stored.status,
+                stored.resolution,
+                stored.created_at,
+                stored.resolved_at,
             ),
         )
 

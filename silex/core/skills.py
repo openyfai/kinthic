@@ -19,9 +19,18 @@ _SKIP_SKILL_NAMES = frozenset({"readme", "plugin_development"})
 
 class SkillMeta:
     """Lightweight metadata record for a loaded skill."""
+
     __slots__ = (
-        "name", "source_path", "description", "version", "author",
-        "tags", "trust_level", "trigger", "inline", "source",
+        "name",
+        "source_path",
+        "description",
+        "version",
+        "author",
+        "tags",
+        "trust_level",
+        "trigger",
+        "inline",
+        "source",
     )
 
     def __init__(
@@ -67,8 +76,8 @@ class SkillLoader:
     def __init__(self, vector_store: VectorStore | None = None):
         self.skills_dir = KINTHIC_SKILLS
         self.plugins_skills_dir = KINTHIC_PLUGINS_SKILLS
-        self.skills: dict[str, str] = {}              # name → markdown content
-        self.skill_meta: dict[str, SkillMeta] = {}    # name → metadata
+        self.skills: dict[str, str] = {}  # name → markdown content
+        self.skill_meta: dict[str, SkillMeta] = {}  # name → metadata
         self.vector_store = vector_store
         self.collection = None
 
@@ -76,7 +85,7 @@ class SkillLoader:
             try:
                 self.collection = self.vector_store.client.get_or_create_collection(
                     name="aria_skills",
-                    embedding_function=self.vector_store.embedding_function
+                    embedding_function=self.vector_store.embedding_function,
                 )
             except Exception as e:
                 log.warning(f"Could not initialize vector collection for skills: {e}")
@@ -136,28 +145,37 @@ class SkillLoader:
             try:
                 raw_content = file_path.read_text(encoding="utf-8")
                 frontmatter, body = self._parse_frontmatter(raw_content)
-                meta = self._load_meta(file_path, skill_name, default_trust, frontmatter)
+                meta = self._load_meta(
+                    file_path, skill_name, default_trust, frontmatter
+                )
 
-                self.skills[skill_name] = body.strip() if body.strip() else raw_content.strip()
+                self.skills[skill_name] = (
+                    body.strip() if body.strip() else raw_content.strip()
+                )
                 self.skill_meta[skill_name] = meta
                 count += 1
 
                 if self.collection:
                     self.collection.upsert(
                         documents=[self.skills[skill_name]],
-                        metadatas=[{
-                            "name": skill_name,
-                            "trust_level": meta.trust_level,
-                            "tags": ",".join(meta.tags),
-                        }],
-                        ids=[f"skill_{skill_name}"]
+                        metadatas=[
+                            {
+                                "name": skill_name,
+                                "trust_level": meta.trust_level,
+                                "tags": ",".join(meta.tags),
+                            }
+                        ],
+                        ids=[f"skill_{skill_name}"],
                     )
             except Exception as e:
                 log.error("Failed to load skill %s: %s", skill_name, e)
 
-        log.info("Loaded %d skills (%d flat, %d nested/plugin)",
-                 count, sum(1 for s in self.skill_meta.values() if s.trust_level == "core"),
-                 sum(1 for s in self.skill_meta.values() if s.trust_level != "core"))
+        log.info(
+            "Loaded %d skills (%d flat, %d nested/plugin)",
+            count,
+            sum(1 for s in self.skill_meta.values() if s.trust_level == "core"),
+            sum(1 for s in self.skill_meta.values() if s.trust_level != "core"),
+        )
         return count
 
     def reload(self) -> int:
@@ -178,6 +196,7 @@ class SkillLoader:
             return {}, content
         try:
             import yaml
+
             frontmatter = yaml.safe_load(parts[1]) or {}
             if not isinstance(frontmatter, dict):
                 frontmatter = {}
@@ -207,12 +226,15 @@ class SkillLoader:
             if yaml_path.exists():
                 try:
                     import yaml
+
                     with open(yaml_path, encoding="utf-8") as f:
                         sidecar = yaml.safe_load(f) or {}
                     if isinstance(sidecar, dict):
                         manifest = {**sidecar, **manifest}
                 except Exception as exc:
-                    log.debug("Could not parse %s for %s: %s", yaml_path.name, skill_name, exc)
+                    log.debug(
+                        "Could not parse %s for %s: %s", yaml_path.name, skill_name, exc
+                    )
                 break
 
         metadata = manifest.get("metadata") or {}
@@ -282,6 +304,7 @@ class SkillLoader:
             return "community"
         try:
             import yaml
+
             with open(yaml_path, encoding="utf-8") as f:
                 manifest = yaml.safe_load(f) or {}
         except Exception:
@@ -325,8 +348,7 @@ class SkillLoader:
 
         try:
             results = self.collection.query(
-                query_texts=[query],
-                n_results=min(limit, len(self.skills))
+                query_texts=[query], n_results=min(limit, len(self.skills))
             )
 
             relevant = {}
@@ -353,13 +375,15 @@ class SkillLoader:
         ]
         for name, meta in sorted(self.skill_meta.items(), key=lambda x: x[0]):
             badge = badge_map.get(meta.trust_level, "")
-            trigger = f" trigger=\"{meta.trigger}\"" if meta.trigger else ""
+            trigger = f' trigger="{meta.trigger}"' if meta.trigger else ""
             inline_note = " [inline]" if meta.inline else ""
             lines.append(
                 f"- {badge} **{name}**{inline_note}: {meta.description}{trigger}"
             )
         lines.append("")
-        lines.append("Call skill_view(name) when a workflow matches the user's request.")
+        lines.append(
+            "Call skill_view(name) when a workflow matches the user's request."
+        )
         return "\n".join(lines)
 
     def format_inline_skills(self, query: str | None = None) -> str:
@@ -369,14 +393,18 @@ class SkillLoader:
             return ""
 
         if query:
-            relevant = set(self.get_relevant_skills(query, limit=len(inline_names)).keys())
-            inline_names = [n for n in inline_names if n in relevant] or inline_names[:2]
+            relevant = set(
+                self.get_relevant_skills(query, limit=len(inline_names)).keys()
+            )
+            inline_names = [n for n in inline_names if n in relevant] or inline_names[
+                :2
+            ]
 
         sections = ["INLINE SKILLS (full instructions):"]
         for name in inline_names:
             content = self.skills.get(name, "")
             if content:
-                sections.append(f"<skill name=\"{name}\">")
+                sections.append(f'<skill name="{name}">')
                 sections.append(content.strip())
                 sections.append("</skill>\n")
         return "\n".join(sections) if len(sections) > 1 else ""
@@ -417,18 +445,20 @@ class SkillLoader:
                 size_bytes = meta.source_path.stat().st_size
             except OSError:
                 size_bytes = len(self.skills.get(name, ""))
-            rows.append({
-                "name": name,
-                "description": meta.description,
-                "version": meta.version,
-                "author": meta.author,
-                "tags": meta.tags,
-                "trust_level": meta.trust_level,
-                "trigger": meta.trigger,
-                "source": meta.source,
-                "layout": self._infer_layout(meta),
-                "source_path": str(meta.source_path),
-                "size_bytes": size_bytes,
-            })
+            rows.append(
+                {
+                    "name": name,
+                    "description": meta.description,
+                    "version": meta.version,
+                    "author": meta.author,
+                    "tags": meta.tags,
+                    "trust_level": meta.trust_level,
+                    "trigger": meta.trigger,
+                    "source": meta.source,
+                    "layout": self._infer_layout(meta),
+                    "source_path": str(meta.source_path),
+                    "size_bytes": size_bytes,
+                }
+            )
         rows.sort(key=lambda r: (r["trust_level"] != "core", r["name"]))
         return rows

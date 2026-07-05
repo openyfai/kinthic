@@ -23,7 +23,9 @@ def main() -> int:
         return 1
 
     text = backlog.read_text(encoding="utf-8")
-    lines = [ln.strip() for ln in text.splitlines() if re.match(r"^\d+\.\s+", ln.strip())]
+    lines = [
+        ln.strip() for ln in text.splitlines() if re.match(r"^\d+\.\s+", ln.strip())
+    ]
     if not lines:
         print("No numbered lines found in backlog.", file=sys.stderr)
         return 1

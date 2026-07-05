@@ -108,17 +108,19 @@ class DebateEngine:
 
             for r in range(rounds):
                 if status_callback:
-                    status_callback(f"[magenta]  Agents A and B are formulating arguments in parallel (Round {r+1})...[/]")
+                    status_callback(
+                        f"[magenta]  Agents A and B are formulating arguments in parallel (Round {r + 1})...[/]"
+                    )
 
                 # Issue leases for Agent A and Agent B
                 lease_a = ActuationLease.issue(
-                    task_id=f"debate_a_round_{r+1}_{uuid.uuid4().hex[:4]}",
+                    task_id=f"debate_a_round_{r + 1}_{uuid.uuid4().hex[:4]}",
                     agent_id="Agent A",
                     ttl_seconds=300.0,
                     allowed_tools=["run_terminal_command"],
                 )
                 lease_b = ActuationLease.issue(
-                    task_id=f"debate_b_round_{r+1}_{uuid.uuid4().hex[:4]}",
+                    task_id=f"debate_b_round_{r + 1}_{uuid.uuid4().hex[:4]}",
                     agent_id="Agent B",
                     ttl_seconds=300.0,
                     allowed_tools=["run_terminal_command"],
@@ -142,16 +144,20 @@ class DebateEngine:
                     arg = await self._generate_argument("Agent A", topic, transcript)
                     # Write result to worker's workspace
                     output_file = h_a.workspace_dir / "output.json"
-                    output_file.write_text(json.dumps(arg.model_dump()), encoding="utf-8")
-                    await h_a.result() # Wait for container to exit
+                    output_file.write_text(
+                        json.dumps(arg.model_dump()), encoding="utf-8"
+                    )
+                    await h_a.result()  # Wait for container to exit
                     return arg
 
                 async def run_agent_b():
                     arg = await self._generate_argument("Agent B", topic, transcript)
                     # Write result to worker's workspace
                     output_file = h_b.workspace_dir / "output.json"
-                    output_file.write_text(json.dumps(arg.model_dump()), encoding="utf-8")
-                    await h_b.result() # Wait for container to exit
+                    output_file.write_text(
+                        json.dumps(arg.model_dump()), encoding="utf-8"
+                    )
+                    await h_b.result()  # Wait for container to exit
                     return arg
 
                 a_arg, b_arg = await asyncio.gather(run_agent_a(), run_agent_b())
@@ -168,7 +174,9 @@ class DebateEngine:
             transcript.append(a_arg)
 
             if status_callback:
-                status_callback("[blue]  Agent B is querying world model and rebutting...[/]")
+                status_callback(
+                    "[blue]  Agent B is querying world model and rebutting...[/]"
+                )
 
             b_arg = await self._generate_argument("Agent B", topic, transcript)
             transcript.append(b_arg)
@@ -176,12 +184,16 @@ class DebateEngine:
             # Additional rounds if requested
             for i in range(1, rounds):
                 if status_callback:
-                    status_callback(f"[red]  Agent A is rebutting (Round {i+1})...[/]")
+                    status_callback(
+                        f"[red]  Agent A is rebutting (Round {i + 1})...[/]"
+                    )
                 a_arg = await self._generate_argument("Agent A", topic, transcript)
                 transcript.append(a_arg)
 
                 if status_callback:
-                    status_callback(f"[blue]  Agent B is rebutting (Round {i+1})...[/]")
+                    status_callback(
+                        f"[blue]  Agent B is rebutting (Round {i + 1})...[/]"
+                    )
                     b_arg = await self._generate_argument("Agent B", topic, transcript)
                 transcript.append(b_arg)
 
@@ -217,7 +229,8 @@ class DebateEngine:
                 kg_context = await self.kg.retrieve_relevant_context(topic)
                 # Extract nodes that have CONTRADICTS edges
                 contradicting_nodes = [
-                    n for n in kg_context
+                    n
+                    for n in kg_context
                     if n.get("contradicts") or n.get("type") == "fact"
                 ]
                 if contradicting_nodes:
@@ -291,11 +304,15 @@ class DebateEngine:
                         "════════════════════════════════════════════════════\n"
                     )
                     for i, c in enumerate(unresolved[:5], 1):
-                        analysis = c.analysis[:120] if hasattr(c, "analysis") else str(c)[:120]
+                        analysis = (
+                            c.analysis[:120] if hasattr(c, "analysis") else str(c)[:120]
+                        )
                         db_contradiction_block += f"  [{i}] {analysis}\n"
                     db_contradiction_block += "\n"
             except Exception as e:
-                log.warning(f"Contradiction retrieval for judge failed (non-fatal): {e}")
+                log.warning(
+                    f"Contradiction retrieval for judge failed (non-fatal): {e}"
+                )
 
         content = (
             f"TOPIC: {topic}\n\n"
@@ -360,18 +377,20 @@ class DebateEngine:
     ) -> ConsensusDebateResponse:
         """Run a consensus-seeking debate between Architect, Engineer, and Auditor."""
         log.info(f"Starting consensus-seeking debate for goal: {goal_description}")
-        
+
         current_code = draft_code
         rounds = 3
         avg_score = 0.0
         critiques = []
-        
+
         for r in range(1, rounds + 1):
             if status_callback:
-                status_callback(f"[magenta]  Consensus Debate: Round {r}/{rounds}...[/]")
-                
+                status_callback(
+                    f"[magenta]  Consensus Debate: Round {r}/{rounds}...[/]"
+                )
+
             critiques = []
-            
+
             # 1. System Architect
             arch_prompt = (
                 "You are the System Architect.\n"
@@ -388,7 +407,7 @@ class DebateEngine:
             )
             arch_critique.role = "SystemArchitect"
             critiques.append(arch_critique)
-            
+
             # 2. Staff Engineer
             eng_prompt = (
                 "You are the Staff Engineer.\n"
@@ -405,7 +424,7 @@ class DebateEngine:
             )
             eng_critique.role = "StaffEngineer"
             critiques.append(eng_critique)
-            
+
             # 3. Security Auditor
             sec_prompt = (
                 "You are the Security Auditor.\n"
@@ -422,50 +441,56 @@ class DebateEngine:
             )
             sec_critique.role = "SecurityAuditor"
             critiques.append(sec_critique)
-            
+
             # Calculate average score
             avg_score = sum(c.score for c in critiques) / 3.0
             log.info(f"Consensus Debate Round {r}: Average score = {avg_score:.3f}")
-            
+
             # Retrieve SecurityAuditor score
-            sec_score = next((c.score for c in critiques if c.role == "SecurityAuditor"), 1.0)
+            sec_score = next(
+                (c.score for c in critiques if c.role == "SecurityAuditor"), 1.0
+            )
             consensus_achieved = avg_score >= 0.9 and sec_score >= 0.8
-            
+
             if consensus_achieved:
                 log.info("Consensus achieved early!")
                 if status_callback:
-                    status_callback(f"[green]  ✔ Consensus achieved early with score {avg_score:.2f}[/]")
+                    status_callback(
+                        f"[green]  ✔ Consensus achieved early with score {avg_score:.2f}[/]"
+                    )
                 return ConsensusDebateResponse(
                     refined_code=current_code,
                     average_score=avg_score,
                     consensus_achieved=True,
-                    critiques=critiques
+                    critiques=critiques,
                 )
-                
+
             # If not achieved and not final round, refine code
             if r < rounds:
                 if status_callback:
-                    status_callback("[bright_cyan]  Consensus Debate: Refining code draft...[/]")
-                    
+                    status_callback(
+                        "[bright_cyan]  Consensus Debate: Refining code draft...[/]"
+                    )
+
                 refine_prompt = (
                     "You are the Refactor Coder.\n"
                     "Your job is to rewrite the proposed code draft to resolve all critiques and suggestions from the Architect, Engineer, and Auditor.\n"
                     "Output only the complete refactored code without explanations."
                 )
-                
+
                 critiques_summary = ""
                 for c in critiques:
                     critiques_summary += f"--- Role: {c.role} (Score: {c.score:.2f}) ---\nCritique: {c.critique}\nSuggestions:\n"
                     for s in c.suggestions:
                         critiques_summary += f"  - {s}\n"
                     critiques_summary += "\n"
-                    
+
                 refine_input = (
                     f"Original Proposed Code:\n{current_code}\n\n"
                     f"Critiques received:\n{critiques_summary}\n\n"
                     f"Rewrite the code to solve all these issues perfectly."
                 )
-                
+
                 refine_response = await self.llm.think(
                     system_prompt=refine_prompt,
                     user_input=refine_input,
@@ -480,14 +505,16 @@ class DebateEngine:
                     if lines and lines[-1] == "```":
                         lines = lines[:-1]
                     current_code = "\n".join(lines).strip()
-                    
-        sec_score = next((c.score for c in critiques if c.role == "SecurityAuditor"), 1.0)
+
+        sec_score = next(
+            (c.score for c in critiques if c.role == "SecurityAuditor"), 1.0
+        )
         consensus_achieved = avg_score >= 0.9 and sec_score >= 0.8
         return ConsensusDebateResponse(
             refined_code=current_code,
             average_score=avg_score,
             consensus_achieved=consensus_achieved,
-            critiques=critiques
+            critiques=critiques,
         )
 
 
@@ -495,12 +522,19 @@ class ConsensusCritique(BaseModel):
     role: str = Field(default="", description="The debate role name")
     score: float = Field(ge=0.0, le=1.0, description="Score assigned to the draft code")
     critique: str = Field(description="Detailed architectural critique")
-    suggestions: list[str] = Field(default_factory=list, description="Specific improvements suggested")
+    suggestions: list[str] = Field(
+        default_factory=list, description="Specific improvements suggested"
+    )
 
 
 class ConsensusDebateResponse(BaseModel):
     refined_code: str = Field(description="The final optimized/refined code draft")
-    average_score: float = Field(description="The average consensus score from all 3 roles")
-    consensus_achieved: bool = Field(description="True if average score >= 0.9 and Security Auditor score >= 0.8")
-    critiques: list[ConsensusCritique] = Field(default_factory=list, description="All critiques from all roles")
-
+    average_score: float = Field(
+        description="The average consensus score from all 3 roles"
+    )
+    consensus_achieved: bool = Field(
+        description="True if average score >= 0.9 and Security Auditor score >= 0.8"
+    )
+    critiques: list[ConsensusCritique] = Field(
+        default_factory=list, description="All critiques from all roles"
+    )

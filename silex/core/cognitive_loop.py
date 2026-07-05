@@ -22,16 +22,24 @@ from pydantic import BaseModel
 from contextvars import ContextVar
 
 # Concurrency-safe task-local state variables
-_turn_start_time_var: ContextVar[float | None] = ContextVar("turn_start_time_var", default=None)
-_pending_tool_audit_var: ContextVar[list[dict]] = ContextVar("pending_tool_audit_var", default=[])
+_turn_start_time_var: ContextVar[float | None] = ContextVar(
+    "turn_start_time_var", default=None
+)
+_pending_tool_audit_var: ContextVar[list[dict]] = ContextVar(
+    "pending_tool_audit_var", default=[]
+)
 _turn_count_var: ContextVar[int] = ContextVar("turn_count_var", default=0)
-_tool_execution_history_var: ContextVar[list[str]] = ContextVar("tool_execution_history_var", default=[])
+_tool_execution_history_var: ContextVar[list[str]] = ContextVar(
+    "tool_execution_history_var", default=[]
+)
 
 from silex.utils.telemetry import tracer
 
 from silex.core.benchmark import BenchmarkRunner
 from silex.core.context_builder import ContextBuilder
-from silex.core.critic import ResponseCritic  # References geometric_score to satisfy static analysis tests
+from silex.core.critic import (
+    ResponseCritic,
+)  # References geometric_score to satisfy static analysis tests
 from silex.core.creativity import CreativityStack
 from silex.core.debate import DebateEngine
 from silex.core.generalization import GeneralizationEngine
@@ -79,8 +87,20 @@ from silex.storage.database import Database
 from silex.tools.registry import ToolRegistry
 from silex.runtime.settings import RuntimeSettingsStore
 from silex.runtime.usage import UsageTracker
-from silex.utils.config import KINTHIC_PROCESS_LOCK, KINTHIC_ONTOLOGY, KINTHIC_EXPORTS, KINTHIC_HOME, WORKSPACE_DIR, autonomy_policy_snapshot
-from silex.utils.config import allow_multi_writer, get_process_role, get_provider_settings, get_settings_store
+from silex.utils.config import (
+    KINTHIC_PROCESS_LOCK,
+    KINTHIC_ONTOLOGY,
+    KINTHIC_EXPORTS,
+    KINTHIC_HOME,
+    WORKSPACE_DIR,
+    autonomy_policy_snapshot,
+)
+from silex.utils.config import (
+    allow_multi_writer,
+    get_process_role,
+    get_provider_settings,
+    get_settings_store,
+)
 from silex.utils.config import max_tool_calls_per_turn
 from silex.utils.config import telegram_public_mode_enabled
 from silex.utils.logger import setup_logger
@@ -143,27 +163,31 @@ class CognitiveLoop:
         self._is_extracting_memory = False
 
         from silex.llm.smart_router import SmartRouter
+
         self.smart_router = SmartRouter(self.settings_store, self.usage_tracker)
-        self.llm = self.smart_router.get_proxy()   # backwards-compatible proxy alias
+        self.llm = self.smart_router.get_proxy()  # backwards-compatible proxy alias
         provider_settings = get_provider_settings(self.settings_store)
-        self.router = self.smart_router               # SmartRouter IS the router now
+        self.router = self.smart_router  # SmartRouter IS the router now
         self._process_lock_path = KINTHIC_PROCESS_LOCK
 
         # Phase 2 — World Model
         self.kg = KnowledgeGraph(self.db)
         self.contradictions = ContradictionDetector(self.db, self.kg)
         self.hypotheses = HypothesisEngine(self.db, self.kg)
-        
+
         from silex.core.causal_graph import CausalKnowledgeGraphGenerator
+
         self.causal_kg = CausalKnowledgeGraphGenerator(self.db)
-        
+
         from silex.security.trust_engine import BayesianTrustEngine
+
         self.trust_engine = BayesianTrustEngine(self.db)
 
         # Phase B: Milestone 2 — Vector Memory
         self.vector_store = VectorStore()
         self.pruner = ContextPruner(self.llm)
         from silex.memory.file_indexer import FileIndexer
+
         self.file_indexer = FileIndexer()
 
         # Phase 5 — Tool Use
@@ -177,6 +201,7 @@ class CognitiveLoop:
         )
 
         from agent.orchestrator import WorkerOrchestrator
+
         self.worker_orchestrator = WorkerOrchestrator(
             max_workers=4,
             workspace_root=WORKSPACE_DIR,
@@ -202,11 +227,15 @@ class CognitiveLoop:
                 self.ontology.merge_from_json_file(_ontology_overlay)
                 log.info("Loaded ontology overlay from %s", _ontology_overlay)
             except Exception as exc:
-                log.warning("Ontology overlay at %s was not loaded: %s", _ontology_overlay, exc)
+                log.warning(
+                    "Ontology overlay at %s was not loaded: %s", _ontology_overlay, exc
+                )
         self.semantic_parser = SemanticParser(self.ontology)
 
         self.context_builder = ContextBuilder(
-            self.memory, self.goals, self.session,
+            self.memory,
+            self.goals,
+            self.session,
             knowledge_graph=self.kg,
             contradiction_detector=self.contradictions,
             hypothesis_engine=self.hypotheses,
@@ -214,14 +243,16 @@ class CognitiveLoop:
             generalization_engine=self.generalization_engine,
             skill_loader=self.skill_loader,
             settings_store=self.settings_store,
-            semantic_parser=self.semantic_parser, # Pass parser to context builder
+            semantic_parser=self.semantic_parser,  # Pass parser to context builder
             pruner=self.pruner,
             creativity_stack=self.creativity_stack,
-            planner=self.planner
+            planner=self.planner,
         )
 
         # Phase 3 — Self-Improvement
-        self.critic = ResponseCritic(self.llm, model_override=provider_settings.get("critic_model"))
+        self.critic = ResponseCritic(
+            self.llm, model_override=provider_settings.get("critic_model")
+        )
         self.improver = ImprovementLogger(self.db)
 
         # Phase 4 — Multi-Agent Debate
@@ -241,11 +272,13 @@ class CognitiveLoop:
 
         # Epistemic integrity — belief engine + scheduled maintenance
         from silex.world.belief_engine import BeliefEngine
+
         self.belief_engine = BeliefEngine(self.db)
         self._belief_maintenance: Any = None
 
         # Phase 1: Genesis Skill Synthesizer
         from silex.autonomy.skill_synthesizer import GenesisSynthesizer
+
         self.genesis_synthesizer = GenesisSynthesizer(self.db, self.llm, self.kg)
 
     # ------------------------------------------------------------------
@@ -264,7 +297,10 @@ class CognitiveLoop:
         try:
             reindexed = await self.memory.reconcile_vector_index()
             if reindexed:
-                log.info("Startup reconciliation re-indexed %d memories into the vector store.", reindexed)
+                log.info(
+                    "Startup reconciliation re-indexed %d memories into the vector store.",
+                    reindexed,
+                )
         except Exception as exc:
             log.warning("Startup vector reconciliation failed: %s", exc)
         try:
@@ -285,7 +321,10 @@ class CognitiveLoop:
                 try:
                     await asyncio.to_thread(indexer.run)
                 except Exception as index_exc:
-                    log.error(f"Background workspace indexing failed: {index_exc}", exc_info=True)
+                    log.error(
+                        f"Background workspace indexing failed: {index_exc}",
+                        exc_info=True,
+                    )
 
             asyncio.create_task(run_indexer_safe())
 
@@ -305,6 +344,7 @@ class CognitiveLoop:
         # Kill orphaned Kinthic worker containers from previous crashes
         try:
             import docker as docker_lib
+
             client = docker_lib.from_env()
             # docker container list is a blocking call, but we can do it safely in startup
             orphans = client.containers.list(filters={"label": "kinthic.managed=true"})
@@ -319,6 +359,7 @@ class CognitiveLoop:
         # Start belief maintenance scheduler
         try:
             from silex.autonomy.belief_maintenance import BeliefMaintenanceScheduler
+
             self._belief_maintenance = BeliefMaintenanceScheduler(self.db, self)
             self._belief_maintenance.start()
         except Exception as exc:
@@ -372,9 +413,13 @@ class CognitiveLoop:
             summary_response = await self.llm.think(
                 system_prompt="You are a concise memory summarizer.",
                 user_input=summary_prompt,
-                model_override=self.settings.get("fast_model") if hasattr(self, "settings") else None,
+                model_override=self.settings.get("fast_model")
+                if hasattr(self, "settings")
+                else None,
             )
-            summary_text = getattr(summary_response, "response", str(summary_response)).strip()
+            summary_text = getattr(
+                summary_response, "response", str(summary_response)
+            ).strip()
             if summary_text:
                 await self.session.update_memory_summary(summary_text)
                 log.info("Memory summary generated (%d chars)", len(summary_text))
@@ -408,7 +453,9 @@ class CognitiveLoop:
             await self.pruner.consolidate_memories(self.memory)
 
             # Phase 2 Patch: Graph Entropy Decay
-            await self.memory.decay_graph_entropy(days=14, decay_factor=0.8, absolute_threshold=0.1)
+            await self.memory.decay_graph_entropy(
+                days=14, decay_factor=0.8, absolute_threshold=0.1
+            )
 
             prefs["last_memory_consolidation_at"] = _time.time()
             await self.db.execute(
@@ -459,7 +506,7 @@ class CognitiveLoop:
             await self.worker_orchestrator.shutdown()
 
         await self.session.end_session()
-        
+
         # Close registered tools (such as BrowserTool to terminate browser process)
         if hasattr(self, "registry") and self.registry:
             for tool in self.registry.tools.values():
@@ -515,10 +562,10 @@ class CognitiveLoop:
         active_goals = await self.goals.get_active()
         if not active_goals:
             return
-            
+
         target_goal = active_goals[0]
         goal_id = str(target_goal.id)
-        
+
         # Check if we already have a worker running for this goal
         if goal_id in self._background_workers:
             handle = self._background_workers[goal_id]
@@ -527,8 +574,12 @@ class CognitiveLoop:
                 # Worker completed — pick up structured result.
                 try:
                     structured = await handle.structured_result()
-                    result_output = structured.output if structured else await handle.result()
-                    goal_succeeded = structured.success if structured else (status == "done")
+                    result_output = (
+                        structured.output if structured else await handle.result()
+                    )
+                    goal_succeeded = (
+                        structured.success if structured else (status == "done")
+                    )
                 except Exception:
                     result_output = await handle.result()
                     goal_succeeded = status == "done"
@@ -540,23 +591,40 @@ class CognitiveLoop:
                 # Durable completion record
                 import time as _time
                 import uuid as _uuid
-                run_id = getattr(self, "_background_run_ids", {}).get(goal_id, "unknown")
+
+                run_id = getattr(self, "_background_run_ids", {}).get(
+                    goal_id, "unknown"
+                )
                 final_status = "completed" if goal_succeeded else "failed"
                 try:
                     await self.db.execute(
                         "UPDATE autonomous_jobs SET status=?, completed_at=?, output_summary=? WHERE goal_id=? AND run_id=?",
-                        (_time.time(), result_output[:2000], final_status, goal_id, run_id),
+                        (
+                            _time.time(),
+                            result_output[:2000],
+                            final_status,
+                            goal_id,
+                            run_id,
+                        ),
                     )
                     await self.db.execute(
                         "INSERT OR IGNORE INTO job_events (event_id, goal_id, run_id, kind, payload_json, payload_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (str(_uuid.uuid4()), goal_id, run_id, final_status,
-                         '{"source":"tick"}', 'done', _time.time()),
+                        (
+                            str(_uuid.uuid4()),
+                            goal_id,
+                            run_id,
+                            final_status,
+                            '{"source":"tick"}',
+                            "done",
+                            _time.time(),
+                        ),
                     )
                 except Exception as _e:
                     log.debug("tick: durable completion write failed: %s", _e)
 
                 # Send Telegram notification
                 from datetime import datetime, timezone
+
                 await self.db.execute(
                     "INSERT INTO notifications (id, message, level, delivered, created_at) VALUES (?, ?, ?, 0, ?)",
                     (
@@ -569,16 +637,24 @@ class CognitiveLoop:
                 )
 
                 # Mark goal in goals table
-                await self.db.execute("UPDATE goals SET status = ? WHERE id = ?",
-                                      ("completed" if goal_succeeded else "failed", goal_id))
+                await self.db.execute(
+                    "UPDATE goals SET status = ? WHERE id = ?",
+                    ("completed" if goal_succeeded else "failed", goal_id),
+                )
 
                 # Remove from tracking
                 del self._background_workers[goal_id]
                 run_ids = getattr(self, "_background_run_ids", {})
                 run_ids.pop(goal_id, None)
-                log.info("tick: Background worker for goal %s finished (status=%s)", goal_id, final_status)
+                log.info(
+                    "tick: Background worker for goal %s finished (status=%s)",
+                    goal_id,
+                    final_status,
+                )
             else:
-                log.info(f"Background worker for goal {goal_id} is still running (status: {status}).")
+                log.info(
+                    f"Background worker for goal {goal_id} is still running (status: {status})."
+                )
             return
 
         # No active worker for this goal yet — spawn a bounded cognitive sub-agent.
@@ -592,15 +668,22 @@ class CognitiveLoop:
         # Record job in durable table
         import time as _time
         import hashlib as _hashlib
+
         try:
             await self.db.execute(
                 """INSERT OR IGNORE INTO autonomous_jobs
                    (goal_id, run_id, description, status, idempotency_key, created_at, started_at, last_heartbeat)
                    VALUES (?, ?, ?, 'running', ?, ?, ?, ?)""",
                 (
-                    goal_id, run_id, target_goal.description,
-                    _hashlib.sha256(f"{goal_id}:{target_goal.description}".encode()).hexdigest()[:32],
-                    _time.time(), _time.time(), _time.time(),
+                    goal_id,
+                    run_id,
+                    target_goal.description,
+                    _hashlib.sha256(
+                        f"{goal_id}:{target_goal.description}".encode()
+                    ).hexdigest()[:32],
+                    _time.time(),
+                    _time.time(),
+                    _time.time(),
                 ),
             )
         except Exception as _e:
@@ -613,13 +696,23 @@ class CognitiveLoop:
             task_id=f"goal_{goal_id[:8]}",
             agent_id="kinthic_background",
             ttl_seconds=3600.0,
-            allowed_tools=["run_terminal_command", "read_file", "list_directory", "search_web"],
+            allowed_tools=[
+                "run_terminal_command",
+                "read_file",
+                "list_directory",
+                "search_web",
+            ],
         )
 
         job = WorkerJob(
             objective=target_goal.description,
             command=f"[BACKGROUND GOAL] {target_goal.description}",
-            allowed_tools=["run_terminal_command", "read_file", "list_directory", "search_web"],
+            allowed_tools=[
+                "run_terminal_command",
+                "read_file",
+                "list_directory",
+                "search_web",
+            ],
             parent_task_id=goal_id,
             agent_id="kinthic_background",
             worker_class=WorkerClass.COGNITIVE,
@@ -632,7 +725,9 @@ class CognitiveLoop:
         self._background_workers[goal_id] = handle
         self._background_run_ids = getattr(self, "_background_run_ids", {})
         self._background_run_ids[goal_id] = run_id
-        log.info("tick: Spawned cognitive sub-agent for goal %s (run=%s)", goal_id, run_id)
+        log.info(
+            "tick: Spawned cognitive sub-agent for goal %s (run=%s)", goal_id, run_id
+        )
 
     # ------------------------------------------------------------------
     # The Loop
@@ -640,7 +735,8 @@ class CognitiveLoop:
 
     def _scrub_ghost_workers(self):
         """Phase 3 Patch: Terminate ghost handles to prevent RAM leakage."""
-        if not hasattr(self, "_background_workers"): return
+        if not hasattr(self, "_background_workers"):
+            return
         dead_goals = []
         for goal_id, handle in list(self._background_workers.items()):
             if handle.done():
@@ -655,7 +751,7 @@ class CognitiveLoop:
         status_callback: Callable[..., Any] | None = None,
         event_emitter: Callable[[dict], Awaitable[None]] | None = None,
         turn_emitter: Any | None = None,
-        images: list[dict] | None = None
+        images: list[dict] | None = None,
     ) -> CognitiveResponse:
         """
         Process a single cognitive turn.
@@ -671,6 +767,7 @@ class CognitiveLoop:
         """
         self._scrub_ghost_workers()
         import time as _time_module
+
         self._turn_start_time = _time_module.time()
         self._pending_tool_audit = []
         self._tool_execution_history = []
@@ -693,23 +790,23 @@ class CognitiveLoop:
                 await turn_emitter.routing("Classifying intent...")
             provider_settings = get_provider_settings(self.settings_store)
             fast_model = provider_settings["fast_model"]
-            
+
             router_prompt = (
                 "You are VYN's Fast Intent Router.\n"
                 "Evaluate the user's message. Does this user message require executing tools (like reading/writing files, run terminal commands, web search, browser), writing code, or deep logical/technical reasoning? Or is it simple conversational chitchat or trivial greetings (e.g. 'thanks', 'cool', 'hi', 'how are you')?\n"
                 "Analyze the user intent and return your final classification output strictly as a structured json object matching the required parameters.\n"
                 "Reply with exactly 'REASON' or 'CHAT'."
             )
-            
+
             intent_response = await self.llm.think(
                 system_prompt=router_prompt,
                 user_input=user_input,
-                model_override=fast_model
+                model_override=fast_model,
             )
-            
+
             intent = intent_response.response.strip().upper()
             log.info(f"Intent Routing: user input evaluated as {intent}")
-            
+
             if "CHAT" in intent and "REASON" not in intent:
                 # Fast conversational path
                 if status_callback:
@@ -717,21 +814,29 @@ class CognitiveLoop:
                 if turn_emitter is not None:
                     await turn_emitter.routing("Fast Router · CHAT path")
                 else:
-                    await _emit({"type": "thinking", "data": {"status": "Thinking...", "detail": "Fast Router · CHAT path"}})
-                    
+                    await _emit(
+                        {
+                            "type": "thinking",
+                            "data": {
+                                "status": "Thinking...",
+                                "detail": "Fast Router · CHAT path",
+                            },
+                        }
+                    )
+
                 chat_prompt = (
                     "You are VYN, a highly capable cognitive AI assistant.\n"
                     "Provide a brief, helpful, and friendly conversational response to the user. "
                     "You do not have tools or full context active right now, so keep it strictly conversational. "
                     "Be fully in character. Make it brief."
                 )
-                
+
                 chat_response = await self.llm.think(
                     system_prompt=chat_prompt,
                     user_input=user_input,
-                    model_override=fast_model
+                    model_override=fast_model,
                 )
-                
+
                 # Persist turn to history
                 await self.session.record_turn(
                     user_input=user_input,
@@ -742,13 +847,25 @@ class CognitiveLoop:
                     memories_added=0,
                     goals_changed=0,
                     scratchpad="",
-                    priority_tags=self._detect_priority_tags(user_input, chat_response.response, "Conversational chitchat handled by Fast Model")
+                    priority_tags=self._detect_priority_tags(
+                        user_input,
+                        chat_response.response,
+                        "Conversational chitchat handled by Fast Model",
+                    ),
                 )
-                
+
                 # Create background task for memory extraction if length gate passes and not already in progress
-                if len(user_input.strip()) >= 15 and not getattr(self, '_is_extracting_memory', False):
-                    session_id = self.session.current.id if self.session.current else None
-                    asyncio.create_task(self._extract_chat_memory_async(user_input, chat_response.response, session_id))
+                if len(user_input.strip()) >= 15 and not getattr(
+                    self, "_is_extracting_memory", False
+                ):
+                    session_id = (
+                        self.session.current.id if self.session.current else None
+                    )
+                    asyncio.create_task(
+                        self._extract_chat_memory_async(
+                            user_input, chat_response.response, session_id
+                        )
+                    )
 
                 # Create a minimal CognitiveResponse
                 return CognitiveResponse(
@@ -764,19 +881,27 @@ class CognitiveLoop:
                     hypotheses=[],
                     hypothesis_resolutions=[],
                     uncertainty_tracking=[],
-                    working_scratchpad=""
+                    working_scratchpad="",
                 )
         except Exception as e:
-            log.warning(f"Fast intent routing failed: {e}. Falling back to normal reasoning flow.")
+            log.warning(
+                f"Fast intent routing failed: {e}. Falling back to normal reasoning flow."
+            )
 
         # Step 0.5: Semantic Analysis
         semantic_analysis = self.semantic_parser.analyze_input(user_input)
-        if semantic_analysis['subjective_interpretations']:
-            log.info(f"Identified subjective terms: {list(semantic_analysis['subjective_interpretations'].keys())}")
+        if semantic_analysis["subjective_interpretations"]:
+            log.info(
+                f"Identified subjective terms: {list(semantic_analysis['subjective_interpretations'].keys())}"
+            )
 
         # Step 0.75: Taste Heuristics Gate
         from silex.core.taste import TasteEvaluator, TasteFrictionBlock
-        if "override taste gate" not in user_input.lower() and "bypass taste gate" not in user_input.lower():
+
+        if (
+            "override taste gate" not in user_input.lower()
+            and "bypass taste gate" not in user_input.lower()
+        ):
             try:
                 taste_evaluator = TasteEvaluator(self.llm)
                 await taste_evaluator.evaluate(user_input)
@@ -805,27 +930,42 @@ class CognitiveLoop:
 
         # Step 1: Build context (passing semantic analysis results)
         with tracer.start_as_current_span("build_context"):
-            system_prompt = await self.context_builder.build(user_input, semantic_analysis=semantic_analysis)
+            system_prompt = await self.context_builder.build(
+                user_input, semantic_analysis=semantic_analysis
+            )
 
         try:
             # Step 1.5: Route (Determine Depth)
-            target_model = self.router.route(user_input, context_size=len(system_prompt))
+            target_model = self.router.route(
+                user_input, context_size=len(system_prompt)
+            )
             _provider_settings = get_provider_settings(self.settings_store)
-            model_name = "REASONING" if target_model == _provider_settings["reasoning_model"] else "FAST"
+            model_name = (
+                "REASONING"
+                if target_model == _provider_settings["reasoning_model"]
+                else "FAST"
+            )
             if status_callback:
                 status_callback(f"[dim]  (Engine: {model_name})[/]")
             if turn_emitter is not None:
                 await turn_emitter.routing(f"[Fast Router] Routed to {model_name} path")
             else:
-                await _emit({"type": "thinking", "data": {"status": "Thinking...", "detail": f"[Fast Router] Routed to {model_name} path"}})
+                await _emit(
+                    {
+                        "type": "thinking",
+                        "data": {
+                            "status": "Thinking...",
+                            "detail": f"[Fast Router] Routed to {model_name} path",
+                        },
+                    }
+                )
 
             if turn_emitter is not None:
                 await turn_emitter.context("Context assembled from memory and beliefs")
 
-
             # Step 2 & 3 & 4 & 5 & 6: Language Agent Tree Search (LATS)
             from silex.core.tree_search import LanguageAgentTreeSearch
-            
+
             all_turn_tool_ids = []
             lats = LanguageAgentTreeSearch(self, max_iterations=3)
             cognitive = await lats.search(
@@ -863,19 +1003,24 @@ class CognitiveLoop:
                 await self._flush_pending_tool_audit()
 
                 # Step 7: Persist new memories
-                memories_added, saved_memories = await self._store_memories(cognitive.new_memories)
+                memories_added, saved_memories = await self._store_memories(
+                    cognitive.new_memories
+                )
 
                 # Link executed tools to the resulting memories (Phase 4)
                 if all_turn_tool_ids and saved_memories:
                     from silex.core.causal_graph import CausalEdge
+
                     for tid in all_turn_tool_ids:
                         for sm in saved_memories:
-                            await self.causal_kg.register_edge(CausalEdge.new(
-                                source_node_id=tid,
-                                target_node_id=sm.id,
-                                relation_type="triggered_by",
-                                weight=sm.confidence
-                            ))
+                            await self.causal_kg.register_edge(
+                                CausalEdge.new(
+                                    source_node_id=tid,
+                                    target_node_id=sm.id,
+                                    relation_type="triggered_by",
+                                    weight=sm.confidence,
+                                )
+                            )
 
                 # Step 8: Process goal updates
                 goals_changed = await self._process_goals(cognitive.goal_updates)
@@ -895,21 +1040,25 @@ class CognitiveLoop:
                         log.warning(f"Principle extraction failed (non-fatal): {e}")
 
                 # Step 10: Process contradictions
-                await self._process_contradictions(
-                    cognitive.contradictions_detected
-                )
+                await self._process_contradictions(cognitive.contradictions_detected)
 
                 # Step 11: Store hypotheses
                 await self._process_hypotheses(cognitive.hypotheses)
 
                 # Step 11.25: Resolve hypotheses when the model (or operator path) supplies resolutions
-                await self._process_hypothesis_resolutions(cognitive.hypothesis_resolutions)
+                await self._process_hypothesis_resolutions(
+                    cognitive.hypothesis_resolutions
+                )
 
                 # Step 11.4: Record explicit uncertainty topics (Phase 4 — uncertainties table)
                 await self._process_uncertainty_tracking(cognitive.uncertainty_tracking)
 
                 # Step 11.5: Process self-improvement proposals (Phase 7 — Safety Locked)
-                if getattr(cognitive, "inline_proposals", None) and self.meta_reasoning and self.session.current:
+                if (
+                    getattr(cognitive, "inline_proposals", None)
+                    and self.meta_reasoning
+                    and self.session.current
+                ):
                     try:
                         await self.meta_reasoning.process_inline_proposals(
                             cognitive.inline_proposals,
@@ -928,21 +1077,26 @@ class CognitiveLoop:
                     memories_added=memories_added,
                     goals_changed=goals_changed,
                     scratchpad=getattr(cognitive, "working_scratchpad", None),
-                    priority_tags=self._detect_priority_tags(user_input, cognitive.response, cognitive.reasoning)
+                    priority_tags=self._detect_priority_tags(
+                        user_input, cognitive.response, cognitive.reasoning
+                    ),
                 )
 
                 # Step 12.5: Cleanup turn checkpoint
                 if self.session.current:
                     await self.db.execute(
                         "DELETE FROM turn_checkpoints WHERE session_id = ? AND turn_number = ?",
-                        (self.session.current.id, self.session.current.turn_count)
+                        (self.session.current.id, self.session.current.turn_count),
                     )
 
                 # Step 12.6: Record trajectory for self-evolution
                 try:
                     import time as _time
+
                     _turn_start = getattr(self, "_turn_start_time", 0.0)
-                    _latency = (_time.time() - _turn_start) * 1000 if _turn_start else 0.0
+                    _latency = (
+                        (_time.time() - _turn_start) * 1000 if _turn_start else 0.0
+                    )
                     _token_total = sum(
                         getattr(u, "input_tokens", 0) + getattr(u, "output_tokens", 0)
                         for u in getattr(self, "_last_usage", [])
@@ -962,14 +1116,20 @@ class CognitiveLoop:
                         ),
                     )
                     for _i, _tc in enumerate(cognitive.tool_calls or []):
-                        _tr = tool_results[_i] if hasattr(self, "_last_tool_results") and _i < len(getattr(self, "_last_tool_results", [])) else None
+                        _tr = (
+                            tool_results[_i]
+                            if hasattr(self, "_last_tool_results")
+                            and _i < len(getattr(self, "_last_tool_results", []))
+                            else None
+                        )
                         await self.db.execute(
                             """INSERT INTO trajectory_steps
                                (trajectory_id, step_order, action_name, tool_input, execution_output,
                                 epistemic_category, latency_ms, token_usage)
                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                             (
-                                _traj_id, _i,
+                                _traj_id,
+                                _i,
                                 _tc.tool_name,
                                 str(_tc.arguments)[:500],
                                 (str(_tr.actual_outcome)[:500] if _tr else ""),
@@ -984,7 +1144,10 @@ class CognitiveLoop:
             # Execute Transactional Batch Flush for the entire graph/memory pipeline
             await self.memory.flush()
         except Exception as db_exc:
-            log.error(f"Database persistence or batch flush failure at turn end: {db_exc}", exc_info=True)
+            log.error(
+                f"Database persistence or batch flush failure at turn end: {db_exc}",
+                exc_info=True,
+            )
             cognitive = self._make_error_response(
                 "I completed reasoning but was unable to save my state due to a database connection issue. "
                 "Please try again."
@@ -993,7 +1156,9 @@ class CognitiveLoop:
         return cognitive
 
     async def _check_reasoning_consistency(
-        self, cognitive: CognitiveResponse, status_callback: Callable[..., Any] | None = None
+        self,
+        cognitive: CognitiveResponse,
+        status_callback: Callable[..., Any] | None = None,
     ) -> None:
         """Verify that tool_calls match the intent described in reasoning."""
         if not cognitive.tool_calls and "tool" not in cognitive.reasoning.lower():
@@ -1001,17 +1166,31 @@ class CognitiveLoop:
 
         tool_names = [tc.tool_name for tc in cognitive.tool_calls]
         # Check if reasoning mentions tools but none were called, or vice-versa
-        mentioned_tool = any(word in cognitive.reasoning.lower() for word in ["call", "use", "run", "search", "browse"])
-        
+        mentioned_tool = any(
+            word in cognitive.reasoning.lower()
+            for word in ["call", "use", "run", "search", "browse"]
+        )
+
         has_mismatch = False
         if cognitive.tool_calls and not mentioned_tool:
             has_mismatch = True
-            log.warning(f"Reasoning Consistency: Model called tools {tool_names} but reasoning does not mention tool use.")
-        elif not cognitive.tool_calls and mentioned_tool and len(cognitive.reasoning) > 50:
+            log.warning(
+                f"Reasoning Consistency: Model called tools {tool_names} but reasoning does not mention tool use."
+            )
+        elif (
+            not cognitive.tool_calls
+            and mentioned_tool
+            and len(cognitive.reasoning) > 50
+        ):
             # Only flag if reasoning is substantial (prevents false positives on "I don't need tools")
-            if any(word in cognitive.reasoning.lower() for word in ["will call", "decided to use", "need to search"]):
+            if any(
+                word in cognitive.reasoning.lower()
+                for word in ["will call", "decided to use", "need to search"]
+            ):
                 has_mismatch = True
-                log.warning("Reasoning Consistency: Model reasoning indicates tool use, but no tool_calls were generated.")
+                log.warning(
+                    "Reasoning Consistency: Model reasoning indicates tool use, but no tool_calls were generated."
+                )
 
         if has_mismatch and self.session.current:
             # Log this as a "soft failure" for the meta-reasoning analyst
@@ -1025,18 +1204,30 @@ class CognitiveLoop:
                     "Reasoning Consistency",
                     f"Reasoning vs Tools mismatch. Reasoning: {cognitive.reasoning[:100]}... Tools: {tool_names}",
                     "open",
-                    datetime.now(timezone.utc).isoformat()
-                )
+                    datetime.now(timezone.utc).isoformat(),
+                ),
             )
             if status_callback:
-                status_callback("[yellow]  ⚠ Reasoning consistency mismatch detected and logged.[/]")
-            await self._log_failure("consistency_mismatch", f"Reasoning vs Tools mismatch: {tool_names}")
+                status_callback(
+                    "[yellow]  ⚠ Reasoning consistency mismatch detected and logged.[/]"
+                )
+            await self._log_failure(
+                "consistency_mismatch", f"Reasoning vs Tools mismatch: {tool_names}"
+            )
 
     @staticmethod
     def _redact_tool_args(args_dict: dict) -> dict:
         sensitive_keys = {
-            "password", "token", "api_key", "apikey", "secret", "authorization",
-            "auth", "credential", "private_key", "access_key",
+            "password",
+            "token",
+            "api_key",
+            "apikey",
+            "secret",
+            "authorization",
+            "auth",
+            "credential",
+            "private_key",
+            "access_key",
         }
         redacted = {}
         for key, value in args_dict.items():
@@ -1051,11 +1242,11 @@ class CognitiveLoop:
         pending = getattr(self, "_pending_tool_audit", None) or []
         if not pending:
             return
-            
+
         # Capture locally and clear state immediately to prevent infinite crash loops
         # if the database transaction aborts.
         self._pending_tool_audit = []
-        
+
         from silex.core.causal_graph import EpistemicNode
 
         for record in pending:
@@ -1086,17 +1277,34 @@ class CognitiveLoop:
                 self.session.current.id,
                 failure_type,
                 description,
-                datetime.now(timezone.utc).isoformat()
-            )
+                datetime.now(timezone.utc).isoformat(),
+            ),
         )
 
-    def _detect_priority_tags(self, user_input: str, response: str, reasoning: str) -> list[str]:
+    def _detect_priority_tags(
+        self, user_input: str, response: str, reasoning: str
+    ) -> list[str]:
         tags = []
-        if any(keyword in user_input.upper() or keyword in response.upper() or keyword in reasoning.upper() for keyword in ["CONSTRAINT", "DIRECTIVE", "UNBREAKABLE"]):
+        if any(
+            keyword in user_input.upper()
+            or keyword in response.upper()
+            or keyword in reasoning.upper()
+            for keyword in ["CONSTRAINT", "DIRECTIVE", "UNBREAKABLE"]
+        ):
             tags.append("SYSTEM_CONSTRAINT")
-        if any(keyword in user_input.upper() or keyword in response.upper() or keyword in reasoning.upper() for keyword in ["COMPLIANCE", "RULE", "COMPLY", "ETHICAL"]):
+        if any(
+            keyword in user_input.upper()
+            or keyword in response.upper()
+            or keyword in reasoning.upper()
+            for keyword in ["COMPLIANCE", "RULE", "COMPLY", "ETHICAL"]
+        ):
             tags.append("COMPLIANCE_RULE")
-        if any(keyword in user_input.upper() or keyword in response.upper() or keyword in reasoning.upper() for keyword in ["GOAL", "OBJECTIVE", "🎯"]):
+        if any(
+            keyword in user_input.upper()
+            or keyword in response.upper()
+            or keyword in reasoning.upper()
+            for keyword in ["GOAL", "OBJECTIVE", "🎯"]
+        ):
             tags.append("USER_SPECIFIED_GOAL")
         return tags
 
@@ -1120,7 +1328,14 @@ class CognitiveLoop:
             tool_calls=[],
         )
 
-    async def _execute_tools(self, tool_calls, status_callback, execution_mode: str = "interactive", event_emitter=None, turn_emitter=None):
+    async def _execute_tools(
+        self,
+        tool_calls,
+        status_callback,
+        execution_mode: str = "interactive",
+        event_emitter=None,
+        turn_emitter=None,
+    ):
         """Execute tool calls and return formatted text, failure flag, and raw results."""
         results_text = ""
         any_failures = False
@@ -1137,63 +1352,87 @@ class CognitiveLoop:
 
         for call in tool_calls:
             # Phase 7: Infinite Recursion Circuit Breaker
-            args_str = call.arguments if isinstance(call.arguments, str) else json.dumps(call.arguments, sort_keys=True)
+            args_str = (
+                call.arguments
+                if isinstance(call.arguments, str)
+                else json.dumps(call.arguments, sort_keys=True)
+            )
             # Normalize whitespace to prevent LLM from bypassing circuit breaker by adding spaces
             import re
-            normalized_args = re.sub(r'\s+', '', args_str)
+
+            normalized_args = re.sub(r"\s+", "", args_str)
             import hashlib
-            call_hash = hashlib.md5(f"{call.tool_name}:{normalized_args}".encode()).hexdigest()
-            
-            recent_count = sum(1 for h in self._tool_execution_history[-15:] if h == call_hash)
+
+            call_hash = hashlib.md5(
+                f"{call.tool_name}:{normalized_args}".encode()
+            ).hexdigest()
+
+            recent_count = sum(
+                1 for h in self._tool_execution_history[-15:] if h == call_hash
+            )
             db_count = 0
             if self.session.current:
                 try:
                     res = await self.db.fetch_all(
                         "SELECT count(*) as c FROM action_logs WHERE session_id = ? AND tool_name = ? AND arguments_json = ? AND created_at > datetime('now', '-1 hour')",
-                        (self.session.current.id, call.tool_name, args_str)
+                        (self.session.current.id, call.tool_name, args_str),
                     )
                     if res:
-                        db_count = int(res[0]['c'])
+                        db_count = int(res[0]["c"])
                 except Exception:
                     pass
-            
+
             if recent_count + db_count >= 3:
                 from silex.tools.registry import ToolResult
+
                 log.warning(f"CIRCUIT BREAKER TRIPPED for tool {call.tool_name}")
                 error_msg = "[CIRCUIT BREAKER TRIPPED] You have executed this exact tool with identical parameters 3 times. You are trapped in a recursive loop. Yield immediately or change your parameters."
-                result = ToolResult(success=False, actual_outcome=error_msg, ethical_decision=None)
+                result = ToolResult(
+                    success=False, actual_outcome=error_msg, ethical_decision=None
+                )
                 tool_results.append(result)
                 results_text += f"--- Tool: {call.tool_name} ---\nExpected: {call.expected_outcome}\nActual Result:\n<tool_output>\n{error_msg}\n</tool_output>\n\n"
                 any_failures = True
-                await self._log_failure("circuit_breaker", f"Trapped in recursive loop on {call.tool_name}")
+                await self._log_failure(
+                    "circuit_breaker", f"Trapped in recursive loop on {call.tool_name}"
+                )
                 continue
-            
+
             self._tool_execution_history.append(call_hash)
 
             if status_callback:
                 status_callback(f"[magenta]  Running: {call.tool_name}...[/]")
-            
+
             tool_obj = self.tool_registry.tools.get(call.tool_name)
             is_high_risk = False
-            if tool_obj and getattr(tool_obj, "risk_level", "low") in ("repo_write", "sandbox_write", "destructive"):
+            if tool_obj and getattr(tool_obj, "risk_level", "low") in (
+                "repo_write",
+                "sandbox_write",
+                "destructive",
+            ):
                 is_high_risk = True
                 has_trust = await self.trust_engine.verify_actor_threshold()
                 if not has_trust:
                     log.warning(f"TRUST ENGINE BLOCKED tool {call.tool_name}")
                     from silex.tools.registry import ToolResult
+
                     result = ToolResult(
                         success=False,
                         actual_outcome="Error: System trust score is too low. Destructive tools are locked.",
-                        ethical_decision=None
+                        ethical_decision=None,
                     )
                     tool_results.append(result)
                     results_text += f"--- Tool: {call.tool_name} ---\nExpected: {call.expected_outcome}\nActual Result:\n<tool_output>\n{result.actual_outcome}\n</tool_output>\n\n"
                     any_failures = True
-                    await self.trust_engine.record_operation(success=False, is_security_violation=True)
+                    await self.trust_engine.record_operation(
+                        success=False, is_security_violation=True
+                    )
                     continue
 
             if turn_emitter is not None:
-                await turn_emitter.tool_start(call.tool_name, f"Running {call.tool_name}...")
+                await turn_emitter.tool_start(
+                    call.tool_name, f"Running {call.tool_name}..."
+                )
 
             result = await self.tool_registry.execute_with_gate(
                 call,
@@ -1206,13 +1445,15 @@ class CognitiveLoop:
             if turn_emitter is not None:
                 outcome = (result.actual_outcome or "")[:120]
                 if result.success:
-                    await turn_emitter.tool_done(call.tool_name, outcome or f"{call.tool_name} done")
+                    await turn_emitter.tool_done(
+                        call.tool_name, outcome or f"{call.tool_name} done"
+                    )
                 else:
                     await turn_emitter.error(f"{call.tool_name}: {outcome}")
-            
+
             if is_high_risk:
                 await self.trust_engine.record_operation(success=result.success)
-            
+
             # Parse arguments if it's a string
             args_dict = {}
             if isinstance(call.arguments, str):
@@ -1222,7 +1463,7 @@ class CognitiveLoop:
                     log.warning(f"Failed to parse tool arguments: {call.arguments}")
             elif isinstance(call.arguments, dict):
                 args_dict = call.arguments
-                
+
             ethical_summary = "No ethical review recorded"
             if result.ethical_decision:
                 ethical_summary = (
@@ -1236,6 +1477,7 @@ class CognitiveLoop:
                 safe_args = self._redact_tool_args(args_dict)
                 import time
                 from silex.core.causal_graph import EpistemicNode
+
                 node_type = "decision" if result.success else "dead_end"
                 epistemic_node = EpistemicNode(
                     node_id=log_id,
@@ -1244,28 +1486,32 @@ class CognitiveLoop:
                     timestamp=time.time(),
                     type=node_type,
                     content=f"Executed {call.tool_name}: {result.actual_outcome[:200]}",
-                    provenance=json.dumps({"tool_name": call.tool_name, "tool_args": safe_args}),
-                )
-                self._pending_tool_audit.append({
-                    "action_log": (
-                        log_id,
-                        self.session.current.id,
-                        self.session.current.turn_count + 1,
-                        call.tool_name,
-                        json.dumps(safe_args),
-                        call.expected_outcome,
-                        result.actual_outcome,
-                        result.success,
-                        self.tool_registry.tools.get(call.tool_name).risk_level
-                        if call.tool_name in self.tool_registry.tools
-                        else "unknown",
-                        f"Ethical decision: {ethical_summary}. Update pending",
-                        datetime.now(timezone.utc).isoformat(),
+                    provenance=json.dumps(
+                        {"tool_name": call.tool_name, "tool_args": safe_args}
                     ),
-                    "epistemic_node": epistemic_node,
-                })
+                )
+                self._pending_tool_audit.append(
+                    {
+                        "action_log": (
+                            log_id,
+                            self.session.current.id,
+                            self.session.current.turn_count + 1,
+                            call.tool_name,
+                            json.dumps(safe_args),
+                            call.expected_outcome,
+                            result.actual_outcome,
+                            result.success,
+                            self.tool_registry.tools.get(call.tool_name).risk_level
+                            if call.tool_name in self.tool_registry.tools
+                            else "unknown",
+                            f"Ethical decision: {ethical_summary}. Update pending",
+                            datetime.now(timezone.utc).isoformat(),
+                        ),
+                        "epistemic_node": epistemic_node,
+                    }
+                )
                 executed_tool_ids.append(log_id)
-            
+
             results_text += f"--- Tool: {call.tool_name} ---\n"
             results_text += f"Expected: {call.expected_outcome}\n"
             if result.ethical_decision:
@@ -1274,28 +1520,37 @@ class CognitiveLoop:
                     f"{result.ethical_decision.action.value} "
                     f"({result.ethical_decision.principle})\n"
                 )
-            
+
             # Phase 3 Fix: Pre-sanitization hard truncation to prevent OOM / Event Loop Stalls
             raw_outcome = result.actual_outcome or ""
             MAX_OUT_LEN = 10000
             if len(raw_outcome) > MAX_OUT_LEN:
-                raw_outcome = raw_outcome[:MAX_OUT_LEN] + f"\n\n[WARNING: OUTPUT TRUNCATED. ORIGINAL LENGTH: {len(raw_outcome)} CHARS]"
-                
+                raw_outcome = (
+                    raw_outcome[:MAX_OUT_LEN]
+                    + f"\n\n[WARNING: OUTPUT TRUNCATED. ORIGINAL LENGTH: {len(raw_outcome)} CHARS]"
+                )
+
             safe_outcome = sanitize_for_injection(raw_outcome)
-            results_text += f"Actual Result:\n<tool_output>\n{safe_outcome}\n</tool_output>\n\n"
-            
+            results_text += (
+                f"Actual Result:\n<tool_output>\n{safe_outcome}\n</tool_output>\n\n"
+            )
+
             if not result.success:
                 any_failures = True
-                await self._log_failure("tool_error", f"Tool {call.tool_name} failed: {result.actual_outcome[:100]}")
-                
-        return results_text, any_failures, tool_results, executed_tool_ids
+                await self._log_failure(
+                    "tool_error",
+                    f"Tool {call.tool_name} failed: {result.actual_outcome[:100]}",
+                )
 
+        return results_text, any_failures, tool_results, executed_tool_ids
 
     # ------------------------------------------------------------------
     # Phase 1 — State Persistence
     # ------------------------------------------------------------------
 
-    async def _store_memories(self, new_memories: list[NewMemory]) -> tuple[int, list[Memory]]:
+    async def _store_memories(
+        self, new_memories: list[NewMemory]
+    ) -> tuple[int, list[Memory]]:
         """Persist new memories from the cognitive response."""
         count = 0
         saved_memories_list = []
@@ -1317,10 +1572,15 @@ class CognitiveLoop:
                 confidence=nm.confidence,
                 tags=nm.tags,
                 provenance={
-                    "session_id": self.session.current.id if self.session.current else None,
-                    "turn_number": (self.session.current.turn_count + 1) if self.session.current else None,
+                    "session_id": self.session.current.id
+                    if self.session.current
+                    else None,
+                    "turn_number": (self.session.current.turn_count + 1)
+                    if self.session.current
+                    else None,
                     "memory_type": memory_type.value,
-                    "identity_relevant": memory_type in {MemoryType.NORMATIVE, MemoryType.CHARACTER},
+                    "identity_relevant": memory_type
+                    in {MemoryType.NORMATIVE, MemoryType.CHARACTER},
                     "requires_review": memory_type == MemoryType.NORMATIVE,
                     "source_kind": source.value,
                 },
@@ -1370,10 +1630,12 @@ class CognitiveLoop:
                         await self.goals.complete(goal.id, notes=update.notes)
                         count += 1
                         log.info(f"✅ Goal completed: {update.description}")
-                        
+
                         # Trigger auto-skill synthesis in the background
                         if len(update.description) > 10:
-                            asyncio.create_task(self._synthesize_skill(update.description))
+                            asyncio.create_task(
+                                self._synthesize_skill(update.description)
+                            )
                 elif update.action == "abandon":
                     goal = await self.goals.find_by_description(update.description)
                     if goal:
@@ -1397,7 +1659,7 @@ class CognitiveLoop:
             recent_turns = await self.session.get_recent_turns(limit=20)
             if not recent_turns:
                 return
-                
+
             history_text = ""
             for t in recent_turns:
                 history_text += f"USER: {t.user_input}\nARIA: {t.response}\n\n"
@@ -1408,14 +1670,16 @@ class CognitiveLoop:
                 try:
                     action_logs = await self.db.fetch_all(
                         "SELECT tool_name, arguments_json, success FROM action_logs WHERE session_id = ? ORDER BY created_at ASC LIMIT 100",
-                        (self.session.current.id,)
+                        (self.session.current.id,),
                     )
                     if action_logs:
                         actions_text = "ACTIONS EXECUTED DURING SESSION:\n"
                         for log_item in action_logs:
                             actions_text += f"- Tool: {log_item['tool_name']}, Args: {log_item['arguments_json']}, Success: {log_item['success']}\n"
                 except Exception as ex:
-                    log.warning(f"Could not fetch action logs for skill synthesis: {ex}")
+                    log.warning(
+                        f"Could not fetch action logs for skill synthesis: {ex}"
+                    )
 
             # 2. Call LLM
             prompt = (
@@ -1433,7 +1697,7 @@ class CognitiveLoop:
                 "- ## Future Heuristics: Lessons learned, edge cases, and principles for resolving similar tasks\n\n"
                 "Do not include any chat formatting. Output ONLY the markdown content."
             )
-            
+
             user_input = f"Goal Completed: {goal_description}\n\n"
             if actions_text:
                 user_input += f"{actions_text}\n"
@@ -1443,9 +1707,9 @@ class CognitiveLoop:
             response = await self.llm.think(
                 system_prompt=prompt,
                 user_input=user_input,
-                model_override=provider_settings.get("reasoning_model")
+                model_override=provider_settings.get("reasoning_model"),
             )
-            
+
             skill_content = response.response.strip()
             if skill_content.startswith("```md"):
                 skill_content = skill_content[5:]
@@ -1461,8 +1725,8 @@ class CognitiveLoop:
             import hashlib
             from silex.evolution.admission_control import SkillAdmissionController
 
-            slug = re.sub(r'[^a-z0-9]+', '_', goal_description.lower()).strip('_')
-            slug = slug[:30].strip('_')
+            slug = re.sub(r"[^a-z0-9]+", "_", goal_description.lower()).strip("_")
+            slug = slug[:30].strip("_")
             if not slug:
                 slug = hashlib.md5(goal_description.encode()).hexdigest()[:8]
 
@@ -1491,7 +1755,9 @@ class CognitiveLoop:
                 if hasattr(self, "skill_loader"):
                     self.skill_loader.load_all()
             else:
-                log.info(f"Auto-skill '{slug}' rejected by admission gate (score={score:.2f})")
+                log.info(
+                    f"Auto-skill '{slug}' rejected by admission gate (score={score:.2f})"
+                )
 
         except Exception as e:
             log.error(f"Failed to synthesize auto-skill for '{goal_description}': {e}")
@@ -1517,7 +1783,10 @@ class CognitiveLoop:
             return
 
         task_desc = row["task_description"] or "workflow"
-        slug = re.sub(r'[^a-z0-9_]+', '_', task_desc.lower()).strip('_')[:30].strip('_') or "evolved_skill"
+        slug = (
+            re.sub(r"[^a-z0-9_]+", "_", task_desc.lower()).strip("_")[:30].strip("_")
+            or "evolved_skill"
+        )
         admitted, score = await self._evolution_coordinator.distill_trajectory_to_skill(
             row["trajectory_id"],
             category="general",
@@ -1603,9 +1872,7 @@ class CognitiveLoop:
             log.debug(f"Processed {count} causal observations into graph")
         return count
 
-    async def _process_contradictions(
-        self, contradictions: list[Contradiction]
-    ) -> int:
+    async def _process_contradictions(self, contradictions: list[Contradiction]) -> int:
         """Process contradictions detected by Gemini."""
         count = 0
         for c in contradictions:
@@ -1678,7 +1945,9 @@ class CognitiveLoop:
             topic = (e.topic or "").strip()
             why = (e.why_uncertain or "").strip()
             if not topic or not why:
-                log.debug("Skipping uncertainty_tracking entry with empty topic or reason")
+                log.debug(
+                    "Skipping uncertainty_tracking entry with empty topic or reason"
+                )
                 continue
             try:
                 await self.debate_engine.track_uncertainty(topic, why)
@@ -1740,7 +2009,9 @@ class CognitiveLoop:
             return None
         return await self.kg.get_neighborhood(node_id, depth=2)
 
-    async def get_causal_chain(self, from_concept: str, to_concept: str) -> list[dict] | None:
+    async def get_causal_chain(
+        self, from_concept: str, to_concept: str
+    ) -> list[dict] | None:
         """Find causal chain between two concepts."""
         src = await self.kg.find_node_by_content_db(from_concept)
         tgt = await self.kg.find_node_by_content_db(to_concept)
@@ -1825,11 +2096,20 @@ class CognitiveLoop:
 
     async def run_meta_analysis(self, status_callback=None):
         """Trigger meta-reasoning analysis."""
-        return await self.meta_reasoning.analyze_and_propose(status_callback=status_callback)
+        return await self.meta_reasoning.analyze_and_propose(
+            status_callback=status_callback
+        )
 
-    async def run_debate(self, topic: str, status_callback: Callable[..., Any] | None = None, parallel: bool = False):
+    async def run_debate(
+        self,
+        topic: str,
+        status_callback: Callable[..., Any] | None = None,
+        parallel: bool = False,
+    ):
         """Manually trigger a Phase 4 debate."""
-        resolution = await self.debate_engine.run_debate(topic, rounds=1, status_callback=status_callback, parallel=parallel)
+        resolution = await self.debate_engine.run_debate(
+            topic, rounds=1, status_callback=status_callback, parallel=parallel
+        )
         # Apply the graph updates discovered during the debate
         if resolution.graph_updates:
             await self._process_causal_observations(resolution.graph_updates)
@@ -1840,7 +2120,11 @@ class CognitiveLoop:
         from agent.jobs import WorkerJob
         from agent.security.lease import ActuationLease
 
-        session_id = self.session.current.id if (self.session and self.session.current) else "no_session"
+        session_id = (
+            self.session.current.id
+            if (self.session and self.session.current)
+            else "no_session"
+        )
 
         handles = []
         for i, subtask in enumerate(subtasks):
@@ -1910,7 +2194,9 @@ class CognitiveLoop:
                 {
                     "content": m.content,
                     "importance": m.importance,
-                    "source": m.source.value if hasattr(m.source, 'value') else str(m.source),
+                    "source": m.source.value
+                    if hasattr(m.source, "value")
+                    else str(m.source),
                     "tags": m.tags,
                 }
                 for m in memories
@@ -1918,8 +2204,12 @@ class CognitiveLoop:
             "goals": [
                 {
                     "description": g.description,
-                    "status": g.status.value if hasattr(g.status, 'value') else str(g.status),
-                    "priority": g.priority.value if hasattr(g.priority, 'value') else str(g.priority),
+                    "status": g.status.value
+                    if hasattr(g.status, "value")
+                    else str(g.status),
+                    "priority": g.priority.value
+                    if hasattr(g.priority, "value")
+                    else str(g.priority),
                 }
                 for g in goals
             ],
@@ -1961,9 +2251,15 @@ class CognitiveLoop:
             "data_dir": str(KINTHIC_HOME),
             "project_root": str(WORKSPACE_DIR),
             "vector_store_active": bool(getattr(self.vector_store, "client", None)),
-            "docker_available": bool(getattr(self.tool_registry.tools.get("run_terminal_command"), "client", None)),
+            "docker_available": bool(
+                getattr(
+                    self.tool_registry.tools.get("run_terminal_command"), "client", None
+                )
+            ),
             "browser_registered": "browser" in self.tool_registry.tools,
-            "current_session": self.session.current.id if self.session.current else None,
+            "current_session": self.session.current.id
+            if self.session.current
+            else None,
             "autonomy_policy": autonomy_policy_snapshot(),
             "provider": provider_settings["provider"],
             "model": provider_settings["model"],
@@ -2011,6 +2307,7 @@ class CognitiveLoop:
     def reload_provider(self) -> None:
         provider_settings = get_provider_settings(self.settings_store)
         from silex.llm.smart_router import SmartRouter
+
         self.smart_router = SmartRouter(self.settings_store, self.usage_tracker)
         self.llm = self.smart_router.get_proxy()
         self.llm.connect()
@@ -2039,14 +2336,27 @@ class CognitiveLoop:
                             os.kill(pid, 0)
                         except ProcessLookupError:
                             self._process_lock_path.unlink(missing_ok=True)
-                            log.warning("Stale process lock cleaned up at %s for pid %s", self._process_lock_path, pid)
+                            log.warning(
+                                "Stale process lock cleaned up at %s for pid %s",
+                                self._process_lock_path,
+                                pid,
+                            )
                         except OSError as exc:
                             # Windows: WinError 87 = Invalid Parameter (Not running), WinError 11 = Access Denied.
                             # We treat both (and Unix ESRCH) as stale lock triggers for recovery.
                             win_err = getattr(exc, "winerror", None)
-                            if exc.errno == errno.ESRCH or win_err == 87 or win_err == 11:
+                            if (
+                                exc.errno == errno.ESRCH
+                                or win_err == 87
+                                or win_err == 11
+                            ):
                                 self._process_lock_path.unlink(missing_ok=True)
-                                log.warning("Stale process lock cleaned up at %s for pid %s (err %s)", self._process_lock_path, pid, win_err or exc.errno)
+                                log.warning(
+                                    "Stale process lock cleaned up at %s for pid %s (err %s)",
+                                    self._process_lock_path,
+                                    pid,
+                                    win_err or exc.errno,
+                                )
                             else:
                                 raise RuntimeError(f"LOCK_EXISTS:{pid}") from exc
                         except SystemError:
@@ -2054,7 +2364,11 @@ class CognitiveLoop:
                             # OSError for certain inaccessible / zombie PIDs. Treat as stale lock.
                             # https://github.com/python/cpython/issues/66218
                             self._process_lock_path.unlink(missing_ok=True)
-                            log.warning("Stale process lock cleaned up at %s for pid %s (SystemError from os.kill)", self._process_lock_path, pid)
+                            log.warning(
+                                "Stale process lock cleaned up at %s for pid %s (SystemError from os.kill)",
+                                self._process_lock_path,
+                                pid,
+                            )
                         else:
                             raise RuntimeError(f"LOCK_EXISTS:{pid}")
 
@@ -2080,14 +2394,16 @@ class CognitiveLoop:
         except OSError:
             pass
 
-    async def _extract_chat_memory_async(self, user_input: str, response_content: str, session_id: str | None = None) -> None:
+    async def _extract_chat_memory_async(
+        self, user_input: str, response_content: str, session_id: str | None = None
+    ) -> None:
         """
         Background task to extract memories and causal observations from a Fast Chat turn,
         and safely persist them to the database using queue serialization.
         """
         try:
             self._is_extracting_memory = True
-            
+
             # Dedicated structural context extraction prompt
             system_prompt = (
                 "Analyze the following rapid conversational interaction turn. "
@@ -2095,25 +2411,27 @@ class CognitiveLoop:
                 "explicit user preferences, structural project definitions, or foundational goals. "
                 "Format your findings strictly as an array list of JSON objects matching our standard NewMemory schema keys."
             )
-            
-            user_payload = f"User Input: {user_input}\nAssistant Response: {response_content}"
-            
+
+            user_payload = (
+                f"User Input: {user_input}\nAssistant Response: {response_content}"
+            )
+
             # Select cost-effective fast_model profile
             provider_settings = get_provider_settings(self.settings_store)
             fast_model = provider_settings["fast_model"]
-            
+
             # Call complete_json - which utilizes repair_json() internally to safely
             # clean markdown code blocks or formatting artifacts.
-            
+
             extracted = await self.llm.complete_json(
                 schema=ChatMemoryExtraction,
                 system_prompt=system_prompt,
                 user_input=user_payload,
                 model_override=fast_model,
                 temperature=0.3,
-                request_kind="background_extraction"
+                request_kind="background_extraction",
             )
-            
+
             if extracted:
                 # Safely execute writes inside a single queue-serialized transaction
                 # utilizing BEGIN IMMEDIATE to prevent SQLite deadlocks and contention.
@@ -2121,7 +2439,9 @@ class CognitiveLoop:
                     if extracted.new_memories:
                         await self._store_memories(extracted.new_memories)
                     if extracted.causal_observations:
-                        await self._process_causal_observations(extracted.causal_observations)
+                        await self._process_causal_observations(
+                            extracted.causal_observations
+                        )
         except Exception as e:
             # Catch all exceptions cleanly and log detailed diagnostics to disk without interrupting the parent daemon
             log.warning(f"Background chat memory extraction failed: {e}", exc_info=True)

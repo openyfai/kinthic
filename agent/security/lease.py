@@ -123,7 +123,9 @@ class ActuationLease:
         allowed = set(self.allowed_tools)
         return all(t in allowed for t in tools)
 
-    def validate_writable_path(self, path: str, workspace_root: Path | None = None) -> bool:
+    def validate_writable_path(
+        self, path: str, workspace_root: Path | None = None
+    ) -> bool:
         """Return True if path is within lease writable scope."""
         normalized = str(Path(path).resolve().as_posix())
         if self.writable_paths:
@@ -157,7 +159,9 @@ class ActuationLease:
     def from_token(cls, token: str) -> Optional["ActuationLease"]:
         try:
             data = json.loads(token)
-            lease = cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+            lease = cls(
+                **{k: v for k, v in data.items() if k in cls.__dataclass_fields__}
+            )
             if not lease.verify_signature() or lease.is_expired():
                 return None
             return lease

@@ -58,8 +58,17 @@ class BeliefEngine:
                    (evidence_id, source_type, source_id, claim, supports_positive,
                     confidence, session_id, goal_id, created_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (ev_id, source_type, source_id, claim,
-                 int(supports), confidence, session_id, goal_id, time.time()),
+                (
+                    ev_id,
+                    source_type,
+                    source_id,
+                    claim,
+                    int(supports),
+                    confidence,
+                    session_id,
+                    goal_id,
+                    time.time(),
+                ),
             )
         except Exception as exc:
             log.debug("admit_evidence failed: %s", exc)
@@ -109,7 +118,8 @@ class BeliefEngine:
         now = time.time()
         try:
             existing = await self._db.fetch_one(
-                "SELECT proposition_id FROM proposition_beliefs WHERE claim = ?", (claim,)
+                "SELECT proposition_id FROM proposition_beliefs WHERE claim = ?",
+                (claim,),
             )
             if existing:
                 await self._db.execute(
@@ -139,15 +149,25 @@ class BeliefEngine:
                 return dict(row)
         except Exception as exc:
             log.debug("get_belief failed: %s", exc)
-        return {"stance": "unknown", "log_odds": 0.0, "confidence": 0.5, "last_verified_at": None}
+        return {
+            "stance": "unknown",
+            "log_odds": 0.0,
+            "confidence": 0.5,
+            "last_verified_at": None,
+        }
 
-    async def update_belief(self, claim: str, stance: str, confidence: float, source: str) -> None:
+    async def update_belief(
+        self, claim: str, stance: str, confidence: float, source: str
+    ) -> None:
         """Directly set belief from an authoritative source (critic, debate, verification)."""
         now = time.time()
-        log_odds = math.log(confidence / (1 - confidence)) if 0 < confidence < 1 else 0.0
+        log_odds = (
+            math.log(confidence / (1 - confidence)) if 0 < confidence < 1 else 0.0
+        )
         try:
             existing = await self._db.fetch_one(
-                "SELECT proposition_id FROM proposition_beliefs WHERE claim = ?", (claim,)
+                "SELECT proposition_id FROM proposition_beliefs WHERE claim = ?",
+                (claim,),
             )
             if existing:
                 await self._db.execute(
@@ -161,7 +181,17 @@ class BeliefEngine:
                     """INSERT INTO proposition_beliefs
                        (proposition_id, claim, stance, log_odds, confidence, last_verified_at, verification_source, created_at, updated_at)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (uuid.uuid4().hex, claim, stance, log_odds, confidence, now, source, now, now),
+                    (
+                        uuid.uuid4().hex,
+                        claim,
+                        stance,
+                        log_odds,
+                        confidence,
+                        now,
+                        source,
+                        now,
+                        now,
+                    ),
                 )
         except Exception as exc:
             log.debug("update_belief write failed: %s", exc)
@@ -170,7 +200,9 @@ class BeliefEngine:
     #  Scheduled Maintenance                                               #
     # ------------------------------------------------------------------ #
 
-    async def get_unresolved_contradictions(self, limit: int = 5) -> list[dict[str, Any]]:
+    async def get_unresolved_contradictions(
+        self, limit: int = 5
+    ) -> list[dict[str, Any]]:
         """Return the top N contradictions that need belief maintenance."""
         try:
             rows = await self._db.fetch_all(
@@ -191,7 +223,9 @@ class BeliefEngine:
             log.debug("get_unresolved_contradictions failed: %s", exc)
             return []
 
-    async def get_stale_beliefs(self, stale_seconds: float = 86400.0, limit: int = 10) -> list[dict[str, Any]]:
+    async def get_stale_beliefs(
+        self, stale_seconds: float = 86400.0, limit: int = 10
+    ) -> list[dict[str, Any]]:
         """Return beliefs that have not been verified recently."""
         cutoff = time.time() - stale_seconds
         try:
@@ -224,4 +258,6 @@ class BeliefEngine:
                 supports=(verified_stance == "true"),
                 confidence=confidence,
             )
-        await self.update_belief(claim, verified_stance, confidence, source="tool_verification")
+        await self.update_belief(
+            claim, verified_stance, confidence, source="tool_verification"
+        )

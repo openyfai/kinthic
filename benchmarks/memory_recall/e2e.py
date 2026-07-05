@@ -7,7 +7,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from benchmarks.memory_recall.harness import NeedleResult, _aggregate_needles, _score_needle
+from benchmarks.memory_recall.harness import (
+    NeedleResult,
+    _aggregate_needles,
+    _score_needle,
+)
 from silex.mcp.server.lifecycle import create_standalone_context
 from silex.mcp.server.schemas import RecallRequest
 from silex.mcp.server import service as svc
@@ -41,7 +45,9 @@ async def run_mcp_e2e_condition(
         needle_results: list[NeedleResult] = []
         for needle in suite["needles"]:
             t0 = time.perf_counter()
-            raw = await svc.recall(ctx, RecallRequest(query=needle["query"], limit=max(k_values)))
+            raw = await svc.recall(
+                ctx, RecallRequest(query=needle["query"], limit=max(k_values))
+            )
             elapsed = (time.perf_counter() - t0) * 1000
             data = json.loads(raw)
             memories = [

@@ -8,7 +8,13 @@ import json
 import time
 from base64 import b64encode
 
-from silex.llm.base import BaseLLMProvider, SchemaT, retry_on_transient, repair_json, ProviderProfile
+from silex.llm.base import (
+    BaseLLMProvider,
+    SchemaT,
+    retry_on_transient,
+    repair_json,
+    ProviderProfile,
+)
 from silex.runtime.settings import RuntimeSettingsStore
 from silex.runtime.usage import UsageTracker
 from silex.llm.catalog import calculate_cost_usd
@@ -31,7 +37,9 @@ class AnthropicProvider(BaseLLMProvider):
         super().__init__(default_model=settings["model"])
         self.provider_profile = provider_profile
         self._settings_store = settings_store
-        self.api_key = get_provider_secret(provider_profile.name, settings_store=settings_store)
+        self.api_key = get_provider_secret(
+            provider_profile.name, settings_store=settings_store
+        )
         self._usage_tracker = usage_tracker
         self._client = None
         self.provider_name = provider_profile.name
@@ -96,7 +104,8 @@ class AnthropicProvider(BaseLLMProvider):
                 messages=messages,
             )
             text = "".join(
-                block.text for block in response.content
+                block.text
+                for block in response.content
                 if getattr(block, "type", "") == "text"
             )
 
@@ -104,7 +113,9 @@ class AnthropicProvider(BaseLLMProvider):
             try:
                 return schema.model_validate(json.loads(text))
             except (json.JSONDecodeError, Exception):
-                log.warning("Anthropic returned non-parseable JSON. Attempting repair...")
+                log.warning(
+                    "Anthropic returned non-parseable JSON. Attempting repair..."
+                )
                 repaired = repair_json(text)
                 return schema.model_validate(json.loads(repaired))
         except Exception as exc:

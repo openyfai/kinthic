@@ -34,6 +34,7 @@ class UsageTracker:
         if session_id is None:
             try:
                 from silex.memory.session import current_session_var
+
                 session = current_session_var.get()
                 if session:
                     session_id = session.id
@@ -76,15 +77,18 @@ class UsageTracker:
             ORDER BY estimated_cost_usd DESC, requests DESC
             """
         )
-        totals = await self.db.fetch_one(
-            """
+        totals = (
+            await self.db.fetch_one(
+                """
             SELECT COUNT(*) AS requests,
                    COALESCE(SUM(input_tokens), 0) AS input_tokens,
                    COALESCE(SUM(output_tokens), 0) AS output_tokens,
                    COALESCE(SUM(estimated_cost_usd), 0) AS estimated_cost_usd
             FROM llm_usage
             """
-        ) or {}
+            )
+            or {}
+        )
         approvals = await self.db.fetch_all(
             """
             SELECT status, COUNT(*) AS count

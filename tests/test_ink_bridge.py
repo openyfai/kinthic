@@ -42,7 +42,9 @@ async def test_emit_error_writes_error_and_response(events_file: Path) -> None:
 
     await bridge.emit_error("something broke")
 
-    payloads = [json.loads(line) for line in events_file.read_text().strip().splitlines()]
+    payloads = [
+        json.loads(line) for line in events_file.read_text().strip().splitlines()
+    ]
     assert payloads[0]["type"] == "error"
     assert payloads[0]["data"]["message"] == "something broke"
     assert payloads[1]["type"] == "response"
@@ -56,7 +58,9 @@ async def test_emit_cancel_writes_cancel_and_response(events_file: Path) -> None
 
     await bridge.emit_cancel("Thinking cancelled.")
 
-    payloads = [json.loads(line) for line in events_file.read_text().strip().splitlines()]
+    payloads = [
+        json.loads(line) for line in events_file.read_text().strip().splitlines()
+    ]
     assert payloads[0]["type"] == "cancel"
     assert payloads[1]["type"] == "response"
 
@@ -87,7 +91,9 @@ async def test_emit_noop_when_disabled(events_file: Path) -> None:
     assert not events_file.exists() or events_file.read_text() == ""
 
 
-def test_build_launch_cmd_prefers_compiled_binary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_build_launch_cmd_prefers_compiled_binary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     compiled = tmp_path / "kinthic-ui"
     compiled.write_text("#!/bin/sh\necho ok\n")
     compiled.chmod(0o755)
@@ -132,10 +138,18 @@ async def test_emit_pushes_over_tcp_when_client_connected() -> None:
     )
     await asyncio.sleep(0.05)
 
-    await bridge.emit({
-        "type": "turn_event",
-        "data": {"turn_id": "t1", "seq": 1, "phase": "user", "title": "You", "detail": "hi"},
-    })
+    await bridge.emit(
+        {
+            "type": "turn_event",
+            "data": {
+                "turn_id": "t1",
+                "seq": 1,
+                "phase": "user",
+                "title": "You",
+                "detail": "hi",
+            },
+        }
+    )
 
     data = await asyncio.wait_for(reader.read(4096), timeout=1.0)
     payload = json.loads(data.decode("utf-8").strip())

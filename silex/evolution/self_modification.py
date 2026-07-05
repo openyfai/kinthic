@@ -24,33 +24,48 @@ log = setup_logger("silex.evolution.self_modification")
 # Structured Output Schema for Code Mutation
 # ---------------------------------------------------------------------------
 
+
 class CodeMutationResponse(BaseModel):
-    rationale: str = Field(..., description="Explanation of why this code mutation was proposed")
-    mutated_code: str = Field(..., description="The entire contents of the mutated file (must be syntactically valid)")
+    rationale: str = Field(
+        ..., description="Explanation of why this code mutation was proposed"
+    )
+    mutated_code: str = Field(
+        ...,
+        description="The entire contents of the mutated file (must be syntactically valid)",
+    )
 
 
 # ---------------------------------------------------------------------------
 # SelfModificationEngine
 # ---------------------------------------------------------------------------
 
+
 class SelfModificationEngine:
     """
     Manages population-based codebase self-modification.
-    
+
     Enforces that mutated files avoid modifying sacred directories:
       - silex/memory/
       - silex/world/
       - silex/security/
-      
+
     Uses UCB1 selection algorithm to balance exploration and exploitation of code variants.
     """
 
     SACRED_SUBSTRINGS = [
-        "silex/memory", "silex/world", "silex/security",
-        "silex/core", "silex/evolution", "silex/utils/config"
+        "silex/memory",
+        "silex/world",
+        "silex/security",
+        "silex/core",
+        "silex/evolution",
+        "silex/utils/config",
     ]
 
-    def __init__(self, base_dir: Path | str | None = None, manifest_path: Path | str | None = None):
+    def __init__(
+        self,
+        base_dir: Path | str | None = None,
+        manifest_path: Path | str | None = None,
+    ):
         if base_dir is None:
             self.base_dir = Path("~/.kinthic/evolution").expanduser()
         else:
@@ -72,8 +87,10 @@ class SelfModificationEngine:
                 with open(self.manifest_path, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
-                log.error(f"Failed to parse manifest {self.manifest_path}, initializing new one: {e}")
-                
+                log.error(
+                    f"Failed to parse manifest {self.manifest_path}, initializing new one: {e}"
+                )
+
         # Initialize default manifest
         default_manifest = {
             "total_runs": 0,
@@ -85,9 +102,9 @@ class SelfModificationEngine:
                     "play_count": 0,
                     "score_sum": 0.0,
                     "average_score": 0.0,
-                    "created_at": time.time()
+                    "created_at": time.time(),
                 }
-            }
+            },
         }
         self._save_manifest_data(default_manifest)
         return default_manifest
@@ -110,7 +127,9 @@ class SelfModificationEngine:
         normalized = str(Path(file_path)).replace("\\", "/").lower()
         for sacred in self.SACRED_SUBSTRINGS:
             if sacred in normalized:
-                log.warning(f"Safety violation: Path {file_path} contains sacred substring: {sacred}")
+                log.warning(
+                    f"Safety violation: Path {file_path} contains sacred substring: {sacred}"
+                )
                 return False
         return True
 
@@ -138,16 +157,22 @@ class SelfModificationEngine:
             elif total_runs == 0:
                 ucb_val = avg_score
             else:
-                ucb_val = avg_score + exploration_constant * math.sqrt(math.log(total_runs) / plays)
+                ucb_val = avg_score + exploration_constant * math.sqrt(
+                    math.log(total_runs) / plays
+                )
 
             if ucb_val > best_ucb:
                 best_ucb = ucb_val
                 best_variant = v
 
-        log.info(f"UCB Selection chose variant '{best_variant['variant_id']}' with UCB score {best_ucb}")
+        log.info(
+            f"UCB Selection chose variant '{best_variant['variant_id']}' with UCB score {best_ucb}"
+        )
         return best_variant
 
-    def register_variant(self, variant_id: str, path: str | Path, parent_id: str | None = None) -> None:
+    def register_variant(
+        self, variant_id: str, path: str | Path, parent_id: str | None = None
+    ) -> None:
         """Registers a new code variant into the population manifest."""
         variants = self.manifest.setdefault("variants", {})
         if variant_id in variants:
@@ -160,7 +185,7 @@ class SelfModificationEngine:
             "play_count": 0,
             "score_sum": 0.0,
             "average_score": 0.0,
-            "created_at": time.time()
+            "created_at": time.time(),
         }
         self.save_manifest()
         log.info(f"Registered new variant: {variant_id} at {path}")
@@ -169,7 +194,9 @@ class SelfModificationEngine:
         """Updates UCB selection metrics with evaluation run outcomes."""
         variants = self.manifest.setdefault("variants", {})
         if variant_id not in variants:
-            log.warning(f"Unknown variant '{variant_id}' submitted feedback. Registering it dynamically.")
+            log.warning(
+                f"Unknown variant '{variant_id}' submitted feedback. Registering it dynamically."
+            )
             self.register_variant(variant_id, "")
 
         v = variants[variant_id]
@@ -179,21 +206,23 @@ class SelfModificationEngine:
 
         self.manifest["total_runs"] = self.manifest.get("total_runs", 0) + 1
         self.save_manifest()
-        log.info(f"Recorded score {score} for variant '{variant_id}'. New play_count={v['play_count']}, avg={v['average_score']:.4f}")
+        log.info(
+            f"Recorded score {score} for variant '{variant_id}'. New play_count={v['play_count']}, avg={v['average_score']:.4f}"
+        )
 
     async def propose_mutation(
         self,
         parent_variant_id: str,
         file_to_mutate: str | Path,
         prompt_guidance: str,
-        llm_client: SupportsLLM
+        llm_client: SupportsLLM,
     ) -> str:
         """
         Uses LLM to mutate an existing file, writes the mutation to a sandbox
         evolution variants folder, and registers it.
         """
         file_path = Path(file_to_mutate)
-        
+
         # 1. Enforce safety checks
         if not self.is_path_safe(file_path):
             raise PermissionError(f"Access denied to modify sacred path: {file_path}")
@@ -202,17 +231,19 @@ class SelfModificationEngine:
         variants = self.manifest.get("variants", {})
         if parent_variant_id not in variants:
             raise ValueError(f"Parent variant '{parent_variant_id}' not found.")
-            
+
         parent_record = variants[parent_variant_id]
         parent_path_str = parent_record.get("path", "")
-        
+
         if parent_path_str and Path(parent_path_str).exists():
             source_path = Path(parent_path_str)
         else:
             source_path = file_path
 
         if not source_path.exists():
-            raise FileNotFoundError(f"Source file to mutate not found at: {source_path}")
+            raise FileNotFoundError(
+                f"Source file to mutate not found at: {source_path}"
+            )
 
         with open(source_path, "r", encoding="utf-8") as f:
             original_code = f.read()
@@ -225,18 +256,21 @@ class SelfModificationEngine:
             "You must return the COMPLETE modified source code file. Do not omit any sections."
         )
 
-        user_input = json.dumps({
-            "original_filename": file_path.name,
-            "optimization_guidance": prompt_guidance,
-            "original_code": original_code
-        }, indent=2)
+        user_input = json.dumps(
+            {
+                "original_filename": file_path.name,
+                "optimization_guidance": prompt_guidance,
+                "original_code": original_code,
+            },
+            indent=2,
+        )
 
         log.info(f"Requesting mutation of '{file_path.name}' via LLM...")
         mutation_result: CodeMutationResponse = await llm_client.complete_json(
             schema=CodeMutationResponse,
             system_prompt=system_prompt,
             user_input=user_input,
-            temperature=0.4
+            temperature=0.4,
         )
 
         # 4. Save and register new variant
@@ -248,11 +282,9 @@ class SelfModificationEngine:
             f.write(mutation_result.mutated_code)
 
         log.info(f"Saved mutated code to: {mutated_path}")
-        
+
         self.register_variant(
-            variant_id=new_variant_id,
-            path=mutated_path,
-            parent_id=parent_variant_id
+            variant_id=new_variant_id, path=mutated_path, parent_id=parent_variant_id
         )
 
         return new_variant_id

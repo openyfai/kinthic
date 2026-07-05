@@ -92,12 +92,18 @@ async def _run_stdio_proxy() -> None:
                 return res
 
             async with stdio_server() as (read_stdio, write_stdio):
-                await server.run(read_stdio, write_stdio, server.create_initialization_options())
+                await server.run(
+                    read_stdio, write_stdio, server.create_initialization_options()
+                )
 
 
 def run_stdio_bridge() -> None:
     if KINTHIC_DAEMON_LOCK.exists():
-        log.info("Daemon lock present — will proxy stdio MCP to %s:%s/mcp if gateway is up", gateway_host(), gateway_port())
+        log.info(
+            "Daemon lock present — will proxy stdio MCP to %s:%s/mcp if gateway is up",
+            gateway_host(),
+            gateway_port(),
+        )
     else:
         log.warning("Daemon not running — standalone MCP stdio")
     asyncio.run(_run_stdio_proxy())

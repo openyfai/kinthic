@@ -29,7 +29,9 @@ async def test_spawn_worker_rejects_expired_lease(tmp_path):
         workspace_root=tmp_path / "workspace",
         project_root=tmp_path / "project",
     )
-    lease = ActuationLease.issue("t1", "agent1", ttl_seconds=-1, allowed_tools=["run_terminal_command"])
+    lease = ActuationLease.issue(
+        "t1", "agent1", ttl_seconds=-1, allowed_tools=["run_terminal_command"]
+    )
 
     with pytest.raises(PermissionError):
         await orchestrator.spawn_worker("echo hi", ["run_terminal_command"], lease)
@@ -49,6 +51,7 @@ async def test_spawn_worker_teardown_after_success(tmp_path):
 
     async def mock_provision(lease=None):
         import uuid
+
         wid = f"worker_{uuid.uuid4().hex[:8]}"
         wdir = tmp_path / "workspace" / wid
         wdir.mkdir(parents=True, exist_ok=True)
@@ -81,6 +84,7 @@ async def test_spawn_worker_fails_on_nonzero_exit(tmp_path):
 
     async def mock_provision(lease=None):
         import uuid
+
         wid = f"worker_{uuid.uuid4().hex[:8]}"
         wdir = tmp_path / "workspace" / wid
         wdir.mkdir(parents=True, exist_ok=True)
@@ -122,7 +126,10 @@ async def test_local_fallback_fail_closed_without_dev_flag(tmp_path, monkeypatch
 async def test_local_fallback_allowed_with_dev_flag(tmp_path, monkeypatch):
     monkeypatch.setenv("KINTHIC_ALLOW_LOCAL_FALLBACK", "1")
 
-    from agent.compute.runtimes.warm_pool import DockerWarmPoolManager, LocalFallbackSandbox
+    from agent.compute.runtimes.warm_pool import (
+        DockerWarmPoolManager,
+        LocalFallbackSandbox,
+    )
 
     manager = DockerWarmPoolManager(
         workspace_root=tmp_path / "workspace",

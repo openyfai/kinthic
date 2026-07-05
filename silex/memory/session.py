@@ -16,7 +16,9 @@ from silex.utils.logger import setup_logger
 
 log = setup_logger("aria.session")
 
-current_session_var: ContextVar[Session | None] = ContextVar("current_session_var", default=None)
+current_session_var: ContextVar[Session | None] = ContextVar(
+    "current_session_var", default=None
+)
 
 
 class SessionManager:
@@ -68,7 +70,9 @@ class SessionManager:
         if row:
             session = self._row_to_session(row)
             current_session_var.set(session)
-            log.info(f"Resumed session {session.id[:8]}... ({session.turn_count} prior turns)")
+            log.info(
+                f"Resumed session {session.id[:8]}... ({session.turn_count} prior turns)"
+            )
             return session
         return await self.start_session()
 
@@ -78,18 +82,18 @@ class SessionManager:
         Returns None if the session_id doesn't exist in the DB.
         """
         row = await self.db.fetch_one(
-            "SELECT * FROM sessions WHERE id = ?",
-            (session_id,)
+            "SELECT * FROM sessions WHERE id = ?", (session_id,)
         )
         if row:
             session = self._row_to_session(row)
             # Clear the ended_at so the session is considered active again
             await self.db.execute(
-                "UPDATE sessions SET ended_at = NULL WHERE id = ?",
-                (session_id,)
+                "UPDATE sessions SET ended_at = NULL WHERE id = ?", (session_id,)
             )
             current_session_var.set(session)
-            log.info(f"Reconnected to session {session.id[:8]}... ({session.turn_count} prior turns)")
+            log.info(
+                f"Reconnected to session {session.id[:8]}... ({session.turn_count} prior turns)"
+            )
             return session
         return None
 
@@ -125,7 +129,9 @@ class SessionManager:
         """Record a conversation turn and update session stats."""
         session = self.current
         if session is None:
-            raise RuntimeError("No active session. Call start_session() or ensure current_session_var is set first.")
+            raise RuntimeError(
+                "No active session. Call start_session() or ensure current_session_var is set first."
+            )
 
         session.turn_count += 1
         session.memories_created += memories_added
@@ -218,16 +224,20 @@ class SessionManager:
         turns.reverse()  # Chronological order
         return turns
 
-    async def compress_turns(self, session_id: str, old_turn_ids: list[str], new_virtual_turn: Turn) -> None:
+    async def compress_turns(
+        self, session_id: str, old_turn_ids: list[str], new_virtual_turn: Turn
+    ) -> None:
         """Replace old raw turns with a compressed virtual turn."""
         async with self.db.transaction():
             for turn_id in old_turn_ids:
                 await self.db.execute("DELETE FROM turns WHERE id = ?", (turn_id,))
                 try:
-                    await self.db.execute("DELETE FROM turns_fts WHERE id = ?", (turn_id,))
+                    await self.db.execute(
+                        "DELETE FROM turns_fts WHERE id = ?", (turn_id,)
+                    )
                 except Exception:
                     pass
-            
+
             await self.db.execute(
                 """
                 INSERT INTO turns (id, session_id, turn_number, user_input,
@@ -293,8 +303,7 @@ class SessionManager:
     async def get_session(self, session_id: str) -> Session | None:
         """Get a specific session by ID."""
         row = await self.db.fetch_one(
-            "SELECT * FROM sessions WHERE id = ?",
-            (session_id,)
+            "SELECT * FROM sessions WHERE id = ?", (session_id,)
         )
         return self._row_to_session(row) if row else None
 
@@ -302,7 +311,7 @@ class SessionManager:
         """Get all turns for a specific session."""
         rows = await self.db.fetch_all(
             "SELECT * FROM turns WHERE session_id = ? ORDER BY turn_number ASC",
-            (session_id,)
+            (session_id,),
         )
         return [self._row_to_turn(r) for r in rows]
 
@@ -314,6 +323,7 @@ class SessionManager:
     async def get_time_since_last_user_message(self) -> float:
         """Calculate and return the elapsed time in seconds since the last real user message."""
         from datetime import datetime, timezone
+
         row = await self.db.fetch_one(
             """
             SELECT created_at FROM turns
@@ -326,7 +336,9 @@ class SessionManager:
             session = self.current
             if session:
                 try:
-                    started_at = datetime.fromisoformat(session.started_at.replace("Z", "+00:00"))
+                    started_at = datetime.fromisoformat(
+                        session.started_at.replace("Z", "+00:00")
+                    )
                 except ValueError:
                     started_at = datetime.now(timezone.utc)
                 return (datetime.now(timezone.utc) - started_at).total_seconds()
@@ -406,7 +418,9 @@ class SessionManager:
             )
             return [self._row_to_turn(r) for r in rows]
         except Exception:
-            keywords = [kw.strip().lower() for kw in query.split() if len(kw.strip()) > 2]
+            keywords = [
+                kw.strip().lower() for kw in query.split() if len(kw.strip()) > 2
+            ]
             if not keywords:
                 return []
             rows = await self.db.fetch_all(

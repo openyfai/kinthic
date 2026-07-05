@@ -28,6 +28,7 @@ async def test_spawn_job_returns_structured_result(tmp_path):
 
     async def mock_provision(lease=None):
         import uuid
+
         wid = f"worker_{uuid.uuid4().hex[:8]}"
         wdir = tmp_path / "workspace" / wid
         wdir.mkdir(parents=True, exist_ok=True)
@@ -43,7 +44,9 @@ async def test_spawn_job_returns_structured_result(tmp_path):
     orchestrator.provider.teardown_sandbox = AsyncMock()
 
     job = WorkerJob.from_command("echo structured", objective="Test structured output")
-    lease = ActuationLease.issue(job.job_id, job.agent_id, allowed_tools=job.allowed_tools)
+    lease = ActuationLease.issue(
+        job.job_id, job.agent_id, allowed_tools=job.allowed_tools
+    )
 
     handle = await orchestrator.spawn_job(job, lease)
     result = await handle.structured_result()

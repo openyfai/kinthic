@@ -63,7 +63,7 @@ def test_actuation_lease_validation():
         task_id=task_id,
         agent_id=agent_id,
         ttl_seconds=300.0,
-        allowed_tools=["run_terminal_command", "file_write"]
+        allowed_tools=["run_terminal_command", "file_write"],
     )
     assert lease.validate("run_terminal_command") is True
     assert lease.validate("file_write") is True
@@ -73,7 +73,7 @@ def test_actuation_lease_validation():
         task_id=task_id,
         agent_id=agent_id,
         ttl_seconds=-10.0,  # Negative TTL to simulate instant expiration
-        allowed_tools=["run_terminal_command"]
+        allowed_tools=["run_terminal_command"],
     )
     assert expired_lease.validate("run_terminal_command") is False
 
@@ -85,7 +85,7 @@ def test_actuation_lease_validation():
         task_id=task_id,
         agent_id=agent_id,
         ttl_seconds=300.0,
-        allowed_tools=["run_terminal_command"]
+        allowed_tools=["run_terminal_command"],
     )
     # Inject a tool maliciously in-memory
     lease_tampered.allowed_tools.append("arbitrary_execution")
@@ -96,7 +96,7 @@ def test_actuation_lease_validation():
         task_id=task_id,
         agent_id=agent_id,
         ttl_seconds=300.0,
-        allowed_tools=["run_terminal_command"]
+        allowed_tools=["run_terminal_command"],
     )
     lease_unsigned.signature = None
     assert lease_unsigned.validate("run_terminal_command") is False
@@ -105,7 +105,7 @@ def test_actuation_lease_validation():
         task_id=task_id,
         agent_id=agent_id,
         ttl_seconds=300.0,
-        allowed_tools=["run_terminal_command"]
+        allowed_tools=["run_terminal_command"],
     )
     lease_bad_signature.signature = "malicious_crafted_signature_here"
     assert lease_bad_signature.validate("run_terminal_command") is False
@@ -115,7 +115,7 @@ def test_actuation_lease_validation():
         task_id=task_id,
         agent_id=agent_id,
         ttl_seconds=300.0,
-        allowed_tools=["run_terminal_command"]
+        allowed_tools=["run_terminal_command"],
     )
     assert lease_default_net.network_allowed is False
 
@@ -124,7 +124,7 @@ def test_actuation_lease_validation():
         agent_id=agent_id,
         ttl_seconds=300.0,
         allowed_tools=["run_terminal_command"],
-        network_allowed=True
+        network_allowed=True,
     )
     assert lease_explicit_net.network_allowed is True
     assert lease_explicit_net.validate("run_terminal_command") is True
@@ -139,7 +139,7 @@ async def test_knowledge_graph_stats_keys(tmp_path):
     db_file = tmp_path / "silex.db"
     db = Database(str(db_file))
     await db.connect()
-    
+
     # Create the tables
     await db.execute(
         "CREATE TABLE IF NOT EXISTS knowledge_nodes ("
@@ -155,12 +155,12 @@ async def test_knowledge_graph_stats_keys(tmp_path):
 
     kg = KnowledgeGraph(db)
     await kg.load()
-    
+
     stats = kg.stats()
     assert "total_nodes" in stats
     assert "total_edges" in stats
     assert "node_count" in stats
     assert "edge_count" in stats
     assert "connected_components" in stats
-    
+
     await db.close()

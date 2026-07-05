@@ -50,7 +50,11 @@ class LocalAuthMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
-        if not gateway_auth_required() or request.url.path in _PUBLIC_PATHS or request.method == "OPTIONS":
+        if (
+            not gateway_auth_required()
+            or request.url.path in _PUBLIC_PATHS
+            or request.method == "OPTIONS"
+        ):
             return await call_next(request)
 
         expected = RuntimeSettingsStore().ensure_web_api_key()
@@ -60,55 +64,96 @@ class LocalAuthMiddleware(BaseHTTPMiddleware):
             if auth.lower().startswith("bearer "):
                 provided = auth[7:].strip()
         if not provided or not hmac.compare_digest(provided, expected):
-            log.warning("Rejected unauthenticated gateway request: %s %s", request.method, request.url.path)
+            log.warning(
+                "Rejected unauthenticated gateway request: %s %s",
+                request.method,
+                request.url.path,
+            )
             return JSONResponse({"error": "unauthorized"}, status_code=401)
 
         return await call_next(request)
+
 
 # The unified singleton cognitive brain
 shared_loop: CognitiveLoop | None = None
 db: Database | None = None
 
+
 class ChatRequest(BaseModel):
     message: str
     images: Optional[List[Dict[str, Any]]] = None
+
 
 class ApprovalRequest(BaseModel):
     approval_id: str
     approved: bool
 
+
 class RestoreRequest(BaseModel):
     archive: str
     pre_backup: bool = True
 
+
 class SkillNameRequest(BaseModel):
     name: str
 
+
 MCP_TOOLS = [
-    {"name": "silex_recall", "description": "Hybrid memory recall (recent + important + keyword + semantic RRF)."},
-    {"name": "silex_search", "description": "Keyword FTS search across stored memories."},
-    {"name": "silex_remember", "description": "Store memory through full A-MAC admission pipeline."},
-    {"name": "silex_remember_explicit", "description": "Store a user/agent fact directly (bypasses A-MAC)."},
-    {"name": "silex_forget", "description": "Delete a memory by ID (requires confirm=true)."},
+    {
+        "name": "silex_recall",
+        "description": "Hybrid memory recall (recent + important + keyword + semantic RRF).",
+    },
+    {
+        "name": "silex_search",
+        "description": "Keyword FTS search across stored memories.",
+    },
+    {
+        "name": "silex_remember",
+        "description": "Store memory through full A-MAC admission pipeline.",
+    },
+    {
+        "name": "silex_remember_explicit",
+        "description": "Store a user/agent fact directly (bypasses A-MAC).",
+    },
+    {
+        "name": "silex_forget",
+        "description": "Delete a memory by ID (requires confirm=true).",
+    },
     {"name": "silex_get_memory", "description": "Retrieve a single memory by UUID."},
-    {"name": "silex_list_memories", "description": "List memories with pagination and optional tag filter."},
-    {"name": "silex_graph_recall", "description": "Graph-aware causal context from the knowledge graph."},
-    {"name": "silex_memory_health", "description": "Memory engine health: counts, vector drift, FTS availability."},
-    {"name": "kinthic_skills_list", "description": "List loaded Kinthic workflow skills (compact index)."},
-    {"name": "kinthic_skill_view", "description": "Load full markdown instructions for a named Kinthic skill."},
+    {
+        "name": "silex_list_memories",
+        "description": "List memories with pagination and optional tag filter.",
+    },
+    {
+        "name": "silex_graph_recall",
+        "description": "Graph-aware causal context from the knowledge graph.",
+    },
+    {
+        "name": "silex_memory_health",
+        "description": "Memory engine health: counts, vector drift, FTS availability.",
+    },
+    {
+        "name": "kinthic_skills_list",
+        "description": "List loaded Kinthic workflow skills (compact index).",
+    },
+    {
+        "name": "kinthic_skill_view",
+        "description": "Load full markdown instructions for a named Kinthic skill.",
+    },
 ]
 
 active_cancels: Dict[str, asyncio.Event] = {}
 active_approvals: Dict[str, asyncio.Queue] = {}
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global shared_loop, db
-    
+
     # 1. Initialize central database connection
     db = Database(str(SILEX_DB))
     await db.connect()
-    
+
     # 2. Instantiate and start the central Cognitive Loop
     log.info("Starting Central Cognitive Loop...")
     shared_loop = CognitiveLoop()
@@ -117,25 +162,28 @@ async def lifespan(app: FastAPI):
     mcp = None
     try:
         from silex.mcp.server.app import mount_mcp_server
+
         mcp = mount_mcp_server(app, shared_loop)
     except ImportError as exc:
         log.warning("MCP server not mounted (install kinthic[mcp]): %s", exc)
     except Exception as exc:
         log.error("Failed to mount MCP server: %s", exc)
-    
+
     # 3. Start Omnichannel Adapters
     if os.getenv("TELEGRAM_BOT_TOKEN"):
         try:
             from silex.adapters.telegram import TelegramAdapter
+
             telegram = TelegramAdapter()
             await telegram.start_async(shared_loop)
             log.info("Telegram Adapter attached to Central Loop.")
         except Exception as e:
             log.error(f"Failed to attach Telegram Adapter: {e}")
-            
+
     if os.getenv("DISCORD_BOT_TOKEN"):
         try:
             from silex.adapters.discord import DiscordAdapter
+
             discord_adapter = DiscordAdapter()
             await discord_adapter.start_async(shared_loop)
             log.info("Discord Adapter attached to Central Loop.")
@@ -147,7 +195,7 @@ async def lifespan(app: FastAPI):
             yield
     else:
         yield
-    
+
     # Teardown
     log.info("Shutting down Central Cognitive Loop...")
     if shared_loop:
@@ -181,14 +229,18 @@ async def get_graph() -> Dict[str, Any]:
     """Fetch all epistemic nodes and edges for the graph visualization."""
     if not db:
         return {"error": "DB not initialized", "nodes": [], "edges": []}
-        
+
     try:
-        node_rows = await db.fetch_all("SELECT node_id, type, content, status FROM epistemic_nodes")
+        node_rows = await db.fetch_all(
+            "SELECT node_id, type, content, status FROM epistemic_nodes"
+        )
         nodes = [dict(row) for row in node_rows]
-        
-        edge_rows = await db.fetch_all("SELECT edge_id, source_node_id, target_node_id, relation_type FROM epistemic_edges")
+
+        edge_rows = await db.fetch_all(
+            "SELECT edge_id, source_node_id, target_node_id, relation_type FROM epistemic_edges"
+        )
         edges = [dict(row) for row in edge_rows]
-        
+
         return {
             "nodes": nodes,
             "edges": edges,
@@ -196,12 +248,13 @@ async def get_graph() -> Dict[str, Any]:
     except Exception as e:
         return {"error": str(e), "nodes": [], "edges": []}
 
+
 @app.post("/api/chat/stream")
 async def process_chat_stream(req: ChatRequest) -> StreamingResponse:
     """Stream cognitive loop events and responses."""
     if not shared_loop:
         return {"error": "Cognitive engine is not ready."}
-        
+
     request_id = str(uuid.uuid4())
     queue = asyncio.Queue()
     cancel_event = asyncio.Event()
@@ -210,61 +263,85 @@ async def process_chat_stream(req: ChatRequest) -> StreamingResponse:
     async def event_emitter(msg: dict):
         if cancel_event.is_set():
             raise asyncio.CancelledError("User cancelled stream")
-            
+
         await queue.put(json.dumps(msg) + "\n")
-        
+
         if msg.get("type") == "approval_requested":
             app_id = msg["data"]["approval_id"]
             app_queue = asyncio.Queue()
             active_approvals[app_id] = app_queue
-            
+
             try:
                 approved = await asyncio.wait_for(app_queue.get(), timeout=300.0)
             except asyncio.TimeoutError:
                 approved = False
             finally:
                 active_approvals.pop(app_id, None)
-                
-            await queue.put(json.dumps({
-                "type": "approval_resolved",
-                "data": {"approval_id": app_id, "approved": approved}
-            }) + "\n")
-            
+
+            await queue.put(
+                json.dumps(
+                    {
+                        "type": "approval_resolved",
+                        "data": {"approval_id": app_id, "approved": approved},
+                    }
+                )
+                + "\n"
+            )
+
             if not approved:
                 raise Exception("User denied tool approval.")
 
     async def generator():
-        task = asyncio.create_task(shared_loop.process(req.message, event_emitter=event_emitter, images=req.images))
+        task = asyncio.create_task(
+            shared_loop.process(
+                req.message, event_emitter=event_emitter, images=req.images
+            )
+        )
         try:
             while True:
                 get_task = asyncio.create_task(queue.get())
-                done, pending = await asyncio.wait([get_task, task], return_when=asyncio.FIRST_COMPLETED)
-                
+                done, pending = await asyncio.wait(
+                    [get_task, task], return_when=asyncio.FIRST_COMPLETED
+                )
+
                 if get_task in done:
                     yield get_task.result()
                     queue.task_done()
-                
+
                 if task in done:
                     if not get_task.done():
                         get_task.cancel()
                     while not queue.empty():
                         yield queue.get_nowait()
-                    
+
                     try:
                         res = task.result()
                         # Only yield response if we didn't stream it already, though event_emitter should cover it
                         if getattr(res, "response", "") and not queue.empty():
                             pass
                     except asyncio.CancelledError:
-                        yield json.dumps({"type": "cancel", "data": {"message": "Thinking cancelled."}}) + "\n"
+                        yield (
+                            json.dumps(
+                                {
+                                    "type": "cancel",
+                                    "data": {"message": "Thinking cancelled."},
+                                }
+                            )
+                            + "\n"
+                        )
                     except Exception as e:
-                        yield json.dumps({"type": "error", "data": {"message": str(e)}}) + "\n"
-                    
+                        yield (
+                            json.dumps({"type": "error", "data": {"message": str(e)}})
+                            + "\n"
+                        )
+
                     yield json.dumps({"type": "done"}) + "\n"
                     break
         finally:
             if not task.done():
-                log.info("Client disconnected from chat stream; cancelling background processing task.")
+                log.info(
+                    "Client disconnected from chat stream; cancelling background processing task."
+                )
                 task.cancel()
                 try:
                     await task
@@ -273,8 +350,13 @@ async def process_chat_stream(req: ChatRequest) -> StreamingResponse:
                 except Exception as exc:
                     log.warning(f"Error clean-cancelling background chat task: {exc}")
             active_cancels.pop(request_id, None)
-                
-    return StreamingResponse(generator(), media_type="application/x-ndjson", headers={"X-Request-Id": request_id})
+
+    return StreamingResponse(
+        generator(),
+        media_type="application/x-ndjson",
+        headers={"X-Request-Id": request_id},
+    )
+
 
 @app.post("/api/chat/cancel")
 async def cancel_chat(req: Request):
@@ -285,6 +367,7 @@ async def cancel_chat(req: Request):
         return {"status": "cancelling"}
     return {"status": "not_found"}
 
+
 @app.post("/api/chat/approve")
 async def approve_chat(req: ApprovalRequest):
     if req.approval_id in active_approvals:
@@ -292,12 +375,14 @@ async def approve_chat(req: ApprovalRequest):
         return {"status": "resolved"}
     return {"error": "Approval request not found or expired"}
 
+
 @app.get("/api/skills")
 async def get_skills() -> Dict[str, Any]:
     """List all loaded skills via SkillLoader (flat, nested, and plugin)."""
     loader = _get_skill_loader()
     if not loader:
         from silex.core.skills import SkillLoader
+
         loader = SkillLoader()
         loader.load_all()
     return {"skills": loader.list_skills_detailed(), "count": len(loader.skills)}
@@ -355,6 +440,7 @@ async def reload_skills() -> Dict[str, Any]:
     loader = _get_skill_loader()
     if not loader:
         from silex.core.skills import SkillLoader
+
         loader = SkillLoader()
 
     now = time.monotonic()
@@ -375,6 +461,7 @@ async def get_skill_detail(name: str) -> Dict[str, Any]:
     loader = _get_skill_loader()
     if not loader:
         from silex.core.skills import SkillLoader
+
         loader = SkillLoader()
         loader.load_all()
     body = loader.get_skill_body(name)
@@ -401,12 +488,18 @@ async def get_metrics() -> Dict[str, Any]:
     """Fetch system metrics from the database."""
     if not db:
         return {"error": "DB not initialized"}
-    
+
     try:
-        nodes_count = (await db.fetch_one("SELECT COUNT(*) as c FROM epistemic_nodes"))["c"]
-        edges_count = (await db.fetch_one("SELECT COUNT(*) as c FROM epistemic_edges"))["c"]
+        nodes_count = (await db.fetch_one("SELECT COUNT(*) as c FROM epistemic_nodes"))[
+            "c"
+        ]
+        edges_count = (await db.fetch_one("SELECT COUNT(*) as c FROM epistemic_edges"))[
+            "c"
+        ]
         memories_count = (await db.fetch_one("SELECT COUNT(*) as c FROM memories"))["c"]
-        trajectories_count = (await db.fetch_one("SELECT COUNT(*) as c FROM trajectories"))["c"]
+        trajectories_count = (
+            await db.fetch_one("SELECT COUNT(*) as c FROM trajectories")
+        )["c"]
 
         vector_drift = -1
         if shared_loop is not None:
@@ -420,6 +513,7 @@ async def get_metrics() -> Dict[str, Any]:
         mcp_mounted = False
         try:
             from silex.mcp.server.app import get_mcp_fastmcp
+
             mcp_mounted = get_mcp_fastmcp() is not None
         except ImportError:
             pass
@@ -472,7 +566,9 @@ def _validate_backup_path(archive: str) -> Path:
     try:
         path.relative_to(backups_dir)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Archive must be inside the backup directory") from exc
+        raise HTTPException(
+            status_code=400, detail="Archive must be inside the backup directory"
+        ) from exc
     if not path.exists():
         raise HTTPException(status_code=404, detail="Archive not found")
     if not path.is_file():
@@ -496,9 +592,19 @@ async def list_memories(
             results = await store.search(q.strip())
             total = len(results)
             page = results[offset : offset + limit]
-            return {"memories": [_memory_to_dict(m) for m in page], "total": total, "query": q}
-        memories, total = await store.list_page(offset=offset, limit=limit, tag=tag or None)
-        return {"memories": [_memory_to_dict(m) for m in memories], "total": total, "tag": tag}
+            return {
+                "memories": [_memory_to_dict(m) for m in page],
+                "total": total,
+                "query": q,
+            }
+        memories, total = await store.list_page(
+            offset=offset, limit=limit, tag=tag or None
+        )
+        return {
+            "memories": [_memory_to_dict(m) for m in memories],
+            "total": total,
+            "tag": tag,
+        }
     except Exception as e:
         log.error("Failed to list memories: %s", e)
         return {"memories": [], "total": 0, "error": str(e)}
@@ -507,7 +613,9 @@ async def list_memories(
 @app.delete("/api/memories/{memory_id}")
 async def delete_memory(memory_id: str, confirm: bool = Query(False)) -> Dict[str, Any]:
     if not confirm:
-        raise HTTPException(status_code=400, detail="Set confirm=true to delete a memory")
+        raise HTTPException(
+            status_code=400, detail="Set confirm=true to delete a memory"
+        )
     if not shared_loop:
         raise HTTPException(status_code=503, detail="Cognitive engine is not ready")
 
@@ -521,14 +629,18 @@ async def delete_memory(memory_id: str, confirm: bool = Query(False)) -> Dict[st
 async def list_backups() -> Dict[str, Any]:
     KINTHIC_BACKUPS.mkdir(parents=True, exist_ok=True)
     backups: List[Dict[str, Any]] = []
-    for file_path in sorted(KINTHIC_BACKUPS.glob("*.zip"), key=lambda p: p.stat().st_mtime, reverse=True):
+    for file_path in sorted(
+        KINTHIC_BACKUPS.glob("*.zip"), key=lambda p: p.stat().st_mtime, reverse=True
+    ):
         stat = file_path.stat()
         backups.append(
             {
                 "name": file_path.name,
                 "path": str(file_path.resolve()),
                 "size_bytes": stat.st_size,
-                "modified_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+                "modified_at": datetime.fromtimestamp(
+                    stat.st_mtime, tz=timezone.utc
+                ).isoformat(),
             }
         )
     return {"backups": backups, "backup_dir": str(KINTHIC_BACKUPS.resolve())}
@@ -552,7 +664,9 @@ async def create_backup() -> Dict[str, Any]:
         "name": out_path.name,
         "path": str(out_path.resolve()),
         "size_bytes": stat.st_size,
-        "modified_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+        "modified_at": datetime.fromtimestamp(
+            stat.st_mtime, tz=timezone.utc
+        ).isoformat(),
     }
 
 
@@ -603,6 +717,7 @@ async def get_integrations() -> Dict[str, Any]:
     mcp_mounted = False
     try:
         from silex.mcp.server.app import get_mcp_fastmcp
+
         mcp_mounted = get_mcp_fastmcp() is not None
     except ImportError:
         pass
@@ -614,7 +729,7 @@ async def get_integrations() -> Dict[str, Any]:
         "http_endpoint": f"http://{host}:{port}/mcp",
         "health_endpoint": f"http://{host}:{port}/api/health",
         "stdio_command": "kinthic mcp serve --stdio",
-        "stdio_command_python": f'python -m scripts.cli mcp serve --stdio',
+        "stdio_command_python": "python -m scripts.cli mcp serve --stdio",
         "claude_config": claude_desktop_config(),
         "cursor_config": cursor_config(),
         "tools": MCP_TOOLS,
@@ -625,6 +740,7 @@ async def get_integrations() -> Dict[str, Any]:
 async def get_settings() -> Dict[str, Any]:
     store = RuntimeSettingsStore()
     return store.load_settings()
+
 
 @app.post("/api/settings")
 async def save_settings(req: Request) -> Dict[str, Any]:
@@ -637,7 +753,9 @@ async def save_settings(req: Request) -> Dict[str, Any]:
         log.error(f"Failed to save settings: {e}")
         return {"error": str(e)}
 
+
 if __name__ == "__main__":
     import uvicorn
     from silex.utils.config import gateway_host, gateway_port
+
     uvicorn.run(app, host=gateway_host(), port=gateway_port())

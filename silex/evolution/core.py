@@ -29,14 +29,21 @@ log = setup_logger("silex.evolution.core")
 # ---------------------------------------------------------------------------
 from pydantic import BaseModel, Field
 
+
 class SkillSynthesisResponse(BaseModel):
-    rationale: str = Field(..., description="Explanation of why this skill is structured this way")
-    markdown_instructions: str = Field(..., description="The complete instruction manual for this skill in Markdown format")
+    rationale: str = Field(
+        ..., description="Explanation of why this skill is structured this way"
+    )
+    markdown_instructions: str = Field(
+        ...,
+        description="The complete instruction manual for this skill in Markdown format",
+    )
 
 
 # ---------------------------------------------------------------------------
 # SelfEvolutionCoordinator
 # ---------------------------------------------------------------------------
+
 
 class SelfEvolutionCoordinator:
     """
@@ -47,7 +54,12 @@ class SelfEvolutionCoordinator:
       - Skill Distillation (A-MAC Admission & Export)
     """
 
-    def __init__(self, db: Database, llm_client: SupportsLLM, evolution_dir: Path | str | None = None):
+    def __init__(
+        self,
+        db: Database,
+        llm_client: SupportsLLM,
+        evolution_dir: Path | str | None = None,
+    ):
         self.db = db
         self.llm_client = llm_client
 
@@ -79,7 +91,7 @@ class SelfEvolutionCoordinator:
         parent_id: str,
         file_to_mutate: str | Path,
         guidance: str,
-        test_file: str | Path
+        test_file: str | Path,
     ) -> tuple[bool, str, str]:
         """
         HyperAgent loop:
@@ -100,7 +112,7 @@ class SelfEvolutionCoordinator:
             parent_variant_id=parent_id,
             file_to_mutate=file_path,
             prompt_guidance=guidance,
-            llm_client=self.llm_client
+            llm_client=self.llm_client,
         )
 
         variant_record = self.self_mod.manifest["variants"][variant_id]
@@ -123,7 +135,9 @@ class SelfEvolutionCoordinator:
             if sibling.name != file_path.name:
                 shutil.copy2(sibling, sandbox_run_dir / sibling.name)
 
-        log.info(f"Isolated sandbox prepared for variant {variant_id} at {sandbox_run_dir}")
+        log.info(
+            f"Isolated sandbox prepared for variant {variant_id} at {sandbox_run_dir}"
+        )
 
         # 3. Run closed-loop TDD validations
         success, test_msg, final_code = await self.tdd.run_tdd_loop(
@@ -131,7 +145,7 @@ class SelfEvolutionCoordinator:
             test_file=sandbox_test_path,
             prompt_guidance=guidance,
             llm_client=self.llm_client,
-            max_iterations=3
+            max_iterations=3,
         )
 
         # 4. Copy back corrected code from sandbox to variants folder
@@ -145,7 +159,9 @@ class SelfEvolutionCoordinator:
         try:
             shutil.rmtree(sandbox_run_dir)
         except Exception as e:
-            log.warning(f"Failed to cleanup sandbox run directory {sandbox_run_dir}: {e}")
+            log.warning(
+                f"Failed to cleanup sandbox run directory {sandbox_run_dir}: {e}"
+            )
 
         return success, variant_id, test_msg
 
@@ -155,31 +171,36 @@ class SelfEvolutionCoordinator:
         category: str,
         skill_name: str,
         description: str,
-        threshold: float = 0.70
+        threshold: float = 0.70,
     ) -> tuple[bool, float]:
         """
         Collects actions from successful trajectories, prompts LLM to format
         them as structured instruction manuals, and runs A-MAC admission checks.
         """
         log.info(f"Distilling trajectory {trajectory_id} to skill: {skill_name}")
-        
+
         # 1. Retrieve steps from database
         steps = await self.db.fetch_all(
             "SELECT * FROM trajectory_steps WHERE trajectory_id = ? ORDER BY step_order ASC",
-            (trajectory_id,)
+            (trajectory_id,),
         )
         if not steps:
-            raise ValueError(f"No execution steps found for trajectory: {trajectory_id}")
+            raise ValueError(
+                f"No execution steps found for trajectory: {trajectory_id}"
+            )
 
         # 2. Format execution path summary
         path_summary = []
         for s in steps:
-            path_summary.append({
-                "step_order": s["step_order"],
-                "action": s["action_name"],
-                "input": s["tool_input"],
-                "output": s["execution_output"][:400] + ("..." if len(s["execution_output"]) > 400 else "")
-            })
+            path_summary.append(
+                {
+                    "step_order": s["step_order"],
+                    "action": s["action_name"],
+                    "input": s["tool_input"],
+                    "output": s["execution_output"][:400]
+                    + ("..." if len(s["execution_output"]) > 400 else ""),
+                }
+            )
 
         # 3. Prompt LLM to synthesize Markdown instructions
         system_prompt = (
@@ -190,18 +211,21 @@ class SelfEvolutionCoordinator:
             "and serve as a robust reference guide for other agents to execute this task correctly."
         )
 
-        user_input = json.dumps({
-            "skill_name": skill_name,
-            "description": description,
-            "category": category,
-            "trajectory_steps": path_summary
-        }, indent=2)
+        user_input = json.dumps(
+            {
+                "skill_name": skill_name,
+                "description": description,
+                "category": category,
+                "trajectory_steps": path_summary,
+            },
+            indent=2,
+        )
 
         synth_result: SkillSynthesisResponse = await self.llm_client.complete_json(
             schema=SkillSynthesisResponse,
             system_prompt=system_prompt,
             user_input=user_input,
-            temperature=0.3
+            temperature=0.3,
         )
 
         # 4. Filter and gate via A-MAC Admission Controller
@@ -215,7 +239,7 @@ class SelfEvolutionCoordinator:
             confidence_score=1.0,
             type_prior=0.8,
             origin_trajectory_id=trajectory_id,
-            threshold=threshold
+            threshold=threshold,
         )
 
         return success, score

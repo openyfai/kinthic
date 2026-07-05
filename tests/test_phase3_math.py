@@ -16,10 +16,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timezone, timedelta
 
 
-
 # ============================================================================
 # 1. CRITIC — Geometric Mean Formula
 # ============================================================================
+
 
 class TestGeometricMeanCritic:
     """
@@ -51,8 +51,8 @@ class TestGeometricMeanCritic:
         # The old threshold was sum >= 2.1 (≡ three scores ≥ 0.7)
         # 0.9 + 0.9 + 0.0 = 1.8 — actually rejected by sum comparison too
         # BUT the RANKING bug: compare dishonest vs. honest:
-        self._arith_sum(0.9, 0.9, 0.0)   # 1.8
-        self._arith_sum(0.7, 0.7, 0.7)    # 2.1
+        self._arith_sum(0.9, 0.9, 0.0)  # 1.8
+        self._arith_sum(0.7, 0.7, 0.7)  # 2.1
         # arithmetic correctly ranks honest above dishonest here
         # BUT the real bug is the partial-collapse scenario:
         self._arith_sum(0.95, 0.95, 0.05)  # 1.95
@@ -66,9 +66,9 @@ class TestGeometricMeanCritic:
         #            (0.70×0.70×0.70)^(1/3) = 0.70
         # Geometric correctly ranks solid (0.70) above partial-dishonest (0.647)
         geo_partial = self._geo(0.95, 0.95, 0.30)
-        geo_solid   = self._geo(0.70, 0.70, 0.70)
+        geo_solid = self._geo(0.70, 0.70, 0.70)
         arith_partial = self._arith_sum(0.95, 0.95, 0.30)
-        arith_solid   = self._arith_sum(0.70, 0.70, 0.70)
+        arith_solid = self._arith_sum(0.70, 0.70, 0.70)
 
         # Geometric: solid wins (correct)
         assert geo_solid > geo_partial, (
@@ -92,7 +92,7 @@ class TestGeometricMeanCritic:
         A response (0.65, 0.65, 0.65) scores exactly 0.65 — accepted.
         """
         just_below = self._geo(0.65, 0.65, 0.64)
-        threshold  = 0.65
+        threshold = 0.65
         assert just_below < threshold
 
         exactly_at = self._geo(0.65, 0.65, 0.65)
@@ -101,6 +101,7 @@ class TestGeometricMeanCritic:
     def test_geometric_score_is_imported_from_critic(self):
         """critic.py must expose a `geometric_score` static method."""
         from silex.core.critic import ResponseCritic
+
         assert hasattr(ResponseCritic, "geometric_score"), (
             "ResponseCritic must expose a `geometric_score(acc, dep, hon) -> float` static method"
         )
@@ -114,6 +115,7 @@ class TestGeometricMeanCritic:
         """
         import inspect
         import silex.core.cognitive_loop as cl_mod
+
         source = inspect.getsource(cl_mod)
         assert "geometric_score" in source, (
             "cognitive_loop.py must call ResponseCritic.geometric_score() "
@@ -125,17 +127,24 @@ class TestGeometricMeanCritic:
 # 2. MEMORY STORE — Unified Multiplicative Decay
 # ============================================================================
 
+
 class TestMemoryRetrievalScore:
     """
     The non-vector retrieval score must use importance × exp(-age/30) as a
     compound multiplicative factor, not as independent additive terms.
     """
 
-    def _make_memory(self, importance: float, age_days: float,
-                     confidence: float = 0.8, source: str = "user",
-                     memory_type: str = "semantic"):
+    def _make_memory(
+        self,
+        importance: float,
+        age_days: float,
+        confidence: float = 0.8,
+        source: str = "user",
+        memory_type: str = "semantic",
+    ):
         """Build a minimal Memory-like object for scoring."""
         from silex.models.schemas import Memory, MemorySource, MemoryType
+
         now = datetime.now(timezone.utc)
         last_accessed = (now - timedelta(days=age_days)).isoformat()
         created_at = last_accessed
@@ -153,10 +162,11 @@ class TestMemoryRetrievalScore:
     def test_old_memory_scores_lower_than_fresh_same_importance(self):
         """A 180-day-old memory must score materially lower than a 1-day-old one."""
         from silex.memory.memory_store import MemoryStore
+
         fresh = self._make_memory(importance=0.8, age_days=1)
-        old   = self._make_memory(importance=0.8, age_days=180)
+        old = self._make_memory(importance=0.8, age_days=180)
         score_fresh = MemoryStore._retrieval_score(fresh, "topic")
-        score_old   = MemoryStore._retrieval_score(old,   "topic")
+        score_old = MemoryStore._retrieval_score(old, "topic")
         assert score_fresh > score_old, (
             f"Fresh memory ({score_fresh:.4f}) must outscore 180-day-old memory "
             f"({score_old:.4f}) at equal importance"
@@ -172,10 +182,11 @@ class TestMemoryRetrievalScore:
         This test checks that the ranking is governed by the product.
         """
         from silex.memory.memory_store import MemoryStore
+
         # High importance but very old
-        old_important  = self._make_memory(importance=0.9, age_days=120)
+        old_important = self._make_memory(importance=0.9, age_days=120)
         # Low importance but very fresh
-        fresh_low      = self._make_memory(importance=0.3, age_days=0)
+        fresh_low = self._make_memory(importance=0.3, age_days=0)
 
         MemoryStore._retrieval_score(old_important, "topic")
         MemoryStore._retrieval_score(fresh_low, "topic")
@@ -183,7 +194,7 @@ class TestMemoryRetrievalScore:
         # The compound decay should significantly penalise the old one:
         # old compound: 0.9 × exp(-120/30) = 0.9 × exp(-4) ≈ 0.9 × 0.018 ≈ 0.016
         # fresh compound: 0.3 × exp(0) = 0.3 × 1.0 = 0.3
-        expected_old_compound  = 0.9 * math.exp(-120 / 30)
+        expected_old_compound = 0.9 * math.exp(-120 / 30)
         expected_fresh_compound = 0.3 * math.exp(0)
         assert expected_fresh_compound > expected_old_compound * 5, (
             "Fresh low-importance compound must dominate old high-importance compound "
@@ -194,6 +205,7 @@ class TestMemoryRetrievalScore:
         """_retrieval_score must use math.exp() for the decay term."""
         import inspect
         from silex.memory import memory_store as ms_mod
+
         source = inspect.getsource(ms_mod.MemoryStore._retrieval_score)
         assert "exp(" in source, (
             "_retrieval_score must use math.exp() for time-decay, not additive recency"
@@ -206,6 +218,7 @@ class TestMemoryRetrievalScore:
         """
         import inspect
         from silex.memory import memory_store as ms_mod
+
         source = inspect.getsource(ms_mod.MemoryStore._retrieval_score)
         # Must contain the multiplicative compound: importance * exp(...)
         assert "importance" in source and "exp(" in source, (
@@ -213,15 +226,17 @@ class TestMemoryRetrievalScore:
         )
         # Assert there is a multiplication between importance and exp
         # (heuristic: the compound token appears in source)
-        assert "importance * math.exp(" in source or "importance*math.exp(" in source or \
-               "* exp(" in source, (
-            "_retrieval_score must multiply importance by exp(decay) as a compound term"
-        )
+        assert (
+            "importance * math.exp(" in source
+            or "importance*math.exp(" in source
+            or "* exp(" in source
+        ), "_retrieval_score must multiply importance by exp(decay) as a compound term"
 
 
 # ============================================================================
 # 3. DEBATE ENGINE — KnowledgeGraph Injection
 # ============================================================================
+
 
 class TestDebateEngineKGInjection:
     """
@@ -233,6 +248,7 @@ class TestDebateEngineKGInjection:
         """DebateEngine.__init__ must accept knowledge_graph kwarg."""
         import inspect
         from silex.core.debate import DebateEngine
+
         sig = inspect.signature(DebateEngine.__init__)
         assert "knowledge_graph" in sig.parameters, (
             "DebateEngine.__init__ must accept a `knowledge_graph` parameter"
@@ -242,6 +258,7 @@ class TestDebateEngineKGInjection:
         """DebateEngine.__init__ must accept contradiction_detector kwarg."""
         import inspect
         from silex.core.debate import DebateEngine
+
         sig = inspect.signature(DebateEngine.__init__)
         assert "contradiction_detector" in sig.parameters, (
             "DebateEngine.__init__ must accept a `contradiction_detector` parameter"
@@ -258,17 +275,19 @@ class TestDebateEngineKGInjection:
 
         # Mock KG returning a contradiction context
         mock_kg = MagicMock()
-        mock_kg.retrieve_relevant_context = AsyncMock(return_value=[
-            {
-                "content": "The Earth is flat",
-                "type": "fact",
-                "confidence": 0.1,
-                "caused_by": [],
-                "causes": [],
-                "contradicts": ["The Earth is approximately spherical"],
-                "related": [],
-            }
-        ])
+        mock_kg.retrieve_relevant_context = AsyncMock(
+            return_value=[
+                {
+                    "content": "The Earth is flat",
+                    "type": "fact",
+                    "confidence": 0.1,
+                    "caused_by": [],
+                    "causes": [],
+                    "contradicts": ["The Earth is approximately spherical"],
+                    "related": [],
+                }
+            ]
+        )
 
         # Mock contradiction detector
         mock_cd = MagicMock()
@@ -281,6 +300,7 @@ class TestDebateEngineKGInjection:
         # Capture what gets sent to complete_json
         captured_prompts = []
         from silex.models.schemas import DebateArgument
+
         mock_llm = MagicMock()
 
         async def capture_complete_json(schema, system_prompt, user_input, **kwargs):
@@ -307,8 +327,11 @@ class TestDebateEngineKGInjection:
         # Agent B's call must have received KG context in the user prompt
         assert len(captured_prompts) >= 1
         agent_b_user_prompt = captured_prompts[-1]["user"]
-        assert "CONTRADICTS" in agent_b_user_prompt or "contradict" in agent_b_user_prompt.lower() or \
-               "flat" in agent_b_user_prompt.lower(), (
+        assert (
+            "CONTRADICTS" in agent_b_user_prompt
+            or "contradict" in agent_b_user_prompt.lower()
+            or "flat" in agent_b_user_prompt.lower()
+        ), (
             f"Agent B's user prompt must contain KG contradiction context. Got: {agent_b_user_prompt[:300]}"
         )
 
@@ -316,6 +339,7 @@ class TestDebateEngineKGInjection:
 # ============================================================================
 # 4. META-REASONING — Algorithmic Failure Clustering
 # ============================================================================
+
 
 class TestMetaReasoningFailureClusters:
     """
@@ -326,6 +350,7 @@ class TestMetaReasoningFailureClusters:
     def test_compute_failure_clusters_method_exists(self):
         """_compute_failure_clusters must exist as a method on MetaReasoningEngine."""
         from silex.core.meta_reasoning import MetaReasoningEngine
+
         assert hasattr(MetaReasoningEngine, "_compute_failure_clusters"), (
             "MetaReasoningEngine must have a `_compute_failure_clusters()` method"
         )
@@ -333,6 +358,7 @@ class TestMetaReasoningFailureClusters:
     def test_compute_confidence_drift_method_exists(self):
         """_compute_confidence_drift must exist as a method on MetaReasoningEngine."""
         from silex.core.meta_reasoning import MetaReasoningEngine
+
         assert hasattr(MetaReasoningEngine, "_compute_confidence_drift"), (
             "MetaReasoningEngine must have a `_compute_confidence_drift()` method"
         )
@@ -345,9 +371,24 @@ class TestMetaReasoningFailureClusters:
         from silex.core.meta_reasoning import MetaReasoningEngine
 
         synthetic_rows = [
-            {"accuracy_score": 0.8, "depth_score": 0.75, "honesty_score": 0.3, "feedback": "Dishonest"},
-            {"accuracy_score": 0.85, "depth_score": 0.80, "honesty_score": 0.25, "feedback": "Overconfident"},
-            {"accuracy_score": 0.78, "depth_score": 0.82, "honesty_score": 0.35, "feedback": "No uncertainty"},
+            {
+                "accuracy_score": 0.8,
+                "depth_score": 0.75,
+                "honesty_score": 0.3,
+                "feedback": "Dishonest",
+            },
+            {
+                "accuracy_score": 0.85,
+                "depth_score": 0.80,
+                "honesty_score": 0.25,
+                "feedback": "Overconfident",
+            },
+            {
+                "accuracy_score": 0.78,
+                "depth_score": 0.82,
+                "honesty_score": 0.35,
+                "feedback": "No uncertainty",
+            },
         ]
 
         report = MetaReasoningEngine._compute_failure_clusters(synthetic_rows)
@@ -362,8 +403,18 @@ class TestMetaReasoningFailureClusters:
         from silex.core.meta_reasoning import MetaReasoningEngine
 
         synthetic_rows = [
-            {"accuracy_score": 0.9, "depth_score": 0.2, "honesty_score": 0.8, "feedback": "Shallow"},
-            {"accuracy_score": 0.85, "depth_score": 0.3, "honesty_score": 0.75, "feedback": "Surface"},
+            {
+                "accuracy_score": 0.9,
+                "depth_score": 0.2,
+                "honesty_score": 0.8,
+                "feedback": "Shallow",
+            },
+            {
+                "accuracy_score": 0.85,
+                "depth_score": 0.3,
+                "honesty_score": 0.75,
+                "feedback": "Surface",
+            },
         ]
 
         report = MetaReasoningEngine._compute_failure_clusters(synthetic_rows)
@@ -398,6 +449,7 @@ class TestMetaReasoningFailureClusters:
 # 5. POST-PHASE 3 REFINEMENTS
 # ============================================================================
 
+
 class TestPostPhase3Refinements:
     """Tests covering local sandbox validation, RRF hybrid search, and memory tools."""
 
@@ -405,17 +457,17 @@ class TestPostPhase3Refinements:
     async def test_sandbox_command_validation(self):
         """Verify that RunTerminalCommandTool rejects dangerous commands outside workspace."""
         from silex.tools.system import RunTerminalCommandTool
-        
+
         tool = RunTerminalCommandTool()
-        
+
         with patch("silex.tools.system.terminal_execution_enabled", return_value=True):
             # Test dangerous commands
             res1 = await tool.execute("rm -rf /")
             assert "rejected" in res1.lower(), f"Expected rejected command, got: {res1}"
-            
+
             res2 = await tool.execute("del /f /q c:\\windows\\system32")
             assert "rejected" in res2.lower()
-            
+
             # Test directory traversal/access outside workspace in a write command
             res3 = await tool.execute("rm -f ../../outside_file.txt")
             assert "rejected" in res3.lower()
@@ -426,45 +478,67 @@ class TestPostPhase3Refinements:
         from silex.memory.memory_store import MemoryStore
         from silex.models.schemas import Memory, MemorySource, MemoryType
         from unittest.mock import MagicMock
-        
+
         # Construct synthetic memories
-        Memory(id="mem1", content="Python script helper", source=MemorySource.USER, memory_type=MemoryType.PROJECT, importance=0.8)
-        Memory(id="mem2", content="Python terminal execution", source=MemorySource.USER, memory_type=MemoryType.PROJECT, importance=0.8)
-        Memory(id="mem3", content="ChromaDB vector store", source=MemorySource.USER, memory_type=MemoryType.PROJECT, importance=0.8)
+        Memory(
+            id="mem1",
+            content="Python script helper",
+            source=MemorySource.USER,
+            memory_type=MemoryType.PROJECT,
+            importance=0.8,
+        )
+        Memory(
+            id="mem2",
+            content="Python terminal execution",
+            source=MemorySource.USER,
+            memory_type=MemoryType.PROJECT,
+            importance=0.8,
+        )
+        Memory(
+            id="mem3",
+            content="ChromaDB vector store",
+            source=MemorySource.USER,
+            memory_type=MemoryType.PROJECT,
+            importance=0.8,
+        )
 
         # Mock DB
         mock_db = MagicMock()
         mock_db.fetch_all = AsyncMock(return_value=[])
 
         MemoryStore(mock_db)
-        
+
         # We manually test RRF blending by injecting rankings
         keyword_ranks = {"mem1": 1, "mem2": 2}
         semantic_ranks = {"mem2": 1, "mem3": 2}
-        
+
         all_ids = set(keyword_ranks.keys()) | set(semantic_ranks.keys())
         raw_rrf_scores = {}
         for m_id in all_ids:
             rank_k = keyword_ranks.get(m_id, 1e9)
             rank_s = semantic_ranks.get(m_id, 1e9)
             raw_rrf_scores[m_id] = 1.0 / (60.0 + rank_k) + 1.0 / (60.0 + rank_s)
-            
+
         rrf_scores = {}
         max_rrf = 2.0 / 61.0
         for m_id, raw_score in raw_rrf_scores.items():
             rrf_scores[m_id] = min(raw_score / max_rrf, 1.0)
-            
+
         # Verify ranking order: mem2 > mem1 > mem3
-        assert rrf_scores["mem2"] > rrf_scores["mem1"], f"mem2 ({rrf_scores['mem2']:.4f}) must outrank mem1 ({rrf_scores['mem1']:.4f})"
-        assert rrf_scores["mem1"] > rrf_scores["mem3"], f"mem1 ({rrf_scores['mem1']:.4f}) must outrank mem3 ({rrf_scores['mem3']:.4f})"
+        assert rrf_scores["mem2"] > rrf_scores["mem1"], (
+            f"mem2 ({rrf_scores['mem2']:.4f}) must outrank mem1 ({rrf_scores['mem1']:.4f})"
+        )
+        assert rrf_scores["mem1"] > rrf_scores["mem3"], (
+            f"mem1 ({rrf_scores['mem1']:.4f}) must outrank mem3 ({rrf_scores['mem3']:.4f})"
+        )
 
     def test_memory_tools_registration(self):
         """Verify that memory tools are registered in ToolRegistry."""
         from silex.tools.registry import ToolRegistry
         from unittest.mock import MagicMock
-        
+
         mock_ms = MagicMock()
         registry = ToolRegistry(memory_store=mock_ms)
-        
+
         assert "search_memory" in registry.tools
         assert "append_runtime_observation" in registry.tools

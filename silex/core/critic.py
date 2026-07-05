@@ -147,7 +147,12 @@ class ResponseCritic:
 
             # Ensure that if any single metric axis falls to 0.0, the overall result score
             # instantly collapses to zero, triggering an automatic conversation retry pass.
-            if critique.scores.accuracy == 0.0 or critique.scores.depth == 0.0 or critique.scores.honesty == 0.0 or geo == 0.0:
+            if (
+                critique.scores.accuracy == 0.0
+                or critique.scores.depth == 0.0
+                or critique.scores.honesty == 0.0
+                or geo == 0.0
+            ):
                 geo = 0.0
                 critique.is_acceptable = False
 

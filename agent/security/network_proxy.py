@@ -41,7 +41,9 @@ def _default_bind_host() -> str:
     LAN with only a per-worker-policy allowlist standing between it and the
     outside world.
     """
-    if os.environ.get("KINTHIC_EGRESS_PROXY_IN_SANDBOX_NETWORK", "").strip().lower() in {"1", "true", "yes"}:
+    if os.environ.get(
+        "KINTHIC_EGRESS_PROXY_IN_SANDBOX_NETWORK", ""
+    ).strip().lower() in {"1", "true", "yes"}:
         return "0.0.0.0"
     return os.environ.get("KINTHIC_EGRESS_PROXY_HOST", "127.0.0.1")
 
@@ -99,7 +101,9 @@ def _host_allowed(host: str, worker_id: str) -> bool:
         if not policy_dir.is_dir():
             continue
         network_allowed, domains = _load_policy_file(policy_dir / ".egress_policy.json")
-        if network_allowed and _host_in_domains(host, domains if domains else DEFAULT_ALLOWED_DOMAINS):
+        if network_allowed and _host_in_domains(
+            host, domains if domains else DEFAULT_ALLOWED_DOMAINS
+        ):
             return True
     return False
 
@@ -158,7 +162,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 class EgressProxyServer:
     """HTTP CONNECT egress proxy for worker sandboxes."""
 
-    def __init__(self, worker_id: str = "shared", port: int = _PROXY_PORT, host: Optional[str] = None):
+    def __init__(
+        self,
+        worker_id: str = "shared",
+        port: int = _PROXY_PORT,
+        host: Optional[str] = None,
+    ):
         self.worker_id = worker_id
         self._server: Optional[HTTPServer] = None
         self._thread: Optional[threading.Thread] = None

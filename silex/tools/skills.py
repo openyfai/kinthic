@@ -32,7 +32,10 @@ class SkillViewTool(BaseTool):
     schema = {
         "type": "object",
         "properties": {
-            "name": {"type": "string", "description": "Skill name from the skills index"},
+            "name": {
+                "type": "string",
+                "description": "Skill name from the skills index",
+            },
         },
         "required": ["name"],
     }
@@ -65,32 +68,38 @@ class SkillManageTool(BaseTool):
     schema = {
         "type": "object",
         "properties": {
-            "name": {"type": "string", "description": "Name of the skill (e.g. data_pipeline)"},
-            "content": {"type": "string", "description": "Full markdown content of the skill including YAML frontmatter."}
+            "name": {
+                "type": "string",
+                "description": "Name of the skill (e.g. data_pipeline)",
+            },
+            "content": {
+                "type": "string",
+                "description": "Full markdown content of the skill including YAML frontmatter.",
+            },
         },
-        "required": ["name", "content"]
+        "required": ["name", "content"],
     }
-    
+
     def __init__(self, skill_loader: SkillLoader | None = None) -> None:
         self.skill_loader = skill_loader
-        
+
     async def execute(self, **kwargs) -> str:
         name = str(kwargs.get("name", "")).strip()
         content = str(kwargs.get("content", "")).strip()
-        
+
         if not name or not content:
             return "Error: name and content are required."
-            
+
         import re
         from pathlib import Path
         from silex.utils.config import KINTHIC_SKILLS
-        
-        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', name.lower())
+
+        safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", name.lower())
         skills_dir = Path(KINTHIC_SKILLS)
         skills_dir.mkdir(parents=True, exist_ok=True)
-        
+
         skill_path = skills_dir / f"{safe_name}.md"
-        
+
         try:
             skill_path.write_text(content, encoding="utf-8")
             if self.skill_loader:

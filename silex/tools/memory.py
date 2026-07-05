@@ -8,6 +8,7 @@ from __future__ import annotations
 from silex.tools.base import BaseTool
 from silex.models.schemas import Memory, MemorySource, MemoryType
 
+
 class SearchMemoryTool(BaseTool):
     """Voluntarily search long-term memory and knowledge graph."""
 
@@ -18,7 +19,7 @@ class SearchMemoryTool(BaseTool):
     schema = {
         "query": {
             "type": "string",
-            "description": "The specific topic, fact, or past conversation to search for."
+            "description": "The specific topic, fact, or past conversation to search for.",
         }
     }
 
@@ -44,7 +45,9 @@ class SearchMemoryTool(BaseTool):
             for i, mem in enumerate(memories, 1):
                 tags_str = f" [{', '.join(mem.tags)}]" if mem.tags else ""
                 lines.append(f"[{i}] {mem.content}")
-                lines.append(f"    (Type: {mem.memory_type.value if hasattr(mem.memory_type, 'value') else mem.memory_type}, Source: {mem.source.value if hasattr(mem.source, 'value') else mem.source}, Confidence: {mem.confidence:.1f}){tags_str}")
+                lines.append(
+                    f"    (Type: {mem.memory_type.value if hasattr(mem.memory_type, 'value') else mem.memory_type}, Source: {mem.source.value if hasattr(mem.source, 'value') else mem.source}, Confidence: {mem.confidence:.1f}){tags_str}"
+                )
                 lines.append("")
 
             return "\n".join(lines)
@@ -62,7 +65,7 @@ class AppendObservationTool(BaseTool):
     schema = {
         "content": {
             "type": "string",
-            "description": "The specific observation, fact, or detail learned during execution to persist."
+            "description": "The specific observation, fact, or detail learned during execution to persist.",
         }
     }
 

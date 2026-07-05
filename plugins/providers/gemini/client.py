@@ -39,7 +39,9 @@ class GeminiClient(BaseLLMProvider):
 
     def connect(self) -> None:
         """Initialize the Gemini client."""
-        api_key = get_provider_secret(self.provider_name, settings_store=self._settings_store)
+        api_key = get_provider_secret(
+            self.provider_name, settings_store=self._settings_store
+        )
         self._client = genai.Client(api_key=api_key)
         log.info(f"Gemini client initialized with model: {self.default_model}")
 
@@ -67,7 +69,9 @@ class GeminiClient(BaseLLMProvider):
         if images:
             for img_dict in images:
                 contents.append(
-                    types.Part.from_bytes(data=img_dict["bytes"], mime_type=img_dict["mime"])
+                    types.Part.from_bytes(
+                        data=img_dict["bytes"], mime_type=img_dict["mime"]
+                    )
                 )
         contents.append(user_input)
 

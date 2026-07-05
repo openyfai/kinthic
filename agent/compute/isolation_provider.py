@@ -10,7 +10,7 @@ from pathlib import Path
 
 class SandboxInstance(ABC):
     """Represents a single, active isolated environment (e.g., a specific container)."""
-    
+
     @property
     @abstractmethod
     def workspace_dir(self) -> Path:
@@ -22,7 +22,7 @@ class SandboxInstance(ABC):
     def worker_id(self) -> str:
         """The unique identifier for this sandbox."""
         pass
-    
+
     @abstractmethod
     async def execute(self, command: str, lease: Any) -> str:
         """Executes a command inside this sandbox."""
@@ -36,7 +36,7 @@ class SandboxInstance(ABC):
 
 class IsolationProvider(ABC):
     """
-    Manages the lifecycle of sandboxes. This could be a simple factory (spawning 
+    Manages the lifecycle of sandboxes. This could be a simple factory (spawning
     containers on demand) or a warm pool manager (claiming pre-initialized containers).
     """
 

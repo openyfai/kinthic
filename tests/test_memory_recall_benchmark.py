@@ -48,7 +48,9 @@ async def test_low_importance_condition_runs(tmp_path):
         output_md=tmp_path / "low.md",
         bench_root=tmp_path / "bench2",
     )
-    cond = next(c for c in payload["conditions"] if c["name"] == "aged_21d_low_importance")
+    cond = next(
+        c for c in payload["conditions"] if c["name"] == "aged_21d_low_importance"
+    )
     assert cond["baselines"]["hybrid"]["queries"] == len(load_suite()["needles"])
 
 
@@ -62,5 +64,7 @@ async def test_mcp_e2e_track_matches_hybrid(tmp_path):
         conditions=["aged_21d"],
         bench_root=tmp_path / "mcp_bench",
     )
-    mcp = next(c for c in payload["conditions"] if c["name"] == "aged_21d")["baselines"]["mcp_recall"]
+    mcp = next(c for c in payload["conditions"] if c["name"] == "aged_21d")[
+        "baselines"
+    ]["mcp_recall"]
     assert mcp["hit_at_5"] >= 0.75

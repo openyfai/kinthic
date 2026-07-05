@@ -149,6 +149,7 @@ class BoundedCognitiveWorker:
 
             # Try to parse structured JSON from the response
             import json
+
             summary = raw_response
             artifacts: list[str] = []
             evidence: list[str] = []
@@ -156,7 +157,10 @@ class BoundedCognitiveWorker:
 
             try:
                 import re
-                json_match = re.search(r"\{[^{}]*\"summary\"[^{}]*\}", raw_response, re.DOTALL)
+
+                json_match = re.search(
+                    r"\{[^{}]*\"summary\"[^{}]*\}", raw_response, re.DOTALL
+                )
                 if json_match:
                     parsed = json.loads(json_match.group(0))
                     summary = parsed.get("summary", raw_response[:500])
@@ -176,7 +180,9 @@ class BoundedCognitiveWorker:
                 turns_used=turns_used,
                 tokens_used=tokens_used,
                 elapsed_seconds=time.time() - start,
-                error="" if task_success else "Cognitive sub-agent completed with low confidence or internal errors",
+                error=""
+                if task_success
+                else "Cognitive sub-agent completed with low confidence or internal errors",
             )
 
         except asyncio.TimeoutError:

@@ -10,6 +10,7 @@ Chunking strategy:
   .json / .yaml / .toml           → whole file if <3KB, else top-level keys
   Everything else                 → fixed 800-char windows with 100-char overlap
 """
+
 from __future__ import annotations
 import os
 import uuid
@@ -24,17 +25,42 @@ log = logging.getLogger("silex.memory.file_indexer")
 MAX_FILE_BYTES = 500_000  # 500KB
 
 SUPPORTED_EXTENSIONS = {
-    ".py", ".ts", ".js", ".tsx", ".jsx",     # code
-    ".md", ".txt", ".rst",                    # prose
-    ".json", ".yaml", ".yml", ".toml",        # config
-    ".html", ".css", ".scss",                 # web
-    ".sh", ".bash", ".zsh",                   # shell
-    ".go", ".rs", ".c", ".cpp", ".h",         # other code
+    ".py",
+    ".ts",
+    ".js",
+    ".tsx",
+    ".jsx",  # code
+    ".md",
+    ".txt",
+    ".rst",  # prose
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",  # config
+    ".html",
+    ".css",
+    ".scss",  # web
+    ".sh",
+    ".bash",
+    ".zsh",  # shell
+    ".go",
+    ".rs",
+    ".c",
+    ".cpp",
+    ".h",  # other code
 }
 
 SKIP_DIRS = {
-    ".git", ".venv", "venv", "node_modules", "__pycache__", ".pytest_cache",
-    "dist", "build", ".ruff_cache", ".mypy_cache",
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    ".pytest_cache",
+    "dist",
+    "build",
+    ".ruff_cache",
+    ".mypy_cache",
 }
 
 
@@ -57,6 +83,7 @@ class FileIndexer:
             import chromadb
             from chromadb.utils import embedding_functions
             from silex.utils.config import SILEX_VECTOR_DB
+
             client = chromadb.PersistentClient(path=str(SILEX_VECTOR_DB))
             ef = embedding_functions.DefaultEmbeddingFunction()
             self._collection = client.get_or_create_collection(
@@ -104,12 +131,16 @@ class FileIndexer:
             if results["documents"]:
                 for i, doc in enumerate(results["documents"][0]):
                     meta = results["metadatas"][0][i] if results["metadatas"] else {}
-                    out.append({
-                        "content": doc,
-                        "path": meta.get("path", ""),
-                        "start_line": meta.get("start_line", 0),
-                        "distance": results["distances"][0][i] if results.get("distances") else None,
-                    })
+                    out.append(
+                        {
+                            "content": doc,
+                            "path": meta.get("path", ""),
+                            "start_line": meta.get("start_line", 0),
+                            "distance": results["distances"][0][i]
+                            if results.get("distances")
+                            else None,
+                        }
+                    )
             return out
         except Exception as exc:
             log.warning("File search failed: %s", exc)
@@ -123,6 +154,7 @@ class FileIndexer:
             import chromadb
             from chromadb.utils import embedding_functions
             from silex.utils.config import SILEX_VECTOR_DB
+
             client = chromadb.PersistentClient(path=str(SILEX_VECTOR_DB))
             client.delete_collection("kinthic_files")
             ef = embedding_functions.DefaultEmbeddingFunction()
@@ -154,7 +186,11 @@ class FileIndexer:
         if not force:
             existing = self._collection.get(where={"path": str(file_path)}, limit=1)
             if existing["ids"]:
-                stored_hash = existing["metadatas"][0].get("hash", "") if existing["metadatas"] else ""
+                stored_hash = (
+                    existing["metadatas"][0].get("hash", "")
+                    if existing["metadatas"]
+                    else ""
+                )
                 if stored_hash == file_hash:
                     return 0  # unchanged
 
@@ -167,11 +203,14 @@ class FileIndexer:
             return 0
 
         texts = [c["text"] for c in chunks]
-        metas = [{
-            "path": str(file_path),
-            "start_line": c["start_line"],
-            "hash": file_hash,
-        } for c in chunks]
+        metas = [
+            {
+                "path": str(file_path),
+                "start_line": c["start_line"],
+                "hash": file_hash,
+            }
+            for c in chunks
+        ]
         ids = [str(uuid.uuid4()) for _ in chunks]
 
         self._collection.add(documents=texts, metadatas=metas, ids=ids)
@@ -189,7 +228,10 @@ class FileIndexer:
     def _chunk_code(self, text: str) -> Iterator[dict]:
         """Split at function/class definitions."""
         import re
-        pattern = re.compile(r'^(def |class |async def |function |const |export )', re.MULTILINE)
+
+        pattern = re.compile(
+            r"^(def |class |async def |function |const |export )", re.MULTILINE
+        )
         lines = text.splitlines()
         split_lines = {m.start() for m in pattern.finditer(text)}
         # Convert char offsets to line numbers
@@ -218,11 +260,12 @@ class FileIndexer:
     def _chunk_prose(self, text: str) -> Iterator[dict]:
         """Split at markdown headings."""
         import re
+
         lines = text.splitlines()
         chunk = []
         start = 0
         for i, line in enumerate(lines):
-            if re.match(r'^#{1,3} |^[-=]{3,}$', line) and chunk:
+            if re.match(r"^#{1,3} |^[-=]{3,}$", line) and chunk:
                 yield {"text": "\n".join(chunk), "start_line": start}
                 chunk = []
                 start = i
@@ -234,13 +277,15 @@ class FileIndexer:
         if chunk:
             yield {"text": "\n".join(chunk), "start_line": start}
 
-    def _chunk_fixed(self, text: str, window: int = 800, overlap: int = 100) -> Iterator[dict]:
+    def _chunk_fixed(
+        self, text: str, window: int = 800, overlap: int = 100
+    ) -> Iterator[dict]:
         """Fixed-size windows with overlap."""
         lines = text.splitlines()
         pos = 0
         start_line = 0
         while pos < len(text):
-            chunk = text[pos:pos + window]
+            chunk = text[pos : pos + window]
             yield {"text": chunk, "start_line": start_line}
             pos += window - overlap
-            start_line += chunk[:window - overlap].count("\n")
+            start_line += chunk[: window - overlap].count("\n")

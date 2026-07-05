@@ -22,14 +22,22 @@ log = setup_logger("silex.evolution.tdd_loops")
 # Structured Output Schema for TDD Correction
 # ---------------------------------------------------------------------------
 
+
 class TDDCorrectionResponse(BaseModel):
-    explanation: str = Field(..., description="Explanation of the code fixes applied to resolve the test failure")
-    corrected_code: str = Field(..., description="The complete corrected source code file (must be syntactically valid)")
+    explanation: str = Field(
+        ...,
+        description="Explanation of the code fixes applied to resolve the test failure",
+    )
+    corrected_code: str = Field(
+        ...,
+        description="The complete corrected source code file (must be syntactically valid)",
+    )
 
 
 # ---------------------------------------------------------------------------
 # RuntimeExtensionEngine
 # ---------------------------------------------------------------------------
+
 
 class RuntimeExtensionEngine:
     """
@@ -44,7 +52,9 @@ class RuntimeExtensionEngine:
             self.sandbox_dir = Path(sandbox_dir)
         self.sandbox_dir.mkdir(parents=True, exist_ok=True)
 
-    async def run_tests(self, test_file: Path | str, timeout: float = 15.0) -> tuple[bool, str]:
+    async def run_tests(
+        self, test_file: Path | str, timeout: float = 15.0
+    ) -> tuple[bool, str]:
         """
         Executes a test file inside an isolated python process.
         Enforces execution timeouts. Returns (success, output_string).
@@ -57,37 +67,38 @@ class RuntimeExtensionEngine:
 
         # Run pytest as a subprocess
         cmd = [sys.executable, "-m", "pytest", str(test_path), "-v"]
-        
+
         try:
             # Run subprocess asynchronously
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=str(test_path.parent)
+                cwd=str(test_path.parent),
             )
-            
+
             try:
                 stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=timeout
+                    process.communicate(), timeout=timeout
                 )
                 stdout = stdout_bytes.decode("utf-8", errors="ignore")
                 stderr = stderr_bytes.decode("utf-8", errors="ignore")
-                
-                success = (process.returncode == 0)
+
+                success = process.returncode == 0
                 output = f"Stdout:\n{stdout}\nStderr:\n{stderr}"
                 log.info(f"Tests finished. Success = {success}")
                 return success, output
-                
+
             except asyncio.TimeoutError:
-                log.warning(f"Test suite execution timed out after {timeout} seconds. Killing process...")
+                log.warning(
+                    f"Test suite execution timed out after {timeout} seconds. Killing process..."
+                )
                 try:
                     process.kill()
                 except OSError:
                     pass  # already dead
                 return False, f"Test execution timed out after {timeout} seconds."
-                
+
         except Exception as e:
             log.exception(f"Unexpected error running tests for {test_file}")
             return False, f"Exception occurred when launching tests: {e}"
@@ -98,7 +109,7 @@ class RuntimeExtensionEngine:
         test_file: Path | str,
         prompt_guidance: str,
         llm_client: SupportsLLM,
-        max_iterations: int = 3
+        max_iterations: int = 3,
     ) -> tuple[bool, str, str]:
         """
         Executes a closed-loop TDD flow:
@@ -108,7 +119,7 @@ class RuntimeExtensionEngine:
         """
         target_path = Path(file_to_mutate).resolve()
         test_path = Path(test_file).resolve()
-        
+
         if not target_path.exists():
             raise FileNotFoundError(f"Target file to edit not found: {target_path}")
 
@@ -116,16 +127,18 @@ class RuntimeExtensionEngine:
 
         for iteration in range(1, max_iterations + 1):
             log.info(f"TDD Loop Iteration {iteration}/{max_iterations}")
-            
+
             # 1. Run tests
             success, test_output = await self.run_tests(test_path)
-            
+
             if success:
                 log.info("TDD loop succeeded: All tests passed!")
                 return True, "All tests passed successfully.", current_code
 
-            log.warning(f"Tests failed on iteration {iteration}. Initiating self-correction...")
-            
+            log.warning(
+                f"Tests failed on iteration {iteration}. Initiating self-correction..."
+            )
+
             # If this is the last iteration, we don't need to invoke LLM correction
             if iteration == max_iterations:
                 break
@@ -138,26 +151,31 @@ class RuntimeExtensionEngine:
                 "You must return the COMPLETE corrected source code. Do not omit any sections."
             )
 
-            user_input = json.dumps({
-                "filename": target_path.name,
-                "guidance": prompt_guidance,
-                "current_code": current_code,
-                "test_failures": test_output[-2500:]  # Send tail of output to avoid context blowup
-            }, indent=2)
+            user_input = json.dumps(
+                {
+                    "filename": target_path.name,
+                    "guidance": prompt_guidance,
+                    "current_code": current_code,
+                    "test_failures": test_output[
+                        -2500:
+                    ],  # Send tail of output to avoid context blowup
+                },
+                indent=2,
+            )
 
             try:
                 correction: TDDCorrectionResponse = await llm_client.complete_json(
                     schema=TDDCorrectionResponse,
                     system_prompt=system_prompt,
                     user_input=user_input,
-                    temperature=0.2
+                    temperature=0.2,
                 )
-                
+
                 # 3. Write corrections to target file
                 current_code = correction.corrected_code
                 target_path.write_text(current_code, encoding="utf-8")
                 log.info(f"Applied TDD correction iteration {iteration}")
-                
+
             except Exception as e:
                 log.error(f"Failed to complete TDD correction round: {e}")
                 return False, f"LLM self-correction error: {e}", current_code
@@ -166,6 +184,8 @@ class RuntimeExtensionEngine:
         success, test_output = await self.run_tests(test_path)
         if success:
             return True, "All tests passed successfully on final check.", current_code
-            
-        log.error("TDD loop failed: Max iterations reached without resolving test failures.")
+
+        log.error(
+            "TDD loop failed: Max iterations reached without resolving test failures."
+        )
         return False, test_output, current_code

@@ -7,13 +7,13 @@ from __future__ import annotations
 
 class BaseTool:
     """Abstract base class for all ARIA tools."""
-    
+
     name: str = "base_tool"
     description: str = "Base description."
     risk_level: str = "read_only"
     requires_approval: bool = False
     timeout_seconds: float = 180.0
-    
+
     # We will use this schema to inform the LLM how to call the tool
     schema: dict = {}
 
@@ -27,7 +27,9 @@ class BaseTool:
     @classmethod
     def get_prompt_description(cls) -> str:
         """Formats the tool for the system prompt."""
-        approval = "requires approval" if cls.requires_approval else "auto-allowed by policy"
+        approval = (
+            "requires approval" if cls.requires_approval else "auto-allowed by policy"
+        )
         return (
             f"- **{cls.name}**: {cls.description}\n"
             f"  Risk: {cls.risk_level} ({approval})\n"

@@ -69,7 +69,9 @@ class BeliefMaintenanceScheduler:
         engine = BeliefEngine(self._db)
 
         # 1. Resolve top unresolved contradictions
-        contradictions = await engine.get_unresolved_contradictions(MAX_CONTRADICTIONS_PER_CYCLE)
+        contradictions = await engine.get_unresolved_contradictions(
+            MAX_CONTRADICTIONS_PER_CYCLE
+        )
         for contradiction in contradictions:
             await self._resolve_contradiction(engine, contradiction)
 
@@ -78,7 +80,9 @@ class BeliefMaintenanceScheduler:
         for belief in stale:
             await self._verify_belief(engine, belief)
 
-    async def _resolve_contradiction(self, engine: Any, contradiction: dict[str, Any]) -> None:
+    async def _resolve_contradiction(
+        self, engine: Any, contradiction: dict[str, Any]
+    ) -> None:
         claim_a = contradiction.get("claim_a", "")
         claim_b = contradiction.get("claim_b", "")
         description = contradiction.get("description", "")
@@ -88,6 +92,7 @@ class BeliefMaintenanceScheduler:
 
         try:
             from silex.core.debate import DebateEngine
+
             debate = DebateEngine(self._loop.llm)
             verdict = await debate.run(
                 proposition_a=claim_a,
@@ -98,16 +103,25 @@ class BeliefMaintenanceScheduler:
             confidence = float(verdict.get("confidence", 0.6))
 
             if winner_claim:
-                await engine.update_belief(winner_claim, "true", confidence, source="debate_engine")
+                await engine.update_belief(
+                    winner_claim, "true", confidence, source="debate_engine"
+                )
                 loser = claim_b if winner_claim == claim_a else claim_a
-                await engine.update_belief(loser, "false", 1.0 - confidence, source="debate_engine")
+                await engine.update_belief(
+                    loser, "false", 1.0 - confidence, source="debate_engine"
+                )
 
             # Mark contradiction resolved
             await self._db.execute(
                 "UPDATE contradictions SET status='resolved' WHERE id=?",
                 (contradiction.get("id", ""),),
             )
-            log.info("Resolved contradiction: %s vs %s → %s", claim_a[:60], claim_b[:60], winner_claim[:60])
+            log.info(
+                "Resolved contradiction: %s vs %s → %s",
+                claim_a[:60],
+                claim_b[:60],
+                winner_claim[:60],
+            )
         except Exception as exc:
             log.debug("Contradiction resolution failed: %s", exc)
 
@@ -137,11 +151,19 @@ class BeliefMaintenanceScheduler:
                 confidence = 0.8
 
             import re
+
             conf_match = re.search(r"(\d+\.\d+)", raw)
             if conf_match:
                 confidence = float(conf_match.group(1))
 
-            await engine.update_belief(claim, stance, confidence, source="scheduled_verification")
-            log.debug("Verified belief '%s...' → %s (conf=%.2f)", claim[:50], stance, confidence)
+            await engine.update_belief(
+                claim, stance, confidence, source="scheduled_verification"
+            )
+            log.debug(
+                "Verified belief '%s...' → %s (conf=%.2f)",
+                claim[:50],
+                stance,
+                confidence,
+            )
         except Exception as exc:
             log.debug("Belief verification failed: %s", exc)

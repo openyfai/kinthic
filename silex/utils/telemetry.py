@@ -7,8 +7,10 @@ from opentelemetry.sdk.trace import TracerProvider, SpanProcessor
 from opentelemetry.sdk.trace.export import ReadableSpan
 from silex.utils.config import WORKSPACE_DIR
 
+
 class JSONLFileSpanExporter(SpanProcessor):
     """Exports OpenTelemetry spans cleanly to a JSONL file to prevent console noise."""
+
     def __init__(self, filename: str = "telemetry_traces.jsonl"):
         self.filepath = WORKSPACE_DIR / filename
 
@@ -21,8 +23,12 @@ class JSONLFileSpanExporter(SpanProcessor):
                     "span_id": hex(span.context.span_id),
                 },
                 "parent_id": hex(span.parent.span_id) if span.parent else None,
-                "start_time": datetime.fromtimestamp(span.start_time / 1e9, timezone.utc).isoformat(),
-                "end_time": datetime.fromtimestamp(span.end_time / 1e9, timezone.utc).isoformat(),
+                "start_time": datetime.fromtimestamp(
+                    span.start_time / 1e9, timezone.utc
+                ).isoformat(),
+                "end_time": datetime.fromtimestamp(
+                    span.end_time / 1e9, timezone.utc
+                ).isoformat(),
                 "duration_ms": (span.end_time - span.start_time) / 1e6,
                 "attributes": dict(span.attributes),
                 "status": span.status.status_code.name,
@@ -37,6 +43,7 @@ class JSONLFileSpanExporter(SpanProcessor):
 
     def force_flush(self, timeout_millis: int = 30000) -> bool:
         return True
+
 
 # Initialize Tracer Provider
 provider = TracerProvider()

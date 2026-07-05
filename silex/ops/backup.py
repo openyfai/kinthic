@@ -96,11 +96,15 @@ def export_backup(output_filename: str) -> None:
         fence_conn = None
         if SILEX_DB.exists():
             try:
-                fence_conn = sqlite3.connect(str(SILEX_DB), timeout=_FENCE_LOCK_TIMEOUT_SECONDS)
+                fence_conn = sqlite3.connect(
+                    str(SILEX_DB), timeout=_FENCE_LOCK_TIMEOUT_SECONDS
+                )
                 fence_conn.execute("BEGIN IMMEDIATE")
                 print("Acquired write-lock fence on the memory database...")
             except sqlite3.OperationalError as e:
-                log.warning(f"Could not acquire backup fence lock, proceeding without it: {e}")
+                log.warning(
+                    f"Could not acquire backup fence lock, proceeding without it: {e}"
+                )
                 if fence_conn is not None:
                     fence_conn.close()
                 fence_conn = None
@@ -123,7 +127,11 @@ def export_backup(output_filename: str) -> None:
             if snapshot_vector_dir.exists():
                 for file_path in snapshot_vector_dir.rglob("*"):
                     if file_path.is_file():
-                        arcname = Path("storage") / "vector_db" / file_path.relative_to(snapshot_vector_dir)
+                        arcname = (
+                            Path("storage")
+                            / "vector_db"
+                            / file_path.relative_to(snapshot_vector_dir)
+                        )
                         zipf.write(file_path, str(arcname))
 
             for root, dirs, files in os.walk(kinthic_dir):
@@ -334,7 +342,11 @@ def restore_backup(
 
             for arcname, _info in restore_entries:
                 rel = PurePosixPath(arcname)
-                if len(rel.parts) >= 2 and rel.parts[0] == "storage" and rel.parts[1] == "vector_db":
+                if (
+                    len(rel.parts) >= 2
+                    and rel.parts[0] == "storage"
+                    and rel.parts[1] == "vector_db"
+                ):
                     continue
 
                 src = tmp_path.joinpath(*rel.parts)

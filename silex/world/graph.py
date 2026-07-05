@@ -102,14 +102,14 @@ class KnowledgeGraph:
         """Phase A Bridge: Load only a relevant subgraph based on query to prevent 15s cold starts."""
         if not query:
             return await self.load()
-            
+
         words = [w.lower() for w in query.split() if len(w) > 3]
         if not words:
             return await self.load()
-            
+
         conditions = " OR ".join(["LOWER(content) LIKE ?"] * len(words))
         params = [f"%{w}%" for w in words]
-        
+
         query_sql = f"""
             SELECT * FROM knowledge_nodes 
             WHERE {conditions}
@@ -117,20 +117,20 @@ class KnowledgeGraph:
             LIMIT ?
         """
         params.append(max_nodes)
-        
+
         node_rows = await self.db.fetch_all(query_sql, tuple(params))
-        
+
         # Ensure we have at least a baseline of high-confidence nodes if query was too narrow
         if len(node_rows) < 20:
             extra = await self.db.fetch_all(
                 "SELECT * FROM knowledge_nodes ORDER BY confidence DESC, validation_count DESC LIMIT ?",
-                (50,)
+                (50,),
             )
             seen = {r["id"] for r in node_rows}
             for r in extra:
                 if r["id"] not in seen:
                     node_rows.append(r)
-        
+
         loaded_node_ids = set()
         for row in node_rows:
             self.graph.add_node(
@@ -147,7 +147,7 @@ class KnowledgeGraph:
                 metadata=json.loads(row["metadata"]),
             )
             loaded_node_ids.add(row["id"])
-            
+
         if loaded_node_ids:
             placeholders = ",".join(["?"] * len(loaded_node_ids))
             edge_query = f"""
@@ -155,7 +155,7 @@ class KnowledgeGraph:
                 WHERE source_node IN ({placeholders}) AND target_node IN ({placeholders})
             """
             edge_params = tuple(list(loaded_node_ids) + list(loaded_node_ids))
-            
+
             edge_rows = await self.db.fetch_all(edge_query, edge_params)
             for row in edge_rows:
                 self.graph.add_edge(
@@ -168,12 +168,12 @@ class KnowledgeGraph:
                     evidence=row["evidence"],
                     created_at=row["created_at"],
                 )
-                
+
         log.info(
             f"Knowledge subgraph loaded (Pragmatic Bridge): {self.graph.number_of_nodes()} nodes, "
             f"{self.graph.number_of_edges()} edges."
         )
-        
+
         self._rebuild_word_index()
 
     def _rebuild_word_index(self) -> None:
@@ -205,7 +205,11 @@ class KnowledgeGraph:
             return self._get_node_model(existing)
 
         # Persist to SQLite
-        node_type = node.node_type.value if isinstance(node.node_type, NodeType) else node.node_type
+        node_type = (
+            node.node_type.value
+            if isinstance(node.node_type, NodeType)
+            else node.node_type
+        )
         await self.db.execute(
             """
             INSERT INTO knowledge_nodes (id, content, node_type, confidence, source,
@@ -214,10 +218,18 @@ class KnowledgeGraph:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                node.id, node.content, node_type, node.confidence,
-                node.source, node.created_at, node.last_validated,
-                node.validation_count, node.contradiction_count,
-                node.verification_status.value if isinstance(node.verification_status, VerificationStatus) else node.verification_status,
+                node.id,
+                node.content,
+                node_type,
+                node.confidence,
+                node.source,
+                node.created_at,
+                node.last_validated,
+                node.validation_count,
+                node.contradiction_count,
+                node.verification_status.value
+                if isinstance(node.verification_status, VerificationStatus)
+                else node.verification_status,
                 json.dumps(node.metadata),
             ),
         )
@@ -233,7 +245,9 @@ class KnowledgeGraph:
             last_validated=node.last_validated,
             validation_count=node.validation_count,
             contradiction_count=node.contradiction_count,
-            verification_status=node.verification_status.value if isinstance(node.verification_status, VerificationStatus) else node.verification_status,
+            verification_status=node.verification_status.value
+            if isinstance(node.verification_status, VerificationStatus)
+            else node.verification_status,
             metadata=node.metadata,
         )
 
@@ -243,7 +257,9 @@ class KnowledgeGraph:
         log.debug(f"Added node: {node.content[:50]}...")
         return node
 
-    async def find_similar_node(self, content: str, threshold: float = 0.8) -> str | None:
+    async def find_similar_node(
+        self, content: str, threshold: float = 0.8
+    ) -> str | None:
         """Find an existing node with very similar content using two-tier cache/DB strategy."""
         content_words = set(content.lower().strip().split())
         if not content_words:
@@ -258,7 +274,9 @@ class KnowledgeGraph:
         for node_id in candidate_ids:
             if node_id not in self.graph:
                 continue
-            existing_words = set(self.graph.nodes[node_id]["content"].lower().strip().split())
+            existing_words = set(
+                self.graph.nodes[node_id]["content"].lower().strip().split()
+            )
             if not existing_words:
                 continue
             overlap = content_words & existing_words
@@ -268,36 +286,42 @@ class KnowledgeGraph:
 
         # TIER 2: Database Fallback Check
         # Extract salient words (length > 4, max 5 words to keep query fast)
-        salient_words = sorted([w for w in content_words if len(w) > 4], key=len, reverse=True)[:5]
+        salient_words = sorted(
+            [w for w in content_words if len(w) > 4], key=len, reverse=True
+        )[:5]
         if not salient_words:
-            salient_words = sorted([w for w in content_words if len(w) > 3], key=len, reverse=True)[:3]
+            salient_words = sorted(
+                [w for w in content_words if len(w) > 3], key=len, reverse=True
+            )[:3]
             if not salient_words:
                 return None
 
         conditions = " OR ".join(["content LIKE ?"] * len(salient_words))
         params = [f"%{w}%" for w in salient_words]
-        
+
         query_sql = f"""
             SELECT id, content FROM knowledge_nodes
             WHERE {conditions}
             LIMIT 50
         """
-        
+
         db_candidates = await self.db.fetch_all(query_sql, tuple(params))
         for row in db_candidates:
             if row["id"] in self.graph:
                 continue  # Already checked in Tier 1
-                
+
             existing_words = set(row["content"].lower().strip().split())
             if not existing_words:
                 continue
-                
+
             overlap = content_words & existing_words
             smaller = min(len(content_words), len(existing_words))
-            
+
             if smaller > 0 and len(overlap) / smaller >= threshold:
                 # Cache miss hit! Load this node into memory to repair fragmentation
-                full_row = await self.db.fetch_one("SELECT * FROM knowledge_nodes WHERE id = ?", (row["id"],))
+                full_row = await self.db.fetch_one(
+                    "SELECT * FROM knowledge_nodes WHERE id = ?", (row["id"],)
+                )
                 if full_row:
                     self.graph.add_node(
                         full_row["id"],
@@ -309,12 +333,14 @@ class KnowledgeGraph:
                         last_validated=full_row["last_validated"],
                         validation_count=full_row["validation_count"],
                         contradiction_count=full_row["contradiction_count"],
-                        verification_status=full_row.get("verification_status", "unverified"),
+                        verification_status=full_row.get(
+                            "verification_status", "unverified"
+                        ),
                         metadata=json.loads(full_row["metadata"]),
                     )
                     self._index_node(full_row["id"], full_row["content"])
                     log.debug(f"Tier 2 cache miss resolved for node {row['id']}")
-                    
+
                     return row["id"]
 
         return None
@@ -393,13 +419,19 @@ class KnowledgeGraph:
             )
             return edge
 
-        edge_type = edge.edge_type.value if isinstance(edge.edge_type, EdgeType) else edge.edge_type
+        edge_type = (
+            edge.edge_type.value
+            if isinstance(edge.edge_type, EdgeType)
+            else edge.edge_type
+        )
 
         # Same typed edge already exists — reinforce only that relationship.
         if self.graph.has_edge(edge.source_node, edge.target_node, key=edge_type):
             existing = self.graph.edges[edge.source_node, edge.target_node, edge_type]
             new_strength = min(1.0, existing.get("strength", 0.5) + 0.1)
-            self.graph.edges[edge.source_node, edge.target_node, edge_type]["strength"] = new_strength
+            self.graph.edges[edge.source_node, edge.target_node, edge_type][
+                "strength"
+            ] = new_strength
             await self.db.execute(
                 """
                 UPDATE causal_edges
@@ -419,14 +451,20 @@ class KnowledgeGraph:
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                edge.id, edge.source_node, edge.target_node,
-                edge_type, edge.strength, edge.evidence, edge.created_at,
+                edge.id,
+                edge.source_node,
+                edge.target_node,
+                edge_type,
+                edge.strength,
+                edge.evidence,
+                edge.created_at,
             ),
         )
 
         # Add to in-memory graph
         self.graph.add_edge(
-            edge.source_node, edge.target_node,
+            edge.source_node,
+            edge.target_node,
             key=edge_type,
             id=edge.id,
             edge_type=edge_type,
@@ -478,14 +516,14 @@ class KnowledgeGraph:
         )
         SELECT DISTINCT node FROM neighborhood;
         """
-        
+
         node_rows = await self.db.fetch_all(cte_sql, (node_id, depth))
         nearby_node_ids = {row["node"] for row in node_rows}
         nearby_node_ids.add(node_id)
-        
+
         if not nearby_node_ids:
             return {"center": center_content, "nodes": [], "edges": []}
-            
+
         placeholders = ",".join(["?"] * len(nearby_node_ids))
         nodes_query = f"""
             SELECT id, content, node_type, confidence 
@@ -493,18 +531,20 @@ class KnowledgeGraph:
             WHERE id IN ({placeholders})
         """
         nodes_data = await self.db.fetch_all(nodes_query, tuple(nearby_node_ids))
-        
+
         nodes_list = []
         node_id_to_content = {}
         for row in nodes_data:
             node_id_to_content[row["id"]] = row["content"]
-            nodes_list.append({
-                "id": row["id"],
-                "content": row["content"],
-                "type": row["node_type"],
-                "confidence": row["confidence"],
-            })
-            
+            nodes_list.append(
+                {
+                    "id": row["id"],
+                    "content": row["content"],
+                    "type": row["node_type"],
+                    "confidence": row["confidence"],
+                }
+            )
+
         edges_query = f"""
             SELECT source_node, target_node, edge_type, strength 
             FROM causal_edges 
@@ -512,26 +552,30 @@ class KnowledgeGraph:
         """
         edges_params = tuple(list(nearby_node_ids) + list(nearby_node_ids))
         edges_data = await self.db.fetch_all(edges_query, edges_params)
-        
+
         edges_list = []
         for row in edges_data:
             from_content = node_id_to_content.get(row["source_node"])
             to_content = node_id_to_content.get(row["target_node"])
             if from_content and to_content:
-                edges_list.append({
-                    "from": from_content[:40],
-                    "to": to_content[:40],
-                    "type": row["edge_type"],
-                    "strength": row["strength"],
-                })
-                
+                edges_list.append(
+                    {
+                        "from": from_content[:40],
+                        "to": to_content[:40],
+                        "type": row["edge_type"],
+                        "strength": row["strength"],
+                    }
+                )
+
         return {
             "center": center_content,
             "nodes": nodes_list,
             "edges": edges_list,
         }
 
-    async def find_causal_chain(self, source_id: str, target_id: str) -> list[dict] | None:
+    async def find_causal_chain(
+        self, source_id: str, target_id: str
+    ) -> list[dict] | None:
         """
         Find the shortest causal path between two nodes using a SQLite recursive CTE.
 
@@ -570,7 +614,7 @@ class KnowledgeGraph:
         placeholders = ",".join(["?"] * len(path))
         node_rows = await self.db.fetch_all(
             f"SELECT id, content FROM knowledge_nodes WHERE id IN ({placeholders})",
-            tuple(path)
+            tuple(path),
         )
         node_contents = {r["id"]: r["content"] for r in node_rows}
 
@@ -580,17 +624,17 @@ class KnowledgeGraph:
         for i in range(len(path) - 1):
             edge_queries.append("(source_node = ? AND target_node = ?)")
             edge_params.extend([path[i], path[i + 1]])
-        
+
         edge_data_map = {}
         if edge_queries:
             edge_rows = await self.db.fetch_all(
                 f"SELECT source_node, target_node, edge_type, strength FROM causal_edges WHERE {' OR '.join(edge_queries)}",
-                tuple(edge_params)
+                tuple(edge_params),
             )
             for r in edge_rows:
                 edge_data_map[(r["source_node"], r["target_node"])] = {
                     "edge_type": r["edge_type"],
-                    "strength": r["strength"]
+                    "strength": r["strength"],
                 }
 
         steps = []
@@ -599,12 +643,14 @@ class KnowledgeGraph:
             u_content = node_contents.get(u, u)
             v_content = node_contents.get(v, v)
             edge_data = edge_data_map.get((u, v), {})
-            steps.append({
-                "from": u_content,
-                "relationship": edge_data.get("edge_type", "→"),
-                "to": v_content,
-                "strength": edge_data.get("strength", 0.5),
-            })
+            steps.append(
+                {
+                    "from": u_content,
+                    "relationship": edge_data.get("edge_type", "→"),
+                    "to": v_content,
+                    "strength": edge_data.get("strength", 0.5),
+                }
+            )
 
         return steps
 
@@ -691,7 +737,9 @@ class KnowledgeGraph:
     # Context Retrieval (replaces flat keyword search)
     # ------------------------------------------------------------------
 
-    async def retrieve_relevant_context(self, query: str, max_nodes: int = 15) -> list[dict]:
+    async def retrieve_relevant_context(
+        self, query: str, max_nodes: int = 15
+    ) -> list[dict]:
         """
         Graph-aware context retrieval using inverted index.
 
@@ -762,7 +810,9 @@ class KnowledgeGraph:
                 elif edge_type == "contradicts":
                     node_context["contradicts"].append(target_content)
                 else:
-                    node_context["related"].append(f"--[{edge_type}]--> {target_content}")
+                    node_context["related"].append(
+                        f"--[{edge_type}]--> {target_content}"
+                    )
 
             for source, _, edata in self.graph.in_edges(node_id, data=True):
                 edge_type = edata.get("edge_type", "related")
@@ -795,10 +845,7 @@ class KnowledgeGraph:
         # Approximate isolated nodes (no incoming or outgoing edges) as a proxy
         # for "disconnected components" — avoids loading the full graph into
         # NetworkX for nx.number_weakly_connected_components which is O(N+E).
-        isolated = sum(
-            1 for n in self.graph.nodes()
-            if self.graph.degree(n) == 0
-        )
+        isolated = sum(1 for n in self.graph.nodes() if self.graph.degree(n) == 0)
 
         total_nodes = self.graph.number_of_nodes()
         total_edges = self.graph.number_of_edges()

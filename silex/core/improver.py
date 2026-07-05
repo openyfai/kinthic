@@ -7,11 +7,16 @@ and the final improved response to SQLite.
 
 from __future__ import annotations
 
-from silex.models.schemas import CognitiveResponse, CritiqueResponse, ImprovementLogEntry
+from silex.models.schemas import (
+    CognitiveResponse,
+    CritiqueResponse,
+    ImprovementLogEntry,
+)
 from silex.storage.database import Database
 from silex.utils.logger import setup_logger
 
 log = setup_logger("aria.improver")
+
 
 class ImprovementLogger:
     """Logs self-improvement cycles to the database."""
@@ -49,22 +54,29 @@ class ImprovementLogger:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                entry.id, entry.session_id, entry.turn_number,
-                entry.original_response, entry.feedback,
-                entry.accuracy_score, entry.depth_score, entry.honesty_score,
-                entry.improved_response, entry.created_at
-            )
+                entry.id,
+                entry.session_id,
+                entry.turn_number,
+                entry.original_response,
+                entry.feedback,
+                entry.accuracy_score,
+                entry.depth_score,
+                entry.honesty_score,
+                entry.improved_response,
+                entry.created_at,
+            ),
         )
-        
+
         log.info(f"Improvement log recorded for turn {turn_number}")
 
-    async def get_recent_improvements(self, limit: int = 10) -> list[ImprovementLogEntry]:
+    async def get_recent_improvements(
+        self, limit: int = 10
+    ) -> list[ImprovementLogEntry]:
         """Fetch recent self-improvement logs."""
         rows = await self.db.fetch_all(
-            "SELECT * FROM improvement_logs ORDER BY created_at DESC LIMIT ?",
-            (limit,)
+            "SELECT * FROM improvement_logs ORDER BY created_at DESC LIMIT ?", (limit,)
         )
-        
+
         return [
             ImprovementLogEntry(
                 id=r["id"],
@@ -77,5 +89,6 @@ class ImprovementLogger:
                 honesty_score=r["honesty_score"],
                 improved_response=r["improved_response"],
                 created_at=r["created_at"],
-            ) for r in rows
+            )
+            for r in rows
         ]

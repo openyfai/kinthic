@@ -30,6 +30,7 @@ Usage (CLI)::
     kinthic export-trajectories --format grpo --output ~/train.jsonl
     kinthic export-trajectories --format sft --success-only --since 2026-01-01
 """
+
 from __future__ import annotations
 
 import csv
@@ -50,7 +51,7 @@ log = logging.getLogger("silex.autonomy.export")
 # How much each epistemic step category contributes to step-level reward (0–1)
 STEP_CATEGORY_SCORE: dict[str, float] = {
     "decision": 1.0,
-    "fact":     0.9,
+    "fact": 0.9,
     "hypothesis": 0.6,
     "dead_end": 0.0,
 }
@@ -76,13 +77,13 @@ class ExportConfig:
     success_only: bool = False
     min_steps: int = 1
     max_steps: int = 256
-    since_ts: float | None = None          # unix timestamp lower bound
-    until_ts: float | None = None          # unix timestamp upper bound
-    include_failed_steps: bool = True      # include dead_end steps in rollout text
+    since_ts: float | None = None  # unix timestamp lower bound
+    until_ts: float | None = None  # unix timestamp upper bound
+    include_failed_steps: bool = True  # include dead_end steps in rollout text
     max_trajectories: int = 10_000
-    benchmark_weight: float = 0.2          # how much benchmark bonus counts in reward
-    step_quality_weight: float = 0.3       # how much step-category quality counts
-    outcome_weight: float = 0.5            # how much is_success counts
+    benchmark_weight: float = 0.2  # how much benchmark bonus counts in reward
+    step_quality_weight: float = 0.3  # how much step-category quality counts
+    outcome_weight: float = 0.5  # how much is_success counts
 
 
 @dataclass
@@ -92,8 +93,8 @@ class ExportRecord:
     trajectory_id: str
     task_description: str
     prompt: str
-    completion: str                        # rollout text of steps
-    reward: float                          # 0.0–1.0 scalar
+    completion: str  # rollout text of steps
+    reward: float  # 0.0–1.0 scalar
     is_success: bool
     total_tokens: int
     step_count: int
@@ -103,15 +104,17 @@ class ExportRecord:
     def to_sft(self) -> dict[str, Any]:
         """Unsloth / Axolotl / TRL SFTTrainer format."""
         return {
-            "prompt":     self.prompt,
+            "prompt": self.prompt,
             "completion": self.completion,
-            "reward":     round(self.reward, 4),
+            "reward": round(self.reward, 4),
             "metadata": {
                 "trajectory_id": self.trajectory_id,
-                "is_success":    self.is_success,
-                "total_tokens":  self.total_tokens,
-                "step_count":    self.step_count,
-                "timestamp":     datetime.datetime.utcfromtimestamp(self.timestamp).isoformat(),
+                "is_success": self.is_success,
+                "total_tokens": self.total_tokens,
+                "step_count": self.step_count,
+                "timestamp": datetime.datetime.utcfromtimestamp(
+                    self.timestamp
+                ).isoformat(),
                 **self.metadata,
             },
         }
@@ -126,30 +129,32 @@ class ExportRecord:
         ``advantages``— (reward − mean) / std; pre-computed where possible
         """
         return {
-            "prompt":     self.prompt,
-            "responses":  [self.completion],
-            "rewards":    [round(self.reward, 4)],
+            "prompt": self.prompt,
+            "responses": [self.completion],
+            "rewards": [round(self.reward, 4)],
             # advantage is filled in post-processing after batch mean/std are known
             "advantages": [None],
             "metadata": {
                 "trajectory_id": self.trajectory_id,
-                "is_success":    self.is_success,
-                "total_tokens":  self.total_tokens,
-                "step_count":    self.step_count,
-                "timestamp":     datetime.datetime.utcfromtimestamp(self.timestamp).isoformat(),
+                "is_success": self.is_success,
+                "total_tokens": self.total_tokens,
+                "step_count": self.step_count,
+                "timestamp": datetime.datetime.utcfromtimestamp(
+                    self.timestamp
+                ).isoformat(),
                 **self.metadata,
             },
         }
 
     def to_csv_row(self) -> dict[str, Any]:
         return {
-            "trajectory_id":   self.trajectory_id,
+            "trajectory_id": self.trajectory_id,
             "task_description": self.task_description[:120],
-            "is_success":      int(self.is_success),
-            "reward":          round(self.reward, 4),
-            "total_tokens":    self.total_tokens,
-            "step_count":      self.step_count,
-            "timestamp":       datetime.datetime.utcfromtimestamp(self.timestamp).isoformat(),
+            "is_success": int(self.is_success),
+            "reward": round(self.reward, 4),
+            "total_tokens": self.total_tokens,
+            "step_count": self.step_count,
+            "timestamp": datetime.datetime.utcfromtimestamp(self.timestamp).isoformat(),
             **{k: str(v)[:80] for k, v in self.metadata.items()},
         }
 
@@ -157,6 +162,7 @@ class ExportRecord:
 # ---------------------------------------------------------------------------
 # Reward computation
 # ---------------------------------------------------------------------------
+
 
 def _compute_reward(
     is_success: bool,
@@ -189,9 +195,9 @@ def _compute_reward(
     # Normalise weights so they always sum to 1 even if benchmark_bonus is absent
     total_w = cfg.outcome_weight + cfg.step_quality_weight + cfg.benchmark_weight
     reward = (
-        cfg.outcome_weight    / total_w * outcome_score
+        cfg.outcome_weight / total_w * outcome_score
         + cfg.step_quality_weight / total_w * step_quality
-        + cfg.benchmark_weight    / total_w * benchmark_bonus
+        + cfg.benchmark_weight / total_w * benchmark_bonus
     )
     return min(max(round(reward, 4), 0.0), 1.0)
 
@@ -212,10 +218,10 @@ def _build_rollout_text(
         cat = s.get("epistemic_category", "decision")
         if not include_failed and cat == "dead_end":
             continue
-        action   = s.get("action_name", "?")
-        inp      = s.get("tool_input",  "")[:200]
-        out      = s.get("execution_output", "")[:300]
-        order    = s.get("step_order", "?")
+        action = s.get("action_name", "?")
+        inp = s.get("tool_input", "")[:200]
+        out = s.get("execution_output", "")[:300]
+        order = s.get("step_order", "?")
         parts.append(f"[step {order} | {cat}] {action}({inp}) → {out}")
     return "\n".join(parts) if parts else "(no steps)"
 
@@ -224,13 +230,17 @@ def _build_rollout_text(
 # BenchmarkScenario index for reward bonus
 # ---------------------------------------------------------------------------
 
+
 def _build_scenario_index() -> dict[str, float]:
     """
     Return a dict mapping lower-case keywords from scenario names/descriptions
     to their normalised expected score.
     """
     try:
-        from agent.benchmarks.scenarios import ORCHESTRATION_BENCHMARKS, SCENARIO_LEVEL_BONUS as _lvl  # type: ignore[attr-defined]
+        from agent.benchmarks.scenarios import (
+            ORCHESTRATION_BENCHMARKS,
+            SCENARIO_LEVEL_BONUS as _lvl,
+        )  # type: ignore[attr-defined]
     except ImportError:
         try:
             from agent.benchmarks.scenarios import ORCHESTRATION_BENCHMARKS  # type: ignore[import]
@@ -258,6 +268,7 @@ def _get_benchmark_bonus(task_description: str, index: dict[str, float]) -> floa
 # ---------------------------------------------------------------------------
 # Reward model — importable by TrajectoryOptimizer and other callers
 # ---------------------------------------------------------------------------
+
 
 class RewardComputer:
     """
@@ -322,17 +333,18 @@ class RewardComputer:
         reward = _compute_reward(is_success, steps, self.cfg, bonus)
 
         return {
-            "reward":          reward,
-            "outcome":         outcome,
-            "step_quality":    round(step_quality, 4),
+            "reward": reward,
+            "outcome": outcome,
+            "step_quality": round(step_quality, 4),
             "benchmark_bonus": round(bonus, 4),
-            "step_scores":     [round(s, 4) for s in step_scores],
+            "step_scores": [round(s, 4) for s in step_scores],
         }
 
 
 # ---------------------------------------------------------------------------
 # Main export function
 # ---------------------------------------------------------------------------
+
 
 async def export_trajectories(
     db: Any,
@@ -395,8 +407,7 @@ async def export_trajectories(
     where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
     traj_rows = await db.fetch_all(
-        f"SELECT * FROM trajectories {where_sql} "
-        f"ORDER BY t.timestamp DESC LIMIT ?",
+        f"SELECT * FROM trajectories {where_sql} ORDER BY t.timestamp DESC LIMIT ?",
         params + [cfg.max_trajectories],
     )
 
@@ -445,7 +456,7 @@ async def export_trajectories(
             continue
 
         is_success = bool(row["is_success"])
-        task_desc  = row["task_description"]
+        task_desc = row["task_description"]
 
         # Scenario-specific bonus (from BenchmarkScenario keyword index)
         scenario_bonus = _get_benchmark_bonus(task_desc, bonus_index)
@@ -458,42 +469,59 @@ async def export_trajectories(
             [dict(s) for s in steps], cfg.include_failed_steps
         )
 
-        records.append(ExportRecord(
-            trajectory_id   = traj_id,
-            task_description= task_desc,
-            prompt          = task_desc,
-            completion      = rollout,
-            reward          = reward,
-            is_success      = is_success,
-            total_tokens    = int(row.get("total_tokens") or 0),
-            step_count      = len(steps),
-            timestamp       = float(row.get("timestamp") or time.time()),
-            metadata        = {
-                "cumulative_latency_ms":  float(row.get("cumulative_latency") or 0.0),
-                "benchmark_bonus":        round(bonus, 4),
-                "scenario_bonus":         round(scenario_bonus, 4),
-                "global_bench_factor":    round(_global_bench_factor, 4),
-                "reward_breakdown": {
-                    "outcome_component":    round(cfg.outcome_weight    * (1.0 if is_success else 0.0), 4),
-                    "step_quality_component": round(cfg.step_quality_weight * (
-                        sum(STEP_CATEGORY_SCORE.get(s.get("epistemic_category", "decision"), 0.5)
-                            for s in [dict(x) for x in steps]) / max(len(steps), 1)
-                    ), 4),
-                    "benchmark_component":  round(cfg.benchmark_weight * bonus, 4),
+        records.append(
+            ExportRecord(
+                trajectory_id=traj_id,
+                task_description=task_desc,
+                prompt=task_desc,
+                completion=rollout,
+                reward=reward,
+                is_success=is_success,
+                total_tokens=int(row.get("total_tokens") or 0),
+                step_count=len(steps),
+                timestamp=float(row.get("timestamp") or time.time()),
+                metadata={
+                    "cumulative_latency_ms": float(
+                        row.get("cumulative_latency") or 0.0
+                    ),
+                    "benchmark_bonus": round(bonus, 4),
+                    "scenario_bonus": round(scenario_bonus, 4),
+                    "global_bench_factor": round(_global_bench_factor, 4),
+                    "reward_breakdown": {
+                        "outcome_component": round(
+                            cfg.outcome_weight * (1.0 if is_success else 0.0), 4
+                        ),
+                        "step_quality_component": round(
+                            cfg.step_quality_weight
+                            * (
+                                sum(
+                                    STEP_CATEGORY_SCORE.get(
+                                        s.get("epistemic_category", "decision"), 0.5
+                                    )
+                                    for s in [dict(x) for x in steps]
+                                )
+                                / max(len(steps), 1)
+                            ),
+                            4,
+                        ),
+                        "benchmark_component": round(cfg.benchmark_weight * bonus, 4),
+                    },
                 },
-            },
-        ))
+            )
+        )
 
     if not records:
-        log.info("No records after filtering (%d trajectories scanned).", len(traj_rows))
+        log.info(
+            "No records after filtering (%d trajectories scanned).", len(traj_rows)
+        )
         return [], None
 
     # ── 4. Compute GRPO advantages (reward − mean) / std ────────────────────
     if cfg.format == "grpo" and len(records) >= 2:
         rewards = [r.reward for r in records]
-        mean_r  = sum(rewards) / len(rewards)
-        var_r   = sum((x - mean_r) ** 2 for x in rewards) / len(rewards)
-        std_r   = var_r ** 0.5 or 1.0
+        mean_r = sum(rewards) / len(rewards)
+        var_r = sum((x - mean_r) ** 2 for x in rewards) / len(rewards)
+        std_r = var_r**0.5 or 1.0
         for rec in records:
             rec.metadata["advantage"] = round((rec.reward - mean_r) / std_r, 4)
 
@@ -502,6 +530,7 @@ async def export_trajectories(
 
     if cfg.output_path is None:
         from silex.utils.config import KINTHIC_EXPORTS
+
         ts = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         ext = "csv" if cfg.format == "csv" else "jsonl"
         cfg.output_path = KINTHIC_EXPORTS / f"trajectories_{cfg.format}_{ts}.{ext}"
@@ -516,7 +545,9 @@ async def export_trajectories(
 
     log.info(
         "Exported %d trajectories as %s → %s",
-        len(records), cfg.format.upper(), written_path,
+        len(records),
+        cfg.format.upper(),
+        written_path,
     )
     return records, written_path
 

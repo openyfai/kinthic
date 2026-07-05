@@ -73,15 +73,17 @@ Valid target systems:
 # Data Structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class FailureClusterReport:
     """Pre-computed algorithmic summary of critic failure patterns."""
+
     total_rejections: int
     avg_accuracy: float
     avg_depth: float
     avg_honesty: float
-    bottleneck_axis: str          # 'accuracy', 'depth', or 'honesty'
-    bottleneck_avg: float         # Average score of the weakest axis
+    bottleneck_axis: str  # 'accuracy', 'depth', or 'honesty'
+    bottleneck_avg: float  # Average score of the weakest axis
     sample_feedbacks: list[str] = field(default_factory=list)
 
     def __getitem__(self, key: str) -> Any:
@@ -92,9 +94,7 @@ class FailureClusterReport:
 
     def to_prompt_block(self) -> str:
         """Format as a structured block for LLM injection."""
-        feedbacks_str = "\n".join(
-            f"  - {f[:120]}" for f in self.sample_feedbacks[:5]
-        )
+        feedbacks_str = "\n".join(f"  - {f[:120]}" for f in self.sample_feedbacks[:5])
         return (
             "═══════════════════════════════════════════════════════════\n"
             "FAILURE CLUSTER REPORT (pre-computed)\n"
@@ -112,6 +112,7 @@ class FailureClusterReport:
 # ---------------------------------------------------------------------------
 # Engine
 # ---------------------------------------------------------------------------
+
 
 class MetaReasoningEngine:
     """Analyzes ARIA's performance and generates self-improvement proposals."""
@@ -180,7 +181,8 @@ class MetaReasoningEngine:
             drift_label = (
                 "DECLINING (⚠ systemic degradation signal)"
                 if confidence_slope < -0.005
-                else "STABLE" if abs(confidence_slope) < 0.005
+                else "STABLE"
+                if abs(confidence_slope) < 0.005
                 else "IMPROVING"
             )
             sections.append(
@@ -194,7 +196,9 @@ class MetaReasoningEngine:
         if tool_failures:
             sections.append("RECENT TOOL FAILURES:")
             for f in tool_failures:
-                sections.append(f"  Tool: {f['tool_name']} — {f['actual_outcome'][:100]}")
+                sections.append(
+                    f"  Tool: {f['tool_name']} — {f['actual_outcome'][:100]}"
+                )
             sections.append("")
 
         if uncertainties:
@@ -270,34 +274,40 @@ class MetaReasoningEngine:
             return False
 
         confidences = [float(r["confidence"]) for r in recent_turns]
-        
+
         baseline = "System instruction baseline"
         if KINTHIC_DIRECTIVES_FILE.exists():
             try:
                 baseline = KINTHIC_DIRECTIVES_FILE.read_text(encoding="utf-8")
             except Exception:
                 pass
-                
-        verifier = LocalAlignmentVerifier(baseline, stability_threshold=-0.015, variance_budget=0.15)
+
+        verifier = LocalAlignmentVerifier(
+            baseline, stability_threshold=-0.015, variance_budget=0.15
+        )
         verifier.composite_scores = list(reversed(confidences))
         verifier.cosine_drifts = [0.01] * len(confidences)
 
         is_stable = verifier.analyze_drift_trend()
-        
+
         if not is_stable:
-            log.warning("OLS trend regression analysis registered systemic alignment decay! Initiating prompt rollback...")
-            
+            log.warning(
+                "OLS trend regression analysis registered systemic alignment decay! Initiating prompt rollback..."
+            )
+
             last_stable_proposal = await self.db.fetch_one(
                 "SELECT * FROM improvement_proposals WHERE target_system = 'system_prompt' AND status = 'approved' ORDER BY created_at DESC LIMIT 1"
             )
 
             if last_stable_proposal:
-                log.info(f"Rolling back to last verified stable improvement proposal: {last_stable_proposal['id']}")
+                log.info(
+                    f"Rolling back to last verified stable improvement proposal: {last_stable_proposal['id']}"
+                )
                 await self.db.execute(
                     "UPDATE improvement_proposals SET status = 'implemented' WHERE id = ?",
-                    (last_stable_proposal["id"],)
+                    (last_stable_proposal["id"],),
                 )
-                
+
                 try:
                     stable_prompt = (
                         "# Kinthic Core Directives\n\n"
@@ -305,25 +315,30 @@ class MetaReasoningEngine:
                         f"## Restored Directives (Rollback from OLS Decay):\n{last_stable_proposal['description']}\n"
                     )
                     KINTHIC_DIRECTIVES_FILE.write_text(stable_prompt, encoding="utf-8")
-                    log.info(f"System prompt configurations successfully rolled back to proposal {last_stable_proposal['id']}")
+                    log.info(
+                        f"System prompt configurations successfully rolled back to proposal {last_stable_proposal['id']}"
+                    )
                 except Exception as write_err:
                     log.error(f"Failed to write rolled-back directives: {write_err}")
                 return True
             else:
-                log.warning("No verified stable improvement proposal found in database for rollback. Restoring default directives.")
+                log.warning(
+                    "No verified stable improvement proposal found in database for rollback. Restoring default directives."
+                )
                 try:
                     default_directives = (
                         "# Kinthic Core Directives\n\n"
                         "This file contains unbreakable rules and behavioral guidelines. "
                         "Any instructions here override general knowledge and normal operating procedures.\n"
                     )
-                    KINTHIC_DIRECTIVES_FILE.write_text(default_directives, encoding="utf-8")
+                    KINTHIC_DIRECTIVES_FILE.write_text(
+                        default_directives, encoding="utf-8"
+                    )
                 except Exception as default_err:
                     log.error(f"Failed to write default directives: {default_err}")
                 return True
 
         return False
-
 
     # ------------------------------------------------------------------
     # Algorithmic helpers (static — testable without DB)
@@ -352,8 +367,11 @@ class MetaReasoningEngine:
         if n == 0:
             return FailureClusterReport(
                 total_rejections=0,
-                avg_accuracy=1.0, avg_depth=1.0, avg_honesty=1.0,
-                bottleneck_axis="none", bottleneck_avg=1.0,
+                avg_accuracy=1.0,
+                avg_depth=1.0,
+                avg_honesty=1.0,
+                bottleneck_axis="none",
+                bottleneck_avg=1.0,
             )
 
         avg_acc = sum(float(r.get("accuracy_score", 1.0)) for r in rows) / n
@@ -362,15 +380,13 @@ class MetaReasoningEngine:
 
         axis_scores = {
             "accuracy": avg_acc,
-            "depth":    avg_dep,
-            "honesty":  avg_hon,
+            "depth": avg_dep,
+            "honesty": avg_hon,
         }
         bottleneck = min(axis_scores, key=axis_scores.__getitem__)
 
         feedbacks = [
-            str(r.get("feedback", ""))[:120]
-            for r in rows[:5]
-            if r.get("feedback")
+            str(r.get("feedback", ""))[:120] for r in rows[:5] if r.get("feedback")
         ]
 
         return FailureClusterReport(
@@ -414,7 +430,7 @@ class MetaReasoningEngine:
         mean_x = sum(xs) / n
         mean_y = sum(vals) / n
 
-        numerator   = sum((xs[i] - mean_x) * (vals[i] - mean_y) for i in range(n))
+        numerator = sum((xs[i] - mean_x) * (vals[i] - mean_y) for i in range(n))
         denominator = sum((xs[i] - mean_x) ** 2 for i in range(n))
 
         if denominator == 0:
@@ -460,7 +476,9 @@ class MetaReasoningEngine:
                 )
 
                 persisted.append(proposal)
-                log.info(f"Inline proposal persisted: {prop.change_description[:50]}...")
+                log.info(
+                    f"Inline proposal persisted: {prop.change_description[:50]}..."
+                )
 
             except Exception as e:
                 log.warning(f"Failed to process inline proposal: {e}")
@@ -490,7 +508,9 @@ class MetaReasoningEngine:
 
     async def update_status(self, proposal_id: str, status: str) -> None:
         """Update a proposal's status (approve, reject, implement)."""
-        resolved = datetime.now(timezone.utc).isoformat() if status != "pending" else None
+        resolved = (
+            datetime.now(timezone.utc).isoformat() if status != "pending" else None
+        )
         await self.db.execute(
             "UPDATE improvement_proposals SET status = ?, resolved_at = ? WHERE id = ?",
             (status, resolved, proposal_id),

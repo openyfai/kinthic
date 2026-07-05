@@ -19,16 +19,42 @@ except ImportError:
     docker = None
 
 from silex.tools.base import BaseTool
-from silex.utils.config import terminal_execution_enabled, terminal_host_fallback_enabled, WORKSPACE_DIR
+from silex.utils.config import (
+    terminal_execution_enabled,
+    terminal_host_fallback_enabled,
+    WORKSPACE_DIR,
+)
 from silex.utils.logger import setup_logger
 
 log = setup_logger("silex.tools.system")
 WORKSPACE_ROOT = WORKSPACE_DIR
-BLOCKED_PATH_PARTS = {".git", "node_modules", ".venv", "venv", "__pycache__", ".kinthic"}
+BLOCKED_PATH_PARTS = {
+    ".git",
+    "node_modules",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".kinthic",
+}
 
 # Full allowlist — only used inside the network-disabled, capability-dropped
 # Docker sandbox where a compromised process cannot reach the host or network.
-_DOCKER_ALLOWED_COMMANDS = {"python", "python3", "pip", "git", "npm", "pytest", "ls", "cat", "echo", "mkdir", "touch", "grep", "node", "uv"}
+_DOCKER_ALLOWED_COMMANDS = {
+    "python",
+    "python3",
+    "pip",
+    "git",
+    "npm",
+    "pytest",
+    "ls",
+    "cat",
+    "echo",
+    "mkdir",
+    "touch",
+    "grep",
+    "node",
+    "uv",
+}
 
 # Host-fallback allowlist is intentionally much smaller: this path runs with
 # real host privileges and (scrubbed but still real) host PATH access, so
@@ -40,8 +66,19 @@ _HOST_FALLBACK_ALLOWED_COMMANDS = {"ls", "cat", "echo", "mkdir", "touch", "grep"
 # Everything else (API keys, tokens, secrets) is deliberately dropped rather
 # than inherited via `copy.deepcopy(os.environ)`.
 _SAFE_HOST_ENV_PASSTHROUGH = {
-    "PATH", "HOME", "USERPROFILE", "TEMP", "TMP", "LANG", "LC_ALL",
-    "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "APPDATA", "LOCALAPPDATA",
+    "PATH",
+    "HOME",
+    "USERPROFILE",
+    "TEMP",
+    "TMP",
+    "LANG",
+    "LC_ALL",
+    "SYSTEMROOT",
+    "WINDIR",
+    "COMSPEC",
+    "PATHEXT",
+    "APPDATA",
+    "LOCALAPPDATA",
 }
 
 
@@ -58,6 +95,7 @@ def _resolve_project_path(path: str) -> Path:
         raise ValueError("path includes a restricted directory")
     return resolved
 
+
 class ListDirectoryTool(BaseTool):
     """Lists contents of a directory to map the codebase."""
 
@@ -67,9 +105,7 @@ class ListDirectoryTool(BaseTool):
         "Lists the files and folders inside a specified directory path. "
         "Use this to explore the project structure."
     )
-    schema = {
-        "path": "string (The absolute or relative directory path to list)"
-    }
+    schema = {"path": "string (The absolute or relative directory path to list)"}
 
     async def execute(self, path: str = ".") -> str:
         try:
@@ -86,21 +122,21 @@ class ListDirectoryTool(BaseTool):
             items = os.listdir(safe_path)
             directories = []
             files = []
-            
+
             for item in items:
                 full_path = safe_path / item
                 if full_path.is_dir():
                     directories.append(f"📁 {item}/")
                 else:
                     files.append(f"📄 {item}")
-                    
+
             directories.sort()
             files.sort()
-            
+
             output = f"Contents of {safe_path}:\n"
             output += "\n".join(directories + files)
             return output
-            
+
         except Exception as e:
             return f"Error listing directory: {e}"
 
@@ -117,9 +153,7 @@ class RunTerminalCommandTool(BaseTool):
         "unless the operator has explicitly opted into a reduced-isolation host fallback "
         "(a small allowlist of read-only-ish commands with a scrubbed environment)."
     )
-    schema = {
-        "command": "string (The command to execute)"
-    }
+    schema = {"command": "string (The command to execute)"}
 
     def __init__(self):
         self._workspace_dir = WORKSPACE_ROOT
@@ -130,14 +164,14 @@ class RunTerminalCommandTool(BaseTool):
             except Exception as e:
                 log.warning(f"Could not connect to Docker: {e}")
 
-
-
     def _validate_execution_bounds(self, argv: list[str]) -> None:
         """Physically block command arguments from referencing paths outside the workspace."""
         for token in argv:
             if ".." in token:
-                raise PermissionError("Directory traversal ('..') is strictly prohibited.")
-            
+                raise PermissionError(
+                    "Directory traversal ('..') is strictly prohibited."
+                )
+
             # Look for path-like structures
             if "/" in token or "\\" in token or token.startswith("."):
                 # Ignore common safe standard shells/files
@@ -158,13 +192,30 @@ class RunTerminalCommandTool(BaseTool):
     def _check_safety(self, command: str, argv: list[str], sandboxed: bool) -> None:
         # Strict allowlist of commands — narrower when not running inside
         # the network-isolated Docker sandbox (see module-level comments).
-        allowed_commands = _DOCKER_ALLOWED_COMMANDS if sandboxed else _HOST_FALLBACK_ALLOWED_COMMANDS
+        allowed_commands = (
+            _DOCKER_ALLOWED_COMMANDS if sandboxed else _HOST_FALLBACK_ALLOWED_COMMANDS
+        )
         cmd_base = Path(argv[0]).name.lower()
         if cmd_base not in allowed_commands:
-            raise PermissionError(f"Command '{cmd_base}' is not in the strict allowlist.")
+            raise PermissionError(
+                f"Command '{cmd_base}' is not in the strict allowlist."
+            )
 
         # Reject shell metacharacters — validation must match execution semantics
-        shell_metachar = ("&&", "||", ";", "|", "&", "`", "$(", "${", "<(", ">(", "\n", "\r")
+        shell_metachar = (
+            "&&",
+            "||",
+            ";",
+            "|",
+            "&",
+            "`",
+            "$(",
+            "${",
+            "<(",
+            ">(",
+            "\n",
+            "\r",
+        )
         for token in shell_metachar:
             if token in command:
                 raise PermissionError(
@@ -172,7 +223,19 @@ class RunTerminalCommandTool(BaseTool):
                 )
 
         # Intercept interpreters executing inline arguments in host fallback mode
-        interpreter_binaries = {"python", "python3", "pythonw", "bash", "sh", "cmd", "powershell", "pwsh", "node", "perl", "ruby"}
+        interpreter_binaries = {
+            "python",
+            "python3",
+            "pythonw",
+            "bash",
+            "sh",
+            "cmd",
+            "powershell",
+            "pwsh",
+            "node",
+            "perl",
+            "ruby",
+        }
         if cmd_base in interpreter_binaries:
             for arg in argv[1:]:
                 arg_clean = arg.strip().lower()
@@ -189,6 +252,7 @@ class RunTerminalCommandTool(BaseTool):
         if not venv_dir.exists():
             log.info("Creating Python virtual environment sandbox...")
             import venv
+
             await asyncio.to_thread(venv.create, venv_dir, with_pip=True)
         return venv_dir
 
@@ -228,7 +292,6 @@ class RunTerminalCommandTool(BaseTool):
                 "KINTHIC_ALLOW_HOST_TERMINAL_FALLBACK=true."
             )
 
-
         if self.client:
             log.info(f"Executing Docker sandboxed command: {command}")
             try:
@@ -257,21 +320,23 @@ class RunTerminalCommandTool(BaseTool):
                     cap_drop=["ALL"],
                     security_opt=["no-new-privileges:true"],
                 )
-                
+
                 try:
                     result = await asyncio.to_thread(container.wait, timeout=60)
                 except Exception:
                     container.kill()
                     return "Error: Sandboxed command timed out after 60 seconds."
-                logs = (await asyncio.to_thread(container.logs)).decode("utf-8", errors="replace")
+                logs = (await asyncio.to_thread(container.logs)).decode(
+                    "utf-8", errors="replace"
+                )
                 exit_code = result.get("StatusCode", 0)
-                
+
                 return f"--- SANDBOX OUTPUT (Alpine Linux) ---\n{logs}\n--- END OUTPUT ---\nExit Code: {exit_code}"
 
             except Exception as e:
                 log.error(f"Sandboxed execution failed: {e}")
                 return f"Error executing sandboxed command: {str(e)}"
-        
+
         else:
             log.info(f"Executing Local strict subprocess exec command: {command}")
             try:
@@ -288,7 +353,11 @@ class RunTerminalCommandTool(BaseTool):
                 # resolve/run a binary. API keys, tokens, and other secrets
                 # in the daemon's environment are deliberately never
                 # inherited here (unlike a plain `os.environ` copy).
-                env = {k: v for k, v in os.environ.items() if k.upper() in _SAFE_HOST_ENV_PASSTHROUGH}
+                env = {
+                    k: v
+                    for k, v in os.environ.items()
+                    if k.upper() in _SAFE_HOST_ENV_PASSTHROUGH
+                }
                 env["PATH"] = str(venv_bin) + os.path.pathsep + env.get("PATH", "")
 
                 # Resolve binary from the path
@@ -304,11 +373,15 @@ class RunTerminalCommandTool(BaseTool):
                     cwd=str(self._workspace_dir),
                     env=env,
                 )
-                
+
                 try:
-                    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
+                    stdout, stderr = await asyncio.wait_for(
+                        proc.communicate(), timeout=60
+                    )
                     exit_code = proc.returncode
-                    logs = stdout.decode("utf-8", errors="replace") + stderr.decode("utf-8", errors="replace")
+                    logs = stdout.decode("utf-8", errors="replace") + stderr.decode(
+                        "utf-8", errors="replace"
+                    )
                 except asyncio.TimeoutError:
                     try:
                         proc.kill()
@@ -325,4 +398,5 @@ class RunTerminalCommandTool(BaseTool):
     async def run_in_worker(self, command: str, lease: Any) -> str:
         """Run command in a worker container governed by a lease."""
         from agent.orchestrator import WorkerOrchestrator
+
         return await WorkerOrchestrator.instance().run_isolated(command, lease)

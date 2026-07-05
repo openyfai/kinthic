@@ -42,7 +42,9 @@ def _seed_home(home: Path) -> Path:
 
     conn = sqlite3.connect(str(db_path))
     try:
-        conn.execute("CREATE TABLE IF NOT EXISTS restore_test (id INTEGER PRIMARY KEY, note TEXT)")
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS restore_test (id INTEGER PRIMARY KEY, note TEXT)"
+        )
         conn.execute("INSERT INTO restore_test (note) VALUES ('seed')")
         conn.commit()
     finally:

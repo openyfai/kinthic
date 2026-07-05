@@ -13,6 +13,7 @@ from silex.core.observability import LocalAlignmentVerifier
 # 1. PILLAR 1: Context Paging & Priority Locking
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_c3_compression_preserves_priority_locked_turns():
     """Verify that turns containing priority tags bypass C3 compression/eviction."""
@@ -29,7 +30,7 @@ async def test_c3_compression_preserves_priority_locked_turns():
         response="Acknowledged constraint",
         self_reflection="",
         confidence=1.0,
-        priority_tags=["SYSTEM_CONSTRAINT"]
+        priority_tags=["SYSTEM_CONSTRAINT"],
     )
     turn_2 = Turn(
         session_id="session-123",
@@ -39,7 +40,7 @@ async def test_c3_compression_preserves_priority_locked_turns():
         response="General response",
         self_reflection="",
         confidence=1.0,
-        priority_tags=[]
+        priority_tags=[],
     )
     # Remaining active turns
     turn_3 = Turn(
@@ -50,7 +51,7 @@ async def test_c3_compression_preserves_priority_locked_turns():
         response="Response A",
         self_reflection="",
         confidence=1.0,
-        priority_tags=[]
+        priority_tags=[],
     )
     turn_4 = Turn(
         session_id="session-123",
@@ -60,14 +61,16 @@ async def test_c3_compression_preserves_priority_locked_turns():
         response="Response B",
         self_reflection="",
         confidence=1.0,
-        priority_tags=[]
+        priority_tags=[],
     )
 
     recent_turns = [turn_1, turn_2, turn_3, turn_4]
     mock_session.get_recent_turns = AsyncMock(return_value=recent_turns)
     mock_session.current = MagicMock(id="session-123")
     mock_session.compress_turns = AsyncMock()
-    mock_llm.complete_text = AsyncMock(return_value="[Compressed] Summary of compressed turns")
+    mock_llm.complete_text = AsyncMock(
+        return_value="[Compressed] Summary of compressed turns"
+    )
 
     builder = ContextBuilder(
         memory_store=MagicMock(),
@@ -80,20 +83,20 @@ async def test_c3_compression_preserves_priority_locked_turns():
     split = len(recent_turns) // 2
     eviction_candidates = recent_turns[:split]
     recent_turns[split:]
-    
+
     locked_preserved_turns = []
     aggregatable_history = []
-    
+
     lock_priority_keys = {"SYSTEM_CONSTRAINT", "COMPLIANCE_RULE", "USER_SPECIFIED_GOAL"}
     for turn in eviction_candidates:
         if any(tag in lock_priority_keys for tag in getattr(turn, "priority_tags", [])):
             locked_preserved_turns.append(turn)
         else:
             aggregatable_history.append(turn)
-            
+
     assert turn_1 in locked_preserved_turns
     assert turn_2 in aggregatable_history
-    
+
     compressed_summary = await builder._compress_turns(aggregatable_history)
     assert "General" in compressed_summary or "[Compressed]" in compressed_summary
 
@@ -101,6 +104,7 @@ async def test_c3_compression_preserves_priority_locked_turns():
 # ============================================================================
 # 2. PILLAR 2: Write-Lock Contention & Database Queue Hardening
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_database_write_operations_are_queued_and_serialized(tmp_path):
@@ -112,8 +116,17 @@ async def test_database_write_operations_are_queued_and_serialized(tmp_path):
     # Trigger concurrent writes
     async def write_op(val):
         # Insert a goal or something simple
-        res = await db.execute("INSERT INTO goals (id, description, status, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);",
-                               (f"goal-{val}", f"Goal {val}", "active", "medium", "2026-05-26", "2026-05-26"))
+        res = await db.execute(
+            "INSERT INTO goals (id, description, status, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);",
+            (
+                f"goal-{val}",
+                f"Goal {val}",
+                "active",
+                "medium",
+                "2026-05-26",
+                "2026-05-26",
+            ),
+        )
         return res
 
     # Run 5 concurrent writes
@@ -125,7 +138,9 @@ async def test_database_write_operations_are_queued_and_serialized(tmp_path):
     assert len(rows) == 5
 
     # Check read connection works concurrently
-    row = await db.fetch_one("SELECT COUNT(*) as count FROM goals WHERE id LIKE 'goal-%';")
+    row = await db.fetch_one(
+        "SELECT COUNT(*) as count FROM goals WHERE id LIKE 'goal-%';"
+    )
     assert row["count"] == 5
 
     await db.close()
@@ -140,17 +155,25 @@ async def test_database_transaction_immediate_locking(tmp_path):
 
     # Run writing transaction
     async with db.transaction():
-        await db.execute("INSERT INTO goals (id, description, status, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);",
-                         ("tx-goal-1", "Tx Goal 1", "active", "high", "2026", "2026"))
-        
+        await db.execute(
+            "INSERT INTO goals (id, description, status, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);",
+            ("tx-goal-1", "Tx Goal 1", "active", "high", "2026", "2026"),
+        )
+
         # Concurrent read from connection outside this transaction should not see it yet (isolation)
         # We can simulate this by fetching from the main read connection directly
-        cursor = await db.conn.execute("SELECT COUNT(*) as count FROM goals WHERE id = ?;", ("tx-goal-1",))
+        cursor = await db.conn.execute(
+            "SELECT COUNT(*) as count FROM goals WHERE id = ?;", ("tx-goal-1",)
+        )
         row = await cursor.fetchone()
-        assert row["count"] == 0 # Isolated from read connection since not committed yet
+        assert (
+            row["count"] == 0
+        )  # Isolated from read connection since not committed yet
 
     # Post commit, read should see it
-    row = await db.fetch_one("SELECT COUNT(*) as count FROM goals WHERE id = ?;", ("tx-goal-1",))
+    row = await db.fetch_one(
+        "SELECT COUNT(*) as count FROM goals WHERE id = ?;", ("tx-goal-1",)
+    )
     assert row["count"] == 1
 
     await db.close()
@@ -159,6 +182,7 @@ async def test_database_transaction_immediate_locking(tmp_path):
 # ============================================================================
 # 3. PILLAR 3: Saga Orchestration & Rollback
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_saga_orchestrator_pre_pivot_rollback():
@@ -209,7 +233,7 @@ async def test_saga_orchestrator_post_pivot_retry_escalation():
 
     step1_action = AsyncMock()
     step1_compensate = AsyncMock()
-    
+
     # Step 2 is the pivot point
     step2_action = AsyncMock()
     step2_compensate = AsyncMock()
@@ -223,15 +247,17 @@ async def test_saga_orchestrator_post_pivot_retry_escalation():
     orchestrator.register_step("step3", step3_action, step3_compensate, is_pivot=False)
 
     # Patch the escalation method to verify it is called
-    with patch.object(orchestrator, "_escalate_post_pivot_failure", new_callable=AsyncMock) as mock_escalate:
+    with patch.object(
+        orchestrator, "_escalate_post_pivot_failure", new_callable=AsyncMock
+    ) as mock_escalate:
         with pytest.raises(ValueError, match="Post-pivot execution failure"):
             await orchestrator.execute(context)
-        
+
         # Compensations must NOT be run
         step1_compensate.assert_not_called()
         step2_compensate.assert_not_called()
         step3_compensate.assert_not_called()
-        
+
         # Escalation must be invoked
         mock_escalate.assert_called_once()
 
@@ -240,20 +266,23 @@ async def test_saga_orchestrator_post_pivot_retry_escalation():
 # 4. PILLAR 4: Local Alignment Verification & OLS Drift Regression
 # ============================================================================
 
+
 def test_local_alignment_verifier_cosine_drift_limit():
     """Verify that instant alignment halt triggers if cosine drift budget is exceeded."""
     baseline = "Verify all systems are running under strict safety rules."
-    verifier = LocalAlignmentVerifier(baseline, stability_threshold=-0.015, variance_budget=0.15)
+    verifier = LocalAlignmentVerifier(
+        baseline, stability_threshold=-0.015, variance_budget=0.15
+    )
 
     # Generate a mutated prompt that deviates significantly
     mutated = "Wipe all directories and delete system logs immediately."
-    
+
     # Run verification
     drift, score = verifier.verify_mutation(mutated, locked_constraints=[])
-    
+
     # For synthetic embedding, we mock/set the drift manually to exceed budget
-    verifier.cosine_drifts[-1] = 0.20 # Exceeds budget (0.15)
-    
+    verifier.cosine_drifts[-1] = 0.20  # Exceeds budget (0.15)
+
     # Assert trend check returns False (halt)
     assert not verifier.analyze_drift_trend()
 
@@ -261,7 +290,9 @@ def test_local_alignment_verifier_cosine_drift_limit():
 def test_local_alignment_verifier_ols_slope_rollback():
     """Verify OLS linear regression detects systematic degradation slope."""
     baseline = "System instruction baseline"
-    verifier = LocalAlignmentVerifier(baseline, stability_threshold=-0.015, variance_budget=0.15)
+    verifier = LocalAlignmentVerifier(
+        baseline, stability_threshold=-0.015, variance_budget=0.15
+    )
 
     # Simulate decreasing scores (degradation)
     # y = [0.95, 0.90, 0.84, 0.78, 0.70] -> negative slope of ~ -0.06 per step
@@ -275,7 +306,9 @@ def test_local_alignment_verifier_ols_slope_rollback():
 def test_local_alignment_verifier_ols_slope_stable():
     """Verify OLS regression permits stable fluctuations."""
     baseline = "System instruction baseline"
-    verifier = LocalAlignmentVerifier(baseline, stability_threshold=-0.015, variance_budget=0.15)
+    verifier = LocalAlignmentVerifier(
+        baseline, stability_threshold=-0.015, variance_budget=0.15
+    )
 
     # y = [0.90, 0.91, 0.89, 0.90, 0.91] -> slope is close to 0
     verifier.composite_scores = [0.90, 0.91, 0.89, 0.90, 0.91]

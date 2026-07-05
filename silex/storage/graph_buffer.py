@@ -7,11 +7,13 @@ from silex.utils.logger import setup_logger
 
 log = setup_logger("silex.graph_buffer")
 
+
 class GraphTransactionBuffer:
     """
     Volatile memory buffer that hoards writes and flushes them to SQLite in a massive atomic transaction.
     Derived from the UNWIND batch-writing physics to prevent disk I/O bottlenecks.
     """
+
     def __init__(self, db: Database):
         self.db = db
         self._nodes: List[KnowledgeNode] = []
@@ -31,7 +33,7 @@ class GraphTransactionBuffer:
     async def stage_memory(self, memory: Memory) -> None:
         async with self._lock:
             self._memories.append(memory)
-            
+
     async def stage_raw_query(self, query: str, params: tuple) -> None:
         async with self._lock:
             self._raw_queries.append((query, params))
@@ -55,10 +57,19 @@ class GraphTransactionBuffer:
         ChromaDB from ever holding a vector with no backing SQLite row.
         """
         async with self._lock:
-            if not self._nodes and not self._edges and not self._memories and not self._raw_queries:
+            if (
+                not self._nodes
+                and not self._edges
+                and not self._memories
+                and not self._raw_queries
+            ):
                 return []
 
-            memory_count, node_count, edge_count = len(self._memories), len(self._nodes), len(self._edges)
+            memory_count, node_count, edge_count = (
+                len(self._memories),
+                len(self._nodes),
+                len(self._edges),
+            )
 
             try:
                 async with self.db.transaction():
@@ -68,13 +79,28 @@ class GraphTransactionBuffer:
                     if self._memories:
                         memory_data = [
                             (
-                                m.id, m.content, m.source.value if hasattr(m.source, 'value') else m.source,
-                                m.memory_type.value if hasattr(m.memory_type, 'value') else m.memory_type,
-                                m.importance, m.confidence, m.created_at, m.last_accessed,
-                                m.access_count, json.dumps(m.tags), m.level, json.dumps(m.child_memory_ids),
-                                json.dumps(m.provenance), json.dumps(m.related_memories), m.archived_at,
-                                None # content_fingerprint
-                            ) for m in self._memories
+                                m.id,
+                                m.content,
+                                m.source.value
+                                if hasattr(m.source, "value")
+                                else m.source,
+                                m.memory_type.value
+                                if hasattr(m.memory_type, "value")
+                                else m.memory_type,
+                                m.importance,
+                                m.confidence,
+                                m.created_at,
+                                m.last_accessed,
+                                m.access_count,
+                                json.dumps(m.tags),
+                                m.level,
+                                json.dumps(m.child_memory_ids),
+                                json.dumps(m.provenance),
+                                json.dumps(m.related_memories),
+                                m.archived_at,
+                                None,  # content_fingerprint
+                            )
+                            for m in self._memories
                         ]
                         await self.db.executemany(
                             """
@@ -83,18 +109,30 @@ class GraphTransactionBuffer:
                                 created_at, last_accessed, access_count, tags, level,
                                 child_memory_ids, provenance_json, related_memories, archived_at, content_fingerprint
                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """, memory_data
+                            """,
+                            memory_data,
                         )
 
                     if self._nodes:
                         node_data = [
                             (
-                                n.id, n.content, n.node_type.value if hasattr(n.node_type, 'value') else n.node_type,
-                                n.confidence, n.source, n.created_at, n.last_validated,
-                                n.validation_count, n.contradiction_count,
-                                n.verification_status.value if hasattr(n.verification_status, 'value') else n.verification_status,
-                                json.dumps(n.metadata)
-                            ) for n in self._nodes
+                                n.id,
+                                n.content,
+                                n.node_type.value
+                                if hasattr(n.node_type, "value")
+                                else n.node_type,
+                                n.confidence,
+                                n.source,
+                                n.created_at,
+                                n.last_validated,
+                                n.validation_count,
+                                n.contradiction_count,
+                                n.verification_status.value
+                                if hasattr(n.verification_status, "value")
+                                else n.verification_status,
+                                json.dumps(n.metadata),
+                            )
+                            for n in self._nodes
                         ]
                         await self.db.executemany(
                             """
@@ -103,23 +141,32 @@ class GraphTransactionBuffer:
                                 last_validated, validation_count, contradiction_count,
                                 verification_status, metadata
                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """, node_data
+                            """,
+                            node_data,
                         )
 
                     if self._edges:
                         edge_data = [
                             (
-                                e.id, e.source_node, e.target_node,
-                                e.edge_type.value if hasattr(e.edge_type, 'value') else e.edge_type,
-                                e.strength, e.evidence, e.created_at
-                            ) for e in self._edges
+                                e.id,
+                                e.source_node,
+                                e.target_node,
+                                e.edge_type.value
+                                if hasattr(e.edge_type, "value")
+                                else e.edge_type,
+                                e.strength,
+                                e.evidence,
+                                e.created_at,
+                            )
+                            for e in self._edges
                         ]
                         await self.db.executemany(
                             """
                             INSERT OR REPLACE INTO causal_edges (
                                 id, source_node, target_node, edge_type, strength, evidence, created_at
                             ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                            """, edge_data
+                            """,
+                            edge_data,
                         )
 
                 # Only clear staged state once the transaction has actually committed.
@@ -129,11 +176,16 @@ class GraphTransactionBuffer:
                 self._memories.clear()
                 self._raw_queries.clear()
 
-                log.info(f"Batched Flush Complete: {memory_count} memories, {node_count} nodes, {edge_count} edges.")
+                log.info(
+                    f"Batched Flush Complete: {memory_count} memories, {node_count} nodes, {edge_count} edges."
+                )
                 return committed_memories
             except Exception as e:
                 log.error(
                     "Batch flush failed, retaining %d memories/%d nodes/%d edges for retry: %s",
-                    memory_count, node_count, edge_count, e,
+                    memory_count,
+                    node_count,
+                    edge_count,
+                    e,
                 )
                 raise

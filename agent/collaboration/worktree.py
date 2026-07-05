@@ -38,11 +38,18 @@ class WorktreeManager:
         Create an isolated git worktree for a worker agent.
         Returns the absolute path to the worktree directory.
         """
-        if not (self.repo_root / ".git").exists() and not (self.repo_root / ".git").is_file():
+        if (
+            not (self.repo_root / ".git").exists()
+            and not (self.repo_root / ".git").is_file()
+        ):
             # Not a git repo — fall back to ephemeral directory only
             fallback = self.worktrees_root / agent_id / uuid.uuid4().hex[:8]
             fallback.mkdir(parents=True, exist_ok=True)
-            log.warning("Repo %s is not a git repository; using ephemeral dir %s", self.repo_root, fallback)
+            log.warning(
+                "Repo %s is not a git repository; using ephemeral dir %s",
+                self.repo_root,
+                fallback,
+            )
             return fallback
 
         branch_name = f"{branch_prefix}/{agent_id}/{uuid.uuid4().hex[:8]}"
@@ -50,8 +57,11 @@ class WorktreeManager:
         dest.parent.mkdir(parents=True, exist_ok=True)
 
         cmd = [
-            "git", "worktree", "add",
-            "-b", branch_name,
+            "git",
+            "worktree",
+            "add",
+            "-b",
+            branch_name,
             str(dest),
             base_ref,
         ]

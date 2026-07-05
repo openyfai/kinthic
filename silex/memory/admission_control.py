@@ -54,7 +54,9 @@ class AdmissionController:
             Dict containing individual scores, composite_score, and 'admitted' bool.
         """
         utility = self.evaluate_future_utility(candidate_content)
-        confidence = await self.compute_factual_confidence(candidate_content, source_context)
+        confidence = await self.compute_factual_confidence(
+            candidate_content, source_context
+        )
         novelty = await novelty_checker(candidate_content)
         recency = self.compute_temporal_recency(age_days=0.0)
         type_prior = self.get_content_type_prior(content_type)
@@ -74,8 +76,13 @@ class AdmissionController:
         MAX_PAYLOAD_SIZE = 800
         sanitized_content = candidate_content
         if candidate_content and len(candidate_content) > MAX_PAYLOAD_SIZE:
-            sanitized_content = candidate_content[:MAX_PAYLOAD_SIZE] + "... [PAYLOAD TRUNCATED BY A-MAC]"
-            log.warning(f"A-MAC payload gating triggered. Truncated {len(candidate_content)} bytes down to {MAX_PAYLOAD_SIZE}.")
+            sanitized_content = (
+                candidate_content[:MAX_PAYLOAD_SIZE]
+                + "... [PAYLOAD TRUNCATED BY A-MAC]"
+            )
+            log.warning(
+                f"A-MAC payload gating triggered. Truncated {len(candidate_content)} bytes down to {MAX_PAYLOAD_SIZE}."
+            )
 
         return {
             "utility": utility,
@@ -91,11 +98,25 @@ class AdmissionController:
     def evaluate_future_utility(self, candidate: str) -> float:
         """Rule-based heuristic for future utility using word boundary matching."""
         import re
+
         candidate_lower = candidate.lower()
         utility_keywords = [
-            "always", "never", "must", "prefer", "error", "failed",
-            "password", "key", "token", "remember", "important",
-            "api", "endpoint", "path", "directory", "config"
+            "always",
+            "never",
+            "must",
+            "prefer",
+            "error",
+            "failed",
+            "password",
+            "key",
+            "token",
+            "remember",
+            "important",
+            "api",
+            "endpoint",
+            "path",
+            "directory",
+            "config",
         ]
         matches = 0
         for kw in utility_keywords:
@@ -110,7 +131,7 @@ class AdmissionController:
         """
         if not context:
             return 0.5  # Neutral prior if no context provided
-            
+
         candidate_str = str(candidate) if candidate is not None else ""
         context_str = str(context) if context is not None else ""
 
@@ -127,24 +148,27 @@ class AdmissionController:
 
         return await asyncio.to_thread(_lcs_ratio)
 
-    def compute_temporal_recency(self, age_days: float = 0.0, decay_rate: float = 0.01) -> float:
+    def compute_temporal_recency(
+        self, age_days: float = 0.0, decay_rate: float = 0.01
+    ) -> float:
         """
         Exponential decay based on time.
         For admission (where the memory is brand new), age_days is 0.0, returning 1.0.
         """
         import math
+
         return math.exp(-decay_rate * max(0.0, age_days))
 
     def get_content_type_prior(self, content_type: str) -> float:
         """Static priority weights based on information type."""
         priors = {
-            "preference": 0.9,     # User preferences are highly prized
-            "system": 0.9,         # System constraints are critical
-            "fact": 0.7,           # Objective truths
-            "semantic": 0.7,       # General knowledge
-            "plan": 0.5,           # Ephemeral action plans
-            "transient": 0.1,      # Scratchpad / short-lived
-            "reflection": 0.6,     # Self-reflections
-            "inference": 0.5,      # Deduced facts
+            "preference": 0.9,  # User preferences are highly prized
+            "system": 0.9,  # System constraints are critical
+            "fact": 0.7,  # Objective truths
+            "semantic": 0.7,  # General knowledge
+            "plan": 0.5,  # Ephemeral action plans
+            "transient": 0.1,  # Scratchpad / short-lived
+            "reflection": 0.6,  # Self-reflections
+            "inference": 0.5,  # Deduced facts
         }
         return priors.get(content_type, 0.5)

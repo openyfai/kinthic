@@ -9,8 +9,16 @@ from datetime import datetime, timedelta, timezone
 from silex.models.schemas import Memory, MemorySource, MemoryType
 
 TOPICS = [
-    "authentication", "billing", "dashboard", "notifications", "search",
-    "analytics", "onboarding", "permissions", "webhooks", "caching",
+    "authentication",
+    "billing",
+    "dashboard",
+    "notifications",
+    "search",
+    "analytics",
+    "onboarding",
+    "permissions",
+    "webhooks",
+    "caching",
 ]
 MODULES = ["auth", "billing", "api", "worker", "frontend", "ingest"]
 TOOLS = ["vim", "vscode", "neovim", "emacs", "zed"]

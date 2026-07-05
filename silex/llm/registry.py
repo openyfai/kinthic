@@ -26,7 +26,9 @@ _ALIASES: dict[str, str] = {}
 _discovered = False
 
 
-def register_provider(profile: ProviderProfile, client_class: type[BaseLLMProvider]) -> None:
+def register_provider(
+    profile: ProviderProfile, client_class: type[BaseLLMProvider]
+) -> None:
     """Register a provider profile and its client class by name and aliases."""
     _REGISTRY[profile.name] = profile
     _CLIENT_CLASSES[profile.name] = client_class
@@ -51,7 +53,7 @@ def get_provider_client_class(name: str) -> type[BaseLLMProvider] | None:
     client_cls = _CLIENT_CLASSES.get(canonical)
     if client_cls:
         return client_cls
-    
+
     # Fallback lookup by api_mode if not directly associated
     profile = _REGISTRY.get(canonical)
     if profile:
@@ -62,10 +64,10 @@ def get_provider_client_class(name: str) -> type[BaseLLMProvider] | None:
             fallback_name = "gemini"
         elif profile.api_mode == "anthropic_native":
             fallback_name = "anthropic"
-            
+
         if fallback_name:
             return _CLIENT_CLASSES.get(fallback_name)
-            
+
     return None
 
 
@@ -96,13 +98,15 @@ def _load_yaml_manifest(path: Path) -> dict[str, Any] | list[dict[str, Any]] | N
 def _import_plugin_client(name: str, client_py: Path) -> type[BaseLLMProvider] | None:
     """Dynamically import client.py and find the BaseLLMProvider subclass."""
     module_name = f"plugins.providers.{name}.client"
-    
+
     if module_name in sys.modules:
         module = sys.modules[module_name]
     else:
         try:
             spec = importlib.util.spec_from_file_location(
-                module_name, client_py, submodule_search_locations=[str(client_py.parent)]
+                module_name,
+                client_py,
+                submodule_search_locations=[str(client_py.parent)],
             )
             if spec is None or spec.loader is None:
                 return None
@@ -119,7 +123,11 @@ def _import_plugin_client(name: str, client_py: Path) -> type[BaseLLMProvider] |
 
     # Scan for BaseLLMProvider subclass (exclude BaseLLMProvider itself)
     for obj in module.__dict__.values():
-        if isinstance(obj, type) and issubclass(obj, BaseLLMProvider) and obj is not BaseLLMProvider:
+        if (
+            isinstance(obj, type)
+            and issubclass(obj, BaseLLMProvider)
+            and obj is not BaseLLMProvider
+        ):
             return obj
     return None
 
@@ -133,7 +141,7 @@ def _discover_providers() -> None:
 
     # Define plugin directories to scan
     scan_dirs: list[tuple[Path, bool]] = []
-    
+
     # 1. Built-in plugins under absolute project root
     builtin_dir = PROJECT_ROOT / "plugins" / "providers"
     if builtin_dir.is_dir():
@@ -150,7 +158,7 @@ def _discover_providers() -> None:
             for child in sorted(base_dir.iterdir()):
                 if not child.is_dir() or child.name.startswith(("_", ".")):
                     continue
-                
+
                 manifest_path = child / "plugin.yaml"
                 if not manifest_path.exists():
                     continue
@@ -181,7 +189,7 @@ def _discover_providers() -> None:
                         fallback_models = tuple(p_data.get("fallback_models", []))
                         env_vars = tuple(p_data.get("env_vars", []))
                         aliases = tuple(p_data.get("aliases", []))
-                        
+
                         profile = ProviderProfile(
                             name=p_data["name"],
                             display_name=p_data["display_name"],
@@ -197,9 +205,11 @@ def _discover_providers() -> None:
                             fixed_temperature=p_data.get("fixed_temperature", None),
                             default_max_tokens=p_data.get("default_max_tokens", None),
                             default_aux_model=p_data.get("default_aux_model", ""),
-                            supports_health_check=p_data.get("supports_health_check", True),
+                            supports_health_check=p_data.get(
+                                "supports_health_check", True
+                            ),
                         )
-                        
+
                         # Resolve client class
                         resolved_client = client_class
                         if not resolved_client:
@@ -222,6 +232,8 @@ def _discover_providers() -> None:
                             # We can just register with None, since get_provider_client_class handles fallback
                             register_provider(profile, None)
                     except Exception as exc:
-                        log.warning(f"Failed to register provider profile from {manifest_path}: {exc}")
+                        log.warning(
+                            f"Failed to register provider profile from {manifest_path}: {exc}"
+                        )
         except Exception as exc:
             log.warning(f"Error scanning plugin folder {base_dir}: {exc}")
