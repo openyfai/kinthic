@@ -188,6 +188,11 @@ export default function TerminalOutput() {
         body: JSON.stringify({ message: cmd, images: imagesPayload.length > 0 ? imagesPayload : undefined }),
       });
 
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.detail || `HTTP Error ${res.status}`);
+      }
+
       const reqId = res.headers.get("X-Request-Id");
       if (reqId) setCurrentRequestId(reqId);
 

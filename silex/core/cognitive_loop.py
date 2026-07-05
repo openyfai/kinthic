@@ -280,7 +280,14 @@ class CognitiveLoop:
             from silex.memory.indexer import WorkspaceIndexer
 
             indexer = WorkspaceIndexer(self.vector_store, str(WORKSPACE_DIR))
-            asyncio.create_task(asyncio.to_thread(indexer.run))
+
+            async def run_indexer_safe():
+                try:
+                    await asyncio.to_thread(indexer.run)
+                except Exception as index_exc:
+                    log.error(f"Background workspace indexing failed: {index_exc}", exc_info=True)
+
+            asyncio.create_task(run_indexer_safe())
 
         # Phase 7: Load semantic profiles
         profiles = await self.memory.get_all_semantic_profiles()
@@ -850,133 +857,138 @@ class CognitiveLoop:
             )
 
         # Batch all persistence operations into a single atomic transaction
-        async with self.db.transaction():
-            await self._flush_pending_tool_audit()
+        # Batch all persistence operations into a single try-except wrapper
+        try:
+            async with self.db.transaction():
+                await self._flush_pending_tool_audit()
 
-            # Step 7: Persist new memories
-            memories_added, saved_memories = await self._store_memories(cognitive.new_memories)
+                # Step 7: Persist new memories
+                memories_added, saved_memories = await self._store_memories(cognitive.new_memories)
 
-            # Link executed tools to the resulting memories (Phase 4)
-            if all_turn_tool_ids and saved_memories:
-                from silex.core.causal_graph import CausalEdge
-                for tid in all_turn_tool_ids:
-                    for sm in saved_memories:
-                        await self.causal_kg.register_edge(CausalEdge.new(
-                            source_node_id=tid,
-                            target_node_id=sm.id,
-                            relation_type="triggered_by",
-                            weight=sm.confidence
-                        ))
+                # Link executed tools to the resulting memories (Phase 4)
+                if all_turn_tool_ids and saved_memories:
+                    from silex.core.causal_graph import CausalEdge
+                    for tid in all_turn_tool_ids:
+                        for sm in saved_memories:
+                            await self.causal_kg.register_edge(CausalEdge.new(
+                                source_node_id=tid,
+                                target_node_id=sm.id,
+                                relation_type="triggered_by",
+                                weight=sm.confidence
+                            ))
 
-            # Step 8: Process goal updates
-            goals_changed = await self._process_goals(cognitive.goal_updates)
+                # Step 8: Process goal updates
+                goals_changed = await self._process_goals(cognitive.goal_updates)
 
-            # Step 9: Build knowledge graph from causal observations
-            graph_updates = await self._process_causal_observations(
-                cognitive.causal_observations
-            )
-
-            # Step 9.5: Abstract principles from new observations (Phase 6)
-            if graph_updates > 0 and cognitive.causal_observations:
-                try:
-                    await self.generalization_engine.abstract_principles(
-                        cognitive.causal_observations
-                    )
-                except Exception as e:
-                    log.warning(f"Principle extraction failed (non-fatal): {e}")
-
-            # Step 10: Process contradictions
-            await self._process_contradictions(
-                cognitive.contradictions_detected
-            )
-
-            # Step 11: Store hypotheses
-            await self._process_hypotheses(cognitive.hypotheses)
-
-            # Step 11.25: Resolve hypotheses when the model (or operator path) supplies resolutions
-            await self._process_hypothesis_resolutions(cognitive.hypothesis_resolutions)
-
-            # Step 11.4: Record explicit uncertainty topics (Phase 4 — uncertainties table)
-            await self._process_uncertainty_tracking(cognitive.uncertainty_tracking)
-
-            # Step 11.5: Process self-improvement proposals (Phase 7 — Safety Locked)
-            if getattr(cognitive, "inline_proposals", None) and self.meta_reasoning and self.session.current:
-                try:
-                    await self.meta_reasoning.process_inline_proposals(
-                        cognitive.inline_proposals,
-                        self.session.current.id,
-                    )
-                except Exception as e:
-                    log.warning(f"Proposal processing failed (non-fatal): {e}")
-
-            # Step 12: Record this turn
-            await self.session.record_turn(
-                user_input=user_input,
-                reasoning=cognitive.reasoning,
-                response=cognitive.response,
-                self_reflection=cognitive.self_reflection,
-                confidence=cognitive.confidence,
-                memories_added=memories_added,
-                goals_changed=goals_changed,
-                scratchpad=getattr(cognitive, "working_scratchpad", None),
-                priority_tags=self._detect_priority_tags(user_input, cognitive.response, cognitive.reasoning)
-            )
-
-            # Step 12.5: Cleanup turn checkpoint
-            if self.session.current:
-                await self.db.execute(
-                    "DELETE FROM turn_checkpoints WHERE session_id = ? AND turn_number = ?",
-                    (self.session.current.id, self.session.current.turn_count)
+                # Step 9: Build knowledge graph from causal observations
+                graph_updates = await self._process_causal_observations(
+                    cognitive.causal_observations
                 )
 
-            # Step 12.6: Record trajectory for self-evolution
-            try:
-                import time as _time
-                _turn_start = getattr(self, "_turn_start_time", 0.0)
-                _latency = (_time.time() - _turn_start) * 1000 if _turn_start else 0.0
-                _token_total = sum(
-                    getattr(u, "input_tokens", 0) + getattr(u, "output_tokens", 0)
-                    for u in getattr(self, "_last_usage", [])
+                # Step 9.5: Abstract principles from new observations (Phase 6)
+                if graph_updates > 0 and cognitive.causal_observations:
+                    try:
+                        await self.generalization_engine.abstract_principles(
+                            cognitive.causal_observations
+                        )
+                    except Exception as e:
+                        log.warning(f"Principle extraction failed (non-fatal): {e}")
+
+                # Step 10: Process contradictions
+                await self._process_contradictions(
+                    cognitive.contradictions_detected
                 )
-                _traj_id = uuid.uuid4().hex
-                await self.db.execute(
-                    """INSERT OR IGNORE INTO trajectories
-                       (trajectory_id, task_description, is_success, cumulative_latency, total_tokens, timestamp)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
-                    (
-                        _traj_id,
-                        user_input[:200],
-                        int(cognitive.confidence > 0.5),
-                        _latency,
-                        _token_total,
-                        _time.time(),
-                    ),
+
+                # Step 11: Store hypotheses
+                await self._process_hypotheses(cognitive.hypotheses)
+
+                # Step 11.25: Resolve hypotheses when the model (or operator path) supplies resolutions
+                await self._process_hypothesis_resolutions(cognitive.hypothesis_resolutions)
+
+                # Step 11.4: Record explicit uncertainty topics (Phase 4 — uncertainties table)
+                await self._process_uncertainty_tracking(cognitive.uncertainty_tracking)
+
+                # Step 11.5: Process self-improvement proposals (Phase 7 — Safety Locked)
+                if getattr(cognitive, "inline_proposals", None) and self.meta_reasoning and self.session.current:
+                    try:
+                        await self.meta_reasoning.process_inline_proposals(
+                            cognitive.inline_proposals,
+                            self.session.current.id,
+                        )
+                    except Exception as e:
+                        log.warning(f"Proposal processing failed (non-fatal): {e}")
+
+                # Step 12: Record this turn
+                await self.session.record_turn(
+                    user_input=user_input,
+                    reasoning=cognitive.reasoning,
+                    response=cognitive.response,
+                    self_reflection=cognitive.self_reflection,
+                    confidence=cognitive.confidence,
+                    memories_added=memories_added,
+                    goals_changed=goals_changed,
+                    scratchpad=getattr(cognitive, "working_scratchpad", None),
+                    priority_tags=self._detect_priority_tags(user_input, cognitive.response, cognitive.reasoning)
                 )
-                for _i, _tc in enumerate(cognitive.tool_calls or []):
-                    _tr = tool_results[_i] if hasattr(self, "_last_tool_results") and _i < len(getattr(self, "_last_tool_results", [])) else None
+
+                # Step 12.5: Cleanup turn checkpoint
+                if self.session.current:
                     await self.db.execute(
-                        """INSERT INTO trajectory_steps
-                           (trajectory_id, step_order, action_name, tool_input, execution_output,
-                            epistemic_category, latency_ms, token_usage)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                        "DELETE FROM turn_checkpoints WHERE session_id = ? AND turn_number = ?",
+                        (self.session.current.id, self.session.current.turn_count)
+                    )
+
+                # Step 12.6: Record trajectory for self-evolution
+                try:
+                    import time as _time
+                    _turn_start = getattr(self, "_turn_start_time", 0.0)
+                    _latency = (_time.time() - _turn_start) * 1000 if _turn_start else 0.0
+                    _token_total = sum(
+                        getattr(u, "input_tokens", 0) + getattr(u, "output_tokens", 0)
+                        for u in getattr(self, "_last_usage", [])
+                    )
+                    _traj_id = uuid.uuid4().hex
+                    await self.db.execute(
+                        """INSERT OR IGNORE INTO trajectories
+                           (trajectory_id, task_description, is_success, cumulative_latency, total_tokens, timestamp)
+                           VALUES (?, ?, ?, ?, ?, ?)""",
                         (
-                            _traj_id, _i,
-                            _tc.tool_name,
-                            str(_tc.arguments)[:500],
-                            (str(_tr.actual_outcome)[:500] if _tr else ""),
-                            "decision",
-                            _latency / max(len(cognitive.tool_calls), 1),
-                            _token_total // max(len(cognitive.tool_calls), 1),
+                            _traj_id,
+                            user_input[:200],
+                            int(cognitive.confidence > 0.5),
+                            _latency,
+                            _token_total,
+                            _time.time(),
                         ),
                     )
-            except Exception as _e:
-                log.debug("Trajectory recording failed: %s", _e)
+                    for _i, _tc in enumerate(cognitive.tool_calls or []):
+                        _tr = tool_results[_i] if hasattr(self, "_last_tool_results") and _i < len(getattr(self, "_last_tool_results", [])) else None
+                        await self.db.execute(
+                            """INSERT INTO trajectory_steps
+                               (trajectory_id, step_order, action_name, tool_input, execution_output,
+                                epistemic_category, latency_ms, token_usage)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                            (
+                                _traj_id, _i,
+                                _tc.tool_name,
+                                str(_tc.arguments)[:500],
+                                (str(_tr.actual_outcome)[:500] if _tr else ""),
+                                "decision",
+                                _latency / max(len(cognitive.tool_calls), 1),
+                                _token_total // max(len(cognitive.tool_calls), 1),
+                            ),
+                        )
+                except Exception as _e:
+                    log.debug("Trajectory recording failed: %s", _e)
 
-        # Execute Transactional Batch Flush for the entire graph/memory pipeline
-        try:
+            # Execute Transactional Batch Flush for the entire graph/memory pipeline
             await self.memory.flush()
-        except Exception as _e:
-            log.error(f"FATAL: Graph Batch Flush failed at turn end: {_e}")
+        except Exception as db_exc:
+            log.error(f"Database persistence or batch flush failure at turn end: {db_exc}", exc_info=True)
+            cognitive = self._make_error_response(
+                "I completed reasoning but was unable to save my state due to a database connection issue. "
+                "Please try again."
+            )
 
         return cognitive
 
