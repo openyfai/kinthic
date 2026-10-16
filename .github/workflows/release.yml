@@ -64,7 +64,7 @@ jobs:
           merge-multiple: true
 
       - name: Generate Release Notes & Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             dist-binaries/kinthic-ui-linux-x64
